@@ -6,6 +6,9 @@ convolution is matmul so there should be a lora version for it.
 ## Why Convolution is matmul?
 
 im2col:
+![image](https://user-images.githubusercontent.com/59680068/221547963-c821b9fa-2825-4b8d-8192-c3109268417f.png)
+![image](https://user-images.githubusercontent.com/59680068/221547996-4be14700-1392-4859-9e29-e3e669142a09.png)
+
 
 ## What I done
 * A demo for LoRA on Convolution network(This repo)
@@ -28,29 +31,40 @@ download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) int
 
 ### Example Model
 Onimai LoRA:
+https://huggingface.co/KBlueLeaf/onimai-locon-test
+![05510-2023-02-27_dc50ca8f4b_download_TTRH_3334316821_c1054458-576x832](https://user-images.githubusercontent.com/59680068/221551622-e26477a7-f929-42a3-9cd5-937ca1595daf.png)
 
 ---
 ## Some calculation
 LoRA for Linear:
-$$
-Y_{out*batch} = W_{out*in}‧X_{in*batch}\\
-Y'_{out*batch} = W_{out*in}‧X_{in*batch} + Wa_{out*rank}‧Wb_{rank*in}‧X_{in*batch}\\
-$$
+```math
+Y_{out*batch} = W_{out*in}‧X_{in*batch}
+```
+```math
+Y'_{out*batch} = W_{out*in}‧X_{in*batch} + Wa_{out*rank}‧Wb_{rank*in}‧X_{in*batch}
+```
 
 Convolution img2col:
-$$
-X:[\bold{c}hannel, \bold{w}idth, \bold{h}eight]
-\xrightarrow{reorder}[c*kw*kh, outw*outh]\\
-Kernels: [out, c, kw, kh] \xrightarrow{reshape} [out, c*kw*kh]\\
-
+```math
+X:[channel, width, height]
+```
+```math
+\xrightarrow{reorder}[c*kw*kh, outw*outh]
+```
+```math
+Kernels: [out, c, kw, kh] \xrightarrow{reshape} [out, c*kw*kh]
+```
+```math
 Conv(X, Kernels) = Kernels * X \xrightarrow{reshape} [out, outw, outh]
-$$
+```
 
 LoRA for Convolution:
-$$
-Conv(in, out, ksize, padding, stride)\\
+```math
+Conv(in, out, ksize, padding, stride)
+```
+```math
 \xrightarrow{}Conv(rank, out, 1)\circ Conv(in, rank, ksize, padding, stride)
-$$
+```
 
 
 Another form:
