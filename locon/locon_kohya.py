@@ -16,7 +16,8 @@ from .locon import LoConModule
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
     if network_dim is None:
         network_dim = 4                     # default
-    network = LoRANetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, alpha=network_alpha)
+    conv_dim = kwargs.get('conv_dim', network_dim)
+    network = LoRANetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, conv_lora_dim=conv_dim, alpha=network_alpha)
     return network
 
 
@@ -43,7 +44,7 @@ def create_network_from_weights(multiplier, file, vae, text_encoder, unet, **kwa
     network.weights_sd = weights_sd
     return network
 
-
+torch.nn.Conv2d
 class LoRANetwork(torch.nn.Module):
     '''
     LoRA + LoCon
@@ -60,24 +61,38 @@ class LoRANetwork(torch.nn.Module):
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
 
-    def __init__(self, text_encoder, unet, multiplier=1.0, lora_dim=4, alpha=1) -> None:
+    def __init__(self, text_encoder, unet, multiplier=1.0, lora_dim=4, conv_lora_dim=4, alpha=1) -> None:
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
+        self.conv_lora_dim = int(conv_lora_dim)
+        if self.conv_lora_dim != self.lora_dim: 
+            print('Apply different lora dim for conv layer')
+            print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
         self.alpha = alpha
 
         # create module instances
         def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:
+            print('Create LoCon Module')
             loras = []
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
-                    print(module.__class__.__name__)
                     for child_name, child_module in module.named_modules():
-                        if child_module.__class__.__name__ in {'Linear', 'Conv2d'}:
+                        if child_module.__class__.__name__ == 'Linear':
                             lora_name = prefix + '.' + name + '.' + child_name
                             lora_name = lora_name.replace('.', '_')
                             lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
-                            loras.append(lora)
+                        elif child_module.__class__.__name__ == 'Conv2d':
+                            k_size, *_ = child_module.kernel_size
+                            lora_name = prefix + '.' + name + '.' + child_name
+                            lora_name = lora_name.replace('.', '_')
+                            if k_size==1:
+                                lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
+                            else:
+                                lora = LoConModule(lora_name, child_module, self.multiplier, self.conv_lora_dim, self.alpha)
+                        else:
+                            continue
+                        loras.append(lora)
             return loras
 
         self.text_encoder_loras = create_modules(
