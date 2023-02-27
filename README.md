@@ -16,6 +16,16 @@ im2col:
 * An [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) for using this↑ in sd-webui
 
 
+## Difference from training LoRA on Stable Diffusion
+normally most of people train LoRA with kohya-ss/sd-scripts, (me too)
+
+but lora only train green part, locon can train yellow part. Combine them can cover almost all of the layers in the model.
+
+(I skip the porj in and porj out since they have very small channels, if you want to f/t them, maybe just f/t it without any trick.)
+![image](https://user-images.githubusercontent.com/59680068/221555165-7b0a1b96-0cc4-4ec4-bdd7-559a43002c65.png)
+
+
+
 ## usage
 ### For kohya script
 move locon folder into kohya-ss/sd-scripts
