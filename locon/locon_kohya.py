@@ -77,7 +77,7 @@ class LoRANetwork(torch.nn.Module):
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
-        self.conv_lora_dim = int(conv_lora_dim)
+        self.conv_lora_dim = float(conv_lora_dim)
         if self.conv_lora_dim != self.lora_dim: 
             print('Apply different lora dim for conv layer')
             print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
@@ -94,14 +94,12 @@ class LoRANetwork(torch.nn.Module):
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
                     for child_name, child_module in module.named_modules():
+                        lora_name = prefix + '.' + name + '.' + child_name
+                        lora_name = lora_name.replace('.', '_')
                         if child_module.__class__.__name__ == 'Linear':
-                            lora_name = prefix + '.' + name + '.' + child_name
-                            lora_name = lora_name.replace('.', '_')
                             lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
-                            lora_name = prefix + '.' + name + '.' + child_name
-                            lora_name = lora_name.replace('.', '_')
                             if k_size==1:
                                 lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
                             else:
