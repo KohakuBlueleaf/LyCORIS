@@ -134,7 +134,9 @@ def extract_diff(
                 for child_name, child_module in module.named_modules():
                     lora_name = prefix + '.' + name + '.' + child_name
                     lora_name = lora_name.replace('.', '_')
-                    if child_module.__class__.__name__ == 'Linear':
+                    
+                    layer = child_module.__class__.__name__
+                    if layer == 'Linear':
                         extract_a, extract_b = extract_linear(
                             (child_module.weight - weights[child_name]),
                             lora_dim,
@@ -142,12 +144,14 @@ def extract_diff(
                             use_threshold,
                             device = extract_decive,
                         )
-                    elif child_module.__class__.__name__ == 'Conv2d':
+                    elif layer == 'Conv2d':
+                        is_linear = (child_module.weight.shape[2] == 1
+                                     and child_module.weight.shape[3] == 1)
                         extract_a, extract_b = extract_conv(
                             (child_module.weight - weights[child_name]), 
                             conv_lora_dim,
-                            threshold_conv,
-                            use_threshold_conv,
+                            threshold_linear if is_linear else threshold_conv,
+                            use_threshold if is_linear else use_threshold_conv,
                             device = extract_decive,
                         )
                     else:
