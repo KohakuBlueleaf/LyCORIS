@@ -10,7 +10,7 @@ STRIDE = 1
 PADDING = 1
 IN_CH = 1280
 OUT_CH = 1280
-LORA_RANK = 256
+LORA_RANK = 1280
 SIZE = 32
 
 convA = nn.Conv2d(IN_CH, LORA_RANK, 3, 1, 1, bias=False)
@@ -19,8 +19,8 @@ convB = nn.Conv2d(LORA_RANK, OUT_CH, 1, bias=False)
 conv_orig = nn.Conv2d(IN_CH, OUT_CH, 3, 1, 1, bias=False)
 
 extract_a, extract_b = extract_conv(conv_orig.weight, LORA_RANK)
-convA.weight = extract_a
-convB.weight = extract_b
+convA.weight = nn.Parameter(extract_a)
+convB.weight = nn.Parameter(extract_b)
 
 
 test_x = torch.randn(1, IN_CH, SIZE, SIZE)
