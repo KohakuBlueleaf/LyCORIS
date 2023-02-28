@@ -77,12 +77,12 @@ class LoRANetwork(torch.nn.Module):
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
-        self.conv_lora_dim = float(conv_lora_dim)
+        self.conv_lora_dim = int(conv_lora_dim)
         if self.conv_lora_dim != self.lora_dim: 
             print('Apply different lora dim for conv layer')
             print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
         self.alpha = alpha
-        self.conv_alpha = conv_alpha
+        self.conv_alpha = float(conv_alpha)
         if self.alpha != self.conv_alpha: 
             print('Apply different alpha value for conv layer')
             print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
