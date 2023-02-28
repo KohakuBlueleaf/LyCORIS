@@ -17,7 +17,13 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     if network_dim is None:
         network_dim = 4                     # default
     conv_dim = kwargs.get('conv_dim', network_dim)
-    network = LoRANetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, conv_lora_dim=conv_dim, alpha=network_alpha)
+    conv_alpha = kwargs.get('conv_alpha', network_alpha)
+    network = LoRANetwork(
+        text_encoder, unet, 
+        multiplier=multiplier, 
+        lora_dim=network_dim, conv_lora_dim=conv_dim, 
+        alpha=network_alpha, conv_alpha=conv_alpha
+    )
     return network
 
 
@@ -61,7 +67,13 @@ class LoRANetwork(torch.nn.Module):
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
 
-    def __init__(self, text_encoder, unet, multiplier=1.0, lora_dim=4, conv_lora_dim=4, alpha=1) -> None:
+    def __init__(
+        self, 
+        text_encoder, unet, 
+        multiplier=1.0, 
+        lora_dim=4, conv_lora_dim=4, 
+        alpha=1, conv_alpha=1
+    ) -> None:
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
@@ -70,6 +82,10 @@ class LoRANetwork(torch.nn.Module):
             print('Apply different lora dim for conv layer')
             print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
         self.alpha = alpha
+        self.conv_alpha = conv_alpha
+        if self.alpha != self.conv_alpha: 
+            print('Apply different alpha value for conv layer')
+            print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
 
         # create module instances
         def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:

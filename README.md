@@ -32,9 +32,9 @@ move locon folder into kohya-ss/sd-scripts
 and use 
 ```bash
 python3 sd-scripts/train_network.py \
-  --network_module=locon.locon_kohya \
-  --network_args="conv_dim=RANK_FOR_CONV" \
-  --network_dim="RANK_FOR_LINEAR"
+  --network_module locon.locon_kohya \
+  --network_args "conv_dim=RANK_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
+  --network_dim "RANK_FOR_TRANSFORMER" --network_alpha "ALPHA_FOR_TRANSFORMER"
 ```
 to train locon+lora for SD model
 
