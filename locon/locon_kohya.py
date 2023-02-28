@@ -105,7 +105,7 @@ class LoRANetwork(torch.nn.Module):
                             if k_size==1:
                                 lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
                             else:
-                                lora = LoConModule(lora_name, child_module, self.multiplier, self.conv_lora_dim, self.alpha)
+                                lora = LoConModule(lora_name, child_module, self.multiplier, self.conv_lora_dim, self.conv_alpha)
                         else:
                             continue
                         loras.append(lora)
