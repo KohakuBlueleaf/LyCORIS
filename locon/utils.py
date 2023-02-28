@@ -12,11 +12,12 @@ def extract_conv(
     lora_rank = 8,
     singular_threshold = 0.1,
     use_threshold = False,
+    device = 'cpu',
 ) -> tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch, kernel_size, _ = weight.shape
     lora_rank = min(out_ch, in_ch, lora_rank)
     
-    U, S, Vh = linalg.svd(weight.reshape(out_ch, -1))
+    U, S, Vh = linalg.svd(weight.reshape(out_ch, -1).to(device))
     
     if use_threshold:
         lora_rank = torch.sum(S>singular_threshold)
@@ -53,11 +54,12 @@ def extract_linear(
     lora_rank = 8,
     singular_threshold = 0.1,
     use_threshold = False,
+    device = 'cpu',
 ) -> tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch = weight.shape
     lora_rank = min(out_ch, in_ch, lora_rank)
     
-    U, S, Vh = linalg.svd(weight)
+    U, S, Vh = linalg.svd(weight.to(device))
     
     if use_threshold:
         lora_rank = torch.sum(S>singular_threshold).item()
@@ -94,8 +96,10 @@ def extract_diff(
     lora_dim=4, 
     conv_lora_dim=4,
     use_threshold = False,
+    use_threshold_conv = False,
     threshold_linear = 0.1,
-    threshold_conv = 0.1
+    threshold_conv = 0.1,
+    extract_decive = 'cpu'
 ):
     UNET_TARGET_REPLACE_MODULE = [
         "Transformer2DModel", 
@@ -124,7 +128,7 @@ def extract_diff(
                         continue
                     temp[name][child_name] = child_module.weight
         
-        for name, module in list(target_module.named_modules()):
+        for name, module in tqdm(list(target_module.named_modules())):
             if name in temp:
                 weights = temp[name]
                 for child_name, child_module in module.named_modules():
@@ -136,19 +140,21 @@ def extract_diff(
                             lora_dim,
                             threshold_linear,
                             use_threshold,
+                            device = extract_decive,
                         )
                     elif child_module.__class__.__name__ == 'Conv2d':
                         extract_a, extract_b = extract_conv(
                             (child_module.weight - weights[child_name]), 
                             conv_lora_dim,
                             threshold_conv,
-                            use_threshold,
+                            use_threshold_conv,
+                            device = extract_decive,
                         )
                     else:
                         continue
-                    loras[f'{lora_name}.lora_down.weight'] = extract_a.detach().cpu().half()
-                    loras[f'{lora_name}.lora_up.weight'] = extract_b.detach().cpu().half()
-                    loras[f'{lora_name}.alpha'] = torch.Tensor([int(extract_a.shape[0])]).detach().cpu().half()
+                    loras[f'{lora_name}.lora_down.weight'] = extract_a.detach().cpu().contiguous().half()
+                    loras[f'{lora_name}.lora_up.weight'] = extract_b.detach().cpu().contiguous().half()
+                    loras[f'{lora_name}.alpha'] = torch.Tensor([extract_a.shape[0]]).half()
                     del extract_a, extract_b
         return loras
     
