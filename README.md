@@ -103,6 +103,8 @@ Params to train:
 * after  = LoRA_rank \* in_ch \* size\*\*2 + LoRA_rank \* out_ch
 
 
+## Citation
+
 ```bibtex
 @misc{LoCon,
   author       = "Shih-Ying Yeh (Kohaku-BlueLeaf)",
