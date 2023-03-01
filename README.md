@@ -101,3 +101,14 @@ Params to train:
 * before = out_ch \* in_ch \* size\*\*2
 
 * after  = LoRA_rank \* in_ch \* size\*\*2 + LoRA_rank \* out_ch
+
+
+```bibtex
+@misc{LoCon,
+  author       = "Shih-Ying Yeh (Kohaku-BlueLeaf)",
+  title        = "LoCon - LoRA for Convolution Network",
+  howpublished = "\url{https://github.com/KohakuBlueleaf/LoCon}",
+  month        = "Feb",
+  year         = "2023"
+}
+```
