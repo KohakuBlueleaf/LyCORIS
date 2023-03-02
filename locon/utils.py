@@ -165,7 +165,7 @@ def extract_diff(
                                      and child_module.weight.shape[3] == 1)
                         extract_a, extract_b = extract_conv(
                             (child_module.weight - weights[child_name]), 
-                            conv_lora_dim,
+                            conv_lora_dim if is_linear else lora_dim,
                             threshold_linear if is_linear else threshold_conv,
                             use_threshold if is_linear else use_threshold_conv,
                             device = extract_device,
