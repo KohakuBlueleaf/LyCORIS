@@ -50,7 +50,7 @@ def create_network_from_weights(multiplier, file, vae, text_encoder, unet, **kwa
     network.weights_sd = weights_sd
     return network
 
-torch.nn.Conv2d
+
 class LoRANetwork(torch.nn.Module):
     '''
     LoRA + LoCon

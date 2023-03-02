@@ -24,7 +24,7 @@ but lora only train green part, locon can train yellow part. Combine them can co
 (I skip the porj in and porj out since they have very small channels, if you want to f/t them, maybe just f/t it without any trick.)
 ![image](https://user-images.githubusercontent.com/59680068/221555165-7b0a1b96-0cc4-4ec4-bdd7-559a43002c65.png)
 
-
+---
 
 ## usage
 ### For kohya script
@@ -40,6 +40,12 @@ to train locon+lora for SD model
 
 ### For a1111's sd-webui
 download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) into sd-webui, and then use locon model as how you use lora model.
+
+### Additional Networks
+Once you install the extension. You can also use your locon model in [addnet](https://github.com/kohya-ss/sd-webui-additional-networks/releases)<br>
+just use it as LoRA model.
+
+---
 
 ### Example Model
 Onimai LoRA:
