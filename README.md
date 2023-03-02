@@ -48,6 +48,18 @@ just use it as LoRA model.
 ---
 
 ### Example Model
+Yog-Sothoth LoRA/LoCon:
+https://civitai.com/models/14878/loconlora-yog-sothoth-depersonalization
+
+LoRA rank=1:
+![00159](https://user-images.githubusercontent.com/59680068/222422792-b37648c3-af2e-4bee-9f82-b14a5d8e5f5d.png)
+LoCon rank=1
+![00164](https://user-images.githubusercontent.com/59680068/222422830-4ec9f550-cdff-4314-b694-1658bf9f1c83.png)
+
+xy grid:
+![image](https://user-images.githubusercontent.com/59680068/222424002-5ce2572c-9102-4e2d-83f2-100bc41ec272.png)
+
+
 Onimai LoRA:
 https://huggingface.co/KBlueLeaf/onimai-locon-test
 ![05510-2023-02-27_dc50ca8f4b_download_TTRH_3334316821_c1054458-576x832](https://user-images.githubusercontent.com/59680068/221551622-e26477a7-f929-42a3-9cd5-937ca1595daf.png)
