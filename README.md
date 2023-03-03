@@ -10,7 +10,7 @@ im2col:
 ![image](https://user-images.githubusercontent.com/59680068/221547996-4be14700-1392-4859-9e29-e3e669142a09.png)
 
 
-## What I done
+## What I did
 * A demo for LoRA on Convolution network(This repo)
 * A network module for kohya_ss/sd-script
 * An [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) for using this↑ in sd-webui
@@ -28,8 +28,23 @@ but lora only train green part, locon can train yellow part. Combine them can co
 
 ## usage
 ### For kohya script
-move locon folder into kohya-ss/sd-scripts
-and use 
+Activate sd-scripts' venv and then install this package
+```bash
+source PATH_TO_SDSCRIPTS_VENV/Scripts/activate
+```
+or
+```powershell
+PATH_TO_SDSCRIPTS_VENV\Scripts\Activate.ps1 # or .bat for cmd
+```
+
+install this package:
+```bash
+git clone https://github.com/KohakuBlueleaf/LoCon
+cd LoCon
+pip install .
+```
+
+Finally you can use this package's locon_kohya to run kohya's training script
 ```bash
 python3 sd-scripts/train_network.py \
   --network_module locon.locon_kohya \
@@ -44,6 +59,19 @@ download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) int
 ### Additional Networks
 Once you install the extension. You can also use your locon model in [addnet](https://github.com/kohya-ss/sd-webui-additional-networks/releases)<br>
 just use it as LoRA model.
+
+
+### Update
+* For main package
+```bash
+cd LoCon
+git pull
+pip install .
+```
+
+* For extension<br>
+Use Extension's tab's check updates btn, and then restart the webui<br>
+**Use apply and restart button will not restart the extension**
 
 ---
 
