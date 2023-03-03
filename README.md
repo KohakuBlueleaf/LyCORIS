@@ -37,7 +37,13 @@ or
 PATH_TO_SDSCRIPTS_VENV\Scripts\Activate.ps1 # or .bat for cmd
 ```
 
-install this package:
+And then you can install this package:
+* through pip
+```bash
+pip install locon
+```
+
+* from source
 ```bash
 git clone https://github.com/KohakuBlueleaf/LoCon
 cd LoCon
