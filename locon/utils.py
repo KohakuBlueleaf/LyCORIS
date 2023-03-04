@@ -9,20 +9,30 @@ from tqdm import tqdm
 
 def extract_conv(
     weight: nn.Parameter|torch.Tensor,
-    lora_rank = 8,
-    singular_threshold = 0.1,
-    use_threshold = False,
+    mode = 'fixed',
+    mode_param = 0,
     device = 'cpu',
 ) -> tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch, kernel_size, _ = weight.shape
-    lora_rank = min(out_ch, in_ch, lora_rank)
     
     U, S, Vh = linalg.svd(weight.reshape(out_ch, -1).to(device))
     
-    if use_threshold:
-        lora_rank = torch.sum(S>singular_threshold)
-        lora_rank = max(1, lora_rank)
-        print(lora_rank)
+    if mode=='fixed':
+        lora_rank = mode_param
+    elif mode=='threshold':
+        assert mode_param>=0
+        lora_rank = torch.sum(S>mode_param)
+    elif mode=='ratio':
+        assert 1>=mode_param>=0
+        min_s = torch.max(S)*mode_param
+        lora_rank = torch.sum(S>min_s)
+    elif mode=='percentile':
+        assert 1>=mode_param>=0
+        s_cum = torch.cumsum(S, dim=0)
+        min_cum_sum = mode_param * torch.sum(S)
+        lora_rank = torch.sum(s_cum>min_cum_sum)
+    lora_rank = max(1, lora_rank)
+    lora_rank = min(out_ch, in_ch, lora_rank)
     
     U = U[:, :lora_rank]
     S = S[:lora_rank]
@@ -59,20 +69,30 @@ def merge_conv(
 
 def extract_linear(
     weight: nn.Parameter|torch.Tensor,
-    lora_rank = 8,
-    singular_threshold = 0.1,
-    use_threshold = False,
+    mode = 'fixed',
+    mode_param = 0,
     device = 'cpu',
 ) -> tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch = weight.shape
-    lora_rank = min(out_ch, in_ch, lora_rank)
     
     U, S, Vh = linalg.svd(weight.to(device))
     
-    if use_threshold:
-        lora_rank = torch.sum(S>singular_threshold).item()
-        lora_rank = max(1, lora_rank)
-        print(lora_rank, singular_threshold)
+    if mode=='fixed':
+        lora_rank = mode_param
+    elif mode=='threshold':
+        assert mode_param>=0
+        lora_rank = torch.sum(S>mode_param)
+    elif mode=='ratio':
+        assert 1>=mode_param>=0
+        min_s = torch.max(S)*mode_param
+        lora_rank = torch.sum(S>min_s)
+    elif mode=='percentile':
+        assert 1>=mode_param>=0
+        s_cum = torch.cumsum(S, dim=0)
+        min_cum_sum = mode_param * torch.sum(S)
+        lora_rank = torch.sum(s_cum>min_cum_sum)
+    lora_rank = max(1, lora_rank)
+    lora_rank = min(out_ch, in_ch, lora_rank)
     
     U = U[:, :lora_rank]
     S = S[:lora_rank]
@@ -109,12 +129,9 @@ def merge_linear(
 def extract_diff(
     base_model,
     db_model,
-    lora_dim=4, 
-    conv_lora_dim=4,
-    use_threshold = False,
-    use_threshold_conv = False,
-    threshold_linear = 0.1,
-    threshold_conv = 0.1,
+    mode = 'fixed',
+    linear_mode_param = 0,
+    conv_mode_param = 0,
     extract_device = 'cpu'
 ):
     UNET_TARGET_REPLACE_MODULE = [
@@ -155,9 +172,8 @@ def extract_diff(
                     if layer == 'Linear':
                         extract_a, extract_b = extract_linear(
                             (child_module.weight - weights[child_name]),
-                            lora_dim,
-                            threshold_linear,
-                            use_threshold,
+                            mode,
+                            linear_mode_param,
                             device = extract_device,
                         )
                     elif layer == 'Conv2d':
@@ -165,9 +181,8 @@ def extract_diff(
                                      and child_module.weight.shape[3] == 1)
                         extract_a, extract_b = extract_conv(
                             (child_module.weight - weights[child_name]), 
-                            conv_lora_dim if is_linear else lora_dim,
-                            threshold_linear if is_linear else threshold_conv,
-                            use_threshold if is_linear else use_threshold_conv,
+                            mode,
+                            linear_mode_param if is_linear else conv_mode_param,
                             device = extract_device,
                         )
                     else:
