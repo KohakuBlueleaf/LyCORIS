@@ -31,6 +31,10 @@ def get_args():
         default='fixed', type=str
     )
     parser.add_argument(
+        "--safetensors", help='use safetensors to save locon model',
+        default=False, action="store_true"
+    )
+    parser.add_argument(
         "--linear_dim", help="network dim for linear layer in fixed mode",
         default=1, type=int
     )
@@ -65,10 +69,12 @@ def get_args():
     return parser.parse_args()
 ARGS = get_args()
 
+
 from locon.utils import extract_diff
 from locon.kohya_model_utils import load_models_from_stable_diffusion_checkpoint
 
 import torch
+from safetensors.torch import save_file
 
 
 def main():
@@ -95,7 +101,11 @@ def main():
         linear_mode_param, conv_mode_param,
         args.device
     )
-    torch.save(state_dict, args.output_name)
+    
+    if args.safetensors:
+        save_file(state_dict, args.output_name)
+    else:
+        torch.save(state_dict, args.output_name)
 
 
 if __name__ == '__main__':
