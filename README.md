@@ -67,6 +67,20 @@ Once you install the extension. You can also use your locon model in [addnet](ht
 just use it as LoRA model.
 
 
+### Extract LoCon
+You can extract LoCon from a dreambooth model with its base model.
+```bash
+python3 extract_locon.py <settings> <base_model> <db_model> <output>
+```
+Use --help to get more info
+```
+$ python3 extract_locon.py --help
+usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--linear_dim LINEAR_DIM] [--conv_dim CONV_DIM]
+                        [--linear_threshold LINEAR_THRESHOLD] [--conv_threshold CONV_THRESHOLD] [--linear_ratio LINEAR_RATIO] [--conv_ratio CONV_RATIO]
+                        [--linear_percentile LINEAR_PERCENTILE] [--conv_percentile CONV_PERCENTILE]
+                        base_model db_model output_name
+```
+
 ### Update
 * For main package
 ```bash
