@@ -30,7 +30,7 @@ def extract_conv(
         assert 1>=mode_param>=0
         s_cum = torch.cumsum(S, dim=0)
         min_cum_sum = mode_param * torch.sum(S)
-        lora_rank = torch.sum(s_cum>min_cum_sum)
+        lora_rank = torch.sum(s_cum<min_cum_sum)
     lora_rank = max(1, lora_rank)
     lora_rank = min(out_ch, in_ch, lora_rank)
     
@@ -90,7 +90,7 @@ def extract_linear(
         assert 1>=mode_param>=0
         s_cum = torch.cumsum(S, dim=0)
         min_cum_sum = mode_param * torch.sum(S)
-        lora_rank = torch.sum(s_cum>min_cum_sum)
+        lora_rank = torch.sum(s_cum<min_cum_sum)
     lora_rank = max(1, lora_rank)
     lora_rank = min(out_ch, in_ch, lora_rank)
     
