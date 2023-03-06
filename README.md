@@ -54,8 +54,8 @@ Finally you can use this package's locon_kohya to run kohya's training script
 ```bash
 python3 sd-scripts/train_network.py \
   --network_module locon.locon_kohya \
-  --network_args "conv_dim=RANK_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
-  --network_dim "RANK_FOR_TRANSFORMER" --network_alpha "ALPHA_FOR_TRANSFORMER"
+  --network_dim "RANK_FOR_TRANSFORMER" --network_alpha "ALPHA_FOR_TRANSFORMER"\
+  --network_args "conv_dim=RANK_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" "dropout=DROPOUT_RATE" \
 ```
 to train locon+lora for SD model
 

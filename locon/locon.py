@@ -10,7 +10,7 @@ class LoConModule(nn.Module):
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """
 
-    def __init__(self, lora_name, org_module: nn.Module, multiplier=1.0, lora_dim=4, alpha=1):
+    def __init__(self, lora_name, org_module: nn.Module, multiplier=1.0, lora_dim=4, alpha=1, dropout=0.):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
@@ -30,7 +30,12 @@ class LoConModule(nn.Module):
             out_dim = org_module.out_features
             self.lora_down = nn.Linear(in_dim, lora_dim, bias=False)
             self.lora_up = nn.Linear(lora_dim, out_dim, bias=False)
-
+        
+        if dropout:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = nn.Identity()
+        
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = lora_dim if alpha is None or alpha == 0 else alpha
@@ -50,4 +55,4 @@ class LoConModule(nn.Module):
         del self.org_module
 
     def forward(self, x):
-        return self.org_forward(x) + self.lora_up(self.lora_down(x)) * self.multiplier * self.scale
+        return self.org_forward(x) + self.dropout(self.lora_up(self.lora_down(x))) * self.multiplier * self.scale

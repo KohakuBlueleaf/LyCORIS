@@ -72,7 +72,8 @@ class LoRANetwork(torch.nn.Module):
         text_encoder, unet, 
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
-        alpha=1, conv_alpha=1
+        alpha=1, conv_alpha=1,
+        dropout = 0,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
@@ -81,12 +82,17 @@ class LoRANetwork(torch.nn.Module):
         if self.conv_lora_dim != self.lora_dim: 
             print('Apply different lora dim for conv layer')
             print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
+            
         self.alpha = alpha
         self.conv_alpha = float(conv_alpha)
         if self.alpha != self.conv_alpha: 
             print('Apply different alpha value for conv layer')
             print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
-
+        
+        if 1 >= dropout >= 0:
+            print(f'Use Dropout value: {dropout}')
+        self.dropout = dropout
+        
         # create module instances
         def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:
             print('Create LoCon Module')
@@ -97,13 +103,22 @@ class LoRANetwork(torch.nn.Module):
                         lora_name = prefix + '.' + name + '.' + child_name
                         lora_name = lora_name.replace('.', '_')
                         if child_module.__class__.__name__ == 'Linear':
-                            lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
+                            lora = LoConModule(
+                                lora_name, child_module, self.multiplier, 
+                                self.lora_dim, self.alpha, self.dropout
+                            )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1:
-                                lora = LoConModule(lora_name, child_module, self.multiplier, self.lora_dim, self.alpha)
+                                lora = LoConModule(
+                                    lora_name, child_module, self.multiplier, 
+                                    self.lora_dim, self.alpha, self.dropout
+                                )
                             else:
-                                lora = LoConModule(lora_name, child_module, self.multiplier, self.conv_lora_dim, self.conv_alpha)
+                                lora = LoConModule(
+                                    lora_name, child_module, self.multiplier, 
+                                    self.conv_lora_dim, self.conv_alpha, self.dropout
+                                )
                         else:
                             continue
                         loras.append(lora)
