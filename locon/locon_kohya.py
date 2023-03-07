@@ -10,7 +10,7 @@ from typing import List
 import torch
 
 from .kohya_utils import *
-from .lycoris import LycoHadaModule
+from .locon import LoConModule
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -94,7 +94,7 @@ class LoRANetwork(torch.nn.Module):
         self.dropout = dropout
         
         # create module instances
-        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LycoHadaModule]:
+        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:
             print('Create LoCon Module')
             loras = []
             for name, module in root_module.named_modules():
@@ -103,19 +103,19 @@ class LoRANetwork(torch.nn.Module):
                         lora_name = prefix + '.' + name + '.' + child_name
                         lora_name = lora_name.replace('.', '_')
                         if child_module.__class__.__name__ == 'Linear':
-                            lora = LycoHadaModule(
+                            lora = LoConModule(
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, self.dropout
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1:
-                                lora = LycoHadaModule(
+                                lora = LoConModule(
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, self.dropout
                                 )
                             else:
-                                lora = LycoHadaModule(
+                                lora = LoConModule(
                                     lora_name, child_module, self.multiplier, 
                                     self.conv_lora_dim, self.conv_alpha, self.dropout
                                 )
