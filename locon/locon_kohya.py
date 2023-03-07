@@ -18,11 +18,13 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         network_dim = 4                     # default
     conv_dim = kwargs.get('conv_dim', network_dim)
     conv_alpha = kwargs.get('conv_alpha', network_alpha)
+    dropout = kwargs.get('dropout', 0.)
     network = LoRANetwork(
         text_encoder, unet, 
         multiplier=multiplier, 
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
-        alpha=network_alpha, conv_alpha=conv_alpha
+        alpha=network_alpha, conv_alpha=conv_alpha,
+        dropout=dropout
     )
     return network
 
@@ -73,7 +75,7 @@ class LoRANetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        dropout = 0,
+        dropout = 0.,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
@@ -89,9 +91,11 @@ class LoRANetwork(torch.nn.Module):
             print('Apply different alpha value for conv layer')
             print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
         
-        if 1 >= dropout >= 0:
+        self.dropout = float(dropout)
+        if 1 >= self.dropout >= 0:
             print(f'Use Dropout value: {dropout}')
-        self.dropout = dropout
+        else:
+            self.dropout = 0
         
         # create module instances
         def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:
