@@ -66,10 +66,11 @@ class LoConModule(nn.Module):
         return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape)
 
     def forward(self, x):
+        bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x,
-            (self.org_module[0].weight 
+            (self.org_module[0].weight.data 
              + self.dropout(self.make_weight()) * self.multiplier * self.scale),
-            self.org_module[0].bias,
+            bias,
             **self.extra_args,
         )
