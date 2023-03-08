@@ -25,11 +25,19 @@ class LoConModule(nn.Module):
             out_dim = org_module.out_channels
             self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
+            self.op = F.conv2d
+            self.extra_args = {
+                'stride': stride,
+                'padding': padding
+            }
         else:
             in_dim = org_module.in_features
             out_dim = org_module.out_features
             self.lora_down = nn.Linear(in_dim, lora_dim, bias=False)
             self.lora_up = nn.Linear(lora_dim, out_dim, bias=False)
+            self.op = F.linear
+            self.extra_args = {}
+        self.shape = org_module.weight.shape
         
         if dropout:
             self.dropout = nn.Dropout(dropout)
@@ -47,12 +55,21 @@ class LoConModule(nn.Module):
         torch.nn.init.zeros_(self.lora_up.weight)
 
         self.multiplier = multiplier
-        self.org_module = org_module # remove in applying
+        self.org_module = [org_module]
 
     def apply_to(self):
-        self.org_forward = self.org_module.forward
-        self.org_module.forward = self.forward
-        del self.org_module
+        self.org_module[0].forward = self.forward
+
+    def make_weight(self):
+        wa = self.lora_up.weight
+        wb = self.lora_down.weight
+        return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape)
 
     def forward(self, x):
-        return self.org_forward(x) + self.dropout(self.lora_up(self.lora_down(x))) * self.multiplier * self.scale
+        return self.op(
+            x,
+            (self.org_module[0].weight 
+             + self.dropout(self.make_weight()) * self.multiplier * self.scale),
+            self.org_module[0].bias,
+            **self.extra_args,
+        )
