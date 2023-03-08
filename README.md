@@ -1,5 +1,9 @@
 # LoCon - LoRA for Convolution Network
 
+This project will be moved to another project for further development.
+And will be archived in the future!
+(Will not affect existed thing like 3rd-party training script or LoCon models)
+
 ## Motivation
 convolution is matmul so there should be a lora version for it.
 
