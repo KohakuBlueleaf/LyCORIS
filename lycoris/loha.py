@@ -27,7 +27,8 @@ class HadaWeight(torch.autograd.Function):
         return grad_out, grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
 
 
-def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
+def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale, dropout):
+    # return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale, dropout)
     return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale)
 
 
