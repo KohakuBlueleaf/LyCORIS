@@ -11,15 +11,28 @@ This project is started from LoCon(see archive branch).
 ## What we have now
 See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) for more example and explanation
 
-* Conventional LoRA
-  * Include Conv layer implementation from LoCon
+### Conventional LoRA
+* Include Conv layer implementation from LoCon
+* recommended settings
+  * dim <= 64
+  * alpha = 1 (or lower, like 0.3)
 
 
-* LoRA with Hadamard Product representation (LoHa)
-  * Ref: [FedPara Low-Rank Hadamard Product For Communication-Efficient Federated Learning](https://openreview.net/pdf?id=d71n4ftoCBy)
-  * designed for federated learning, but has some cool property like rank<=dim^2 so should be good for parameter-efficient finetuning.
-    * Conventional LoRA is rank<=dim
+### LoRA with Hadamard Product representation (LoHa)
+* Ref: [FedPara Low-Rank Hadamard Product For Communication-Efficient Federated Learning](https://openreview.net/pdf?id=d71n4ftoCBy)
+* designed for federated learning, but has some cool property like rank<=dim^2 so should be good for parameter-efficient finetuning.
+  * Conventional LoRA is rank<=dim
+* recommended settings
+  * dim <= 32
+  * alpha = 1 (or lower)
+  
+**WARNING: You are not supposed to use dim>64 in LoHa, which is over sqrt(original_dim) for almost all layer in SD**
 
+**High dim with LoHa may cause unstable loss or just goes to NaN. If you want to use high dim LoHa, please use lower lr**
+
+**WARNING-AGAIN: Use parameter-efficient algorithim in parameter-unefficient way is not a good idea**
+
+---
 
 ## usage
 ### For kohya script
