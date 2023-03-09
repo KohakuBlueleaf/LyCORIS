@@ -5,6 +5,7 @@
 # https://github.com/kohya-ss/sd-scripts/blob/main/networks/lora.py
 
 import math
+from warnings import warn
 import os
 from typing import List
 import torch
@@ -27,6 +28,21 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     }[algo]
     
     print(f'Using rank adaptation algo: {algo}')
+    
+    if (algo == 'loha' 
+        and not kwargs.get('no_dim_warn', False) 
+        and network_dim>64 
+        or conv_dim>64):
+        warn(
+            (
+                "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)"
+                "in Hadamard Product representation!\n"
+                "Please consider use lower dim or disable this warning with --network_args no_dim_warn\n"
+                "If you just want to use high dim loha, please consider use lower lr."
+            ),
+            stacklevel=2,
+        )
+    
     network = LoRANetwork(
         text_encoder, unet, 
         multiplier=multiplier, 

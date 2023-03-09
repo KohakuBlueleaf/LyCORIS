@@ -36,7 +36,12 @@ class LohaModule(nn.Module):
     Hadamard product Implementaion for Low Rank Adaptation
     """
 
-    def __init__(self, lora_name, org_module: nn.Module, multiplier=1.0, lora_dim=4, alpha=1, dropout=0.):
+    def __init__(
+        self, 
+        lora_name, 
+        org_module: nn.Module, 
+        multiplier=1.0, lora_dim=4, alpha=1, dropout=0.,
+    ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
