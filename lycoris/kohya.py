@@ -31,17 +31,18 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     
     if (algo == 'loha' 
         and not kwargs.get('no_dim_warn', False) 
-        and network_dim>64 
-        or conv_dim>64):
+        and (network_dim>64 or conv_dim>64)):
+        print('='*20 + 'WARNING' + '='*20)
         warn(
             (
                 "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)"
                 "in Hadamard Product representation!\n"
-                "Please consider use lower dim or disable this warning with --network_args no_dim_warn\n"
+                "Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n"
                 "If you just want to use high dim loha, please consider use lower lr."
             ),
             stacklevel=2,
         )
+        print('='*20 + 'WARNING' + '='*20)
     
     network = LoRANetwork(
         text_encoder, unet, 
