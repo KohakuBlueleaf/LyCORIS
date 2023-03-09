@@ -24,7 +24,7 @@ With some experiments from community, finetuning whole model can learn "More". B
 
 ## Hadamard product vs Conventional
 We introduced LoRA finetuning with Hadamard Product representation from FedPara.
-And based on this [experiments](https://civitai.com/models/17336/roukin8-character-lohaloconfullckpt-8), LoHa with same size (and dim>2, or rank>4) can get definitely better result.
+And based on this [experiments](https://civitai.com/models/17336/roukin8-character-lohaloconfullckpt-8), LoHa with same size (and dim>2, or rank>4) can get better result in some situation.
 
 ![Image](https://i.imgur.com/l3P0TgM.jpg)
 
