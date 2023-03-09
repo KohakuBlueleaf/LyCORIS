@@ -1,4 +1,4 @@
-# LoCon network module
+# network module for kohya
 # reference:
 # https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
 # https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
@@ -11,6 +11,7 @@ import torch
 
 from .kohya_utils import *
 from .locon import LoConModule
+from .loha import LohaModule
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -18,14 +19,21 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         network_dim = 4                     # default
     conv_dim = kwargs.get('conv_dim', network_dim)
     conv_alpha = kwargs.get('conv_alpha', network_alpha)
-    dropout = kwargs.get('dropout', 0.)
+    algo = kwargs.get('algo', 'lora')
+    network_module = {
+        'lora': LoConModule,
+        'loha': LohaModule,
+    }[algo]
+    
+    print(f'Using rank adaptation algo: {algo}')
     network = LoRANetwork(
         text_encoder, unet, 
         multiplier=multiplier, 
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
         alpha=network_alpha, conv_alpha=conv_alpha,
-        dropout=dropout
+        module = network_module
     )
+    
     return network
 
 
@@ -75,7 +83,7 @@ class LoRANetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        dropout = 0.,
+        dropout = 0, module = LoConModule,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
@@ -91,14 +99,12 @@ class LoRANetwork(torch.nn.Module):
             print('Apply different alpha value for conv layer')
             print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
         
-        self.dropout = float(dropout)
-        if 1 >= self.dropout >= 0:
+        if 1 >= dropout >= 0:
             print(f'Use Dropout value: {dropout}')
-        else:
-            self.dropout = 0
+        self.dropout = dropout
         
         # create module instances
-        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[LoConModule]:
+        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[module]:
             print('Create LoCon Module')
             loras = []
             for name, module in root_module.named_modules():
@@ -106,23 +112,25 @@ class LoRANetwork(torch.nn.Module):
                     for child_name, child_module in module.named_modules():
                         lora_name = prefix + '.' + name + '.' + child_name
                         lora_name = lora_name.replace('.', '_')
-                        if child_module.__class__.__name__ == 'Linear':
-                            lora = LoConModule(
+                        if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
+                            lora = module(
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, self.dropout
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
-                            if k_size==1:
-                                lora = LoConModule(
+                            if k_size==1 and lora_dim>0:
+                                lora = module(
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, self.dropout
                                 )
-                            else:
-                                lora = LoConModule(
+                            elif conv_lora_dim>0:
+                                lora = module(
                                     lora_name, child_module, self.multiplier, 
                                     self.conv_lora_dim, self.conv_alpha, self.dropout
                                 )
+                            else:
+                                continue
                         else:
                             continue
                         loras.append(lora)
@@ -200,6 +208,10 @@ class LoRANetwork(torch.nn.Module):
 
     def enable_gradient_checkpointing(self):
         # not supported
+        def make_ckpt(module):
+            if isinstance(module, torch.nn.Module):
+                module.grad_ckpt = True
+        self.apply(make_ckpt)
         pass
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
