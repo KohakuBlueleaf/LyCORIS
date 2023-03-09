@@ -27,8 +27,7 @@ class HadaWeight(torch.autograd.Function):
         return grad_out, grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
 
 
-def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale, dropout):
-    # return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale, dropout)
+def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
     return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale)
 
 
@@ -106,7 +105,6 @@ class LohaModule(nn.Module):
             self.hada_w1_a, self.hada_w1_b,
             self.hada_w2_a, self.hada_w2_b,
             scale = torch.tensor(self.scale*self.multiplier),
-            dropout = self.dropout
         )
         
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
