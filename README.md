@@ -110,7 +110,7 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Demo.md) an
   author       = "Shih-Ying Yeh (Kohaku-BlueLeaf)",
   title        = "LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
   howpublished = "\url{https://github.com/KohakuBlueleaf/LyCORIS}",
-  month        = "Feb",
+  month        = "March",
   year         = "2023"
 }
 ```
