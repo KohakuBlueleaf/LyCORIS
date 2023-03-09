@@ -17,9 +17,9 @@ from .loha import LohaModule
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
     if network_dim is None:
         network_dim = 4                     # default
-    conv_dim = kwargs.get('conv_dim', network_dim)
-    conv_alpha = kwargs.get('conv_alpha', network_alpha)
-    dropout = kwargs.get('dropout', 0.)
+    conv_dim = int(kwargs.get('conv_dim', network_dim))
+    conv_alpha = float(kwargs.get('conv_alpha', network_alpha))
+    dropout = float(kwargs.get('dropout', 0.))
     algo = kwargs.get('algo', 'lora')
     network_module = {
         'lora': LoConModule,
@@ -106,7 +106,7 @@ class LoRANetwork(torch.nn.Module):
         self.dropout = dropout
         
         # create module instances
-        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[module]:
+        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[network_module]:
             print('Create LoCon Module')
             loras = []
             for name, module in root_module.named_modules():

@@ -105,7 +105,6 @@ class LohaModule(nn.Module):
             self.hada_w1_a, self.hada_w1_b,
             self.hada_w2_a, self.hada_w2_b,
             scale = torch.tensor(self.scale*self.multiplier),
-            dropout = self.dropout
         )
         
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
