@@ -52,7 +52,7 @@ $dW = Wa \cdot Wb$ with $rank(dW) \le dim$
 [Ref](https://arxiv.org/abs/2108.06098)
 
 consider $dW = Wa \odot Wb$, we can get $rank(dW) \le rank(Wa) \times rank(Wb)$.
-And then we use conventional method on $Wa$ and $Wb$. we can use 2x dim to get square rank.
+And then we use conventional method on $Wa$ and $Wb$. Which means it can use 2x dim to get square rank.
 
 **Rank != Information capacity, but they are relative**
 
@@ -66,4 +66,9 @@ With pytorch's autograd, this kind of operation will cache the $Wa$ and $Wb$ for
 To avoid this terrible situation, I impl a custom backward which will reconstruct $Wa$ and $Wb$ when actually needed, this method saved tons of memory.
 
 ### Special method for convolution kernels
+Todo...
+
+---
+
+## Sparse Bias
 Todo...
