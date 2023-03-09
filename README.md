@@ -90,6 +90,7 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Demo.md) and 
 
 
 ## Todo list
+- [ ] Module and Document for using LyCORIS in any other model, Not only SD.
 - [ ] Proposition3 in [FedPara](https://openreview.net/pdf?id=d71n4ftoCBy)
   * also need custom backward to save the vram
 - [ ] Low rank + sparse representation
