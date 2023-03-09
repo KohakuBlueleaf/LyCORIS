@@ -50,6 +50,8 @@ $dW = Wa \cdot Wb$ with $rank(dW) \le dim$
 
 ## Hadamard Product
 [Ref](https://arxiv.org/abs/2108.06098)
+![image](https://user-images.githubusercontent.com/59680068/223942143-05b5ebff-06c4-4d07-a0eb-037fd6f04e77.png)
+
 
 consider $dW = Wa \odot Wb$, we can get $rank(dW) \le rank(Wa) \times rank(Wb)$.
 And then we use conventional method on $Wa$ and $Wb$. Which means it can use 2x dim to get square rank.
