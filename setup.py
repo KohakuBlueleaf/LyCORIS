@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='lycoris',
+    name='lycoris_lora',
     packages=['lycoris'],
     version='0.0.1',
     url='https://github.com/KohakuBlueleaf/LoCon',
