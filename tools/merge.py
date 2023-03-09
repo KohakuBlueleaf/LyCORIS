@@ -10,7 +10,7 @@ def get_args():
         default='', type=str
     )
     parser.add_argument(
-        "lycoris_model", help="the loha model you want to extract the locon",
+        "lycoris_model", help="the lyco model you want to merge into sd model",
         default='', type=str
     )
     parser.add_argument(
