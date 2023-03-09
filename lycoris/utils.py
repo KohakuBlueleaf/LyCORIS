@@ -269,3 +269,66 @@ def merge_locon(
         base_model[2], 
         UNET_TARGET_REPLACE_MODULE
     )
+
+
+def merge_loha(
+    base_model,
+    loha_state_dict: Dict[str, torch.TensorType],
+    scale: float = 1.0,
+    device = 'cpu'
+):
+    UNET_TARGET_REPLACE_MODULE = [
+        "Transformer2DModel", 
+        "Attention", 
+        "ResnetBlock2D", 
+        "Downsample2D", 
+        "Upsample2D"
+    ]
+    TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
+    LORA_PREFIX_UNET = 'lora_unet'
+    LORA_PREFIX_TEXT_ENCODER = 'lora_te'
+    def merge(
+        prefix, 
+        root_module: torch.nn.Module,
+        target_replace_modules
+    ):
+        temp = {}
+        
+        for name, module in tqdm(list(root_module.named_modules())):
+            if module.__class__.__name__ in target_replace_modules:
+                temp[name] = {}
+                for child_name, child_module in module.named_modules():
+                    layer = child_module.__class__.__name__
+                    if layer not in {'Linear', 'Conv2d'}:
+                        continue
+                    lora_name = prefix + '.' + name + '.' + child_name
+                    lora_name = lora_name.replace('.', '_')
+                    
+                    w1a = loha_state_dict[f'{lora_name}.hada_w1_a'].float()
+                    w1b = loha_state_dict[f'{lora_name}.hada_w1_b'].float()
+                    w2a = loha_state_dict[f'{lora_name}.hada_w2_a'].float()
+                    w2b = loha_state_dict[f'{lora_name}.hada_w2_b'].float()
+                    alpha = loha_state_dict[f'{lora_name}.alpha'].float()
+                    dim = w1b.shape[0]
+                    
+                    delta = (w1a @ w1b) * (w2a @ w2b)
+                    delta = delta.reshape(child_module.weight.shape)
+                    
+                    if layer == 'Conv2d':
+                        child_module.weight.requires_grad_(False)
+                        child_module.weight += (alpha.to(device)/dim * scale * delta).cpu()
+                    elif layer == 'Linear':
+                        child_module.weight.requires_grad_(False)
+                        child_module.weight += (alpha.to(device)/dim * scale * delta).cpu()
+                    del delta
+    
+    merge(
+        LORA_PREFIX_TEXT_ENCODER, 
+        base_model[0], 
+        TEXT_ENCODER_TARGET_REPLACE_MODULE
+    )
+    merge(
+        LORA_PREFIX_UNET,
+        base_model[2], 
+        UNET_TARGET_REPLACE_MODULE
+    )
