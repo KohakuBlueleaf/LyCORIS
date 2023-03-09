@@ -179,7 +179,7 @@ Params to train:
 @misc{LoCon,
   author       = "Shih-Ying Yeh (Kohaku-BlueLeaf)",
   title        = "LoCon - LoRA for Convolution Network",
-  howpublished = "\url{https://github.com/KohakuBlueleaf/LoCon/tree/locon-archive}",
+  howpublished = "\url{https://github.com/KohakuBlueleaf/LyCORIS/tree/locon-archive}",
   month        = "Feb",
   year         = "2023"
 }
