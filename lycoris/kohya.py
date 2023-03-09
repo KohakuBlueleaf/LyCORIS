@@ -19,6 +19,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         network_dim = 4                     # default
     conv_dim = kwargs.get('conv_dim', network_dim)
     conv_alpha = kwargs.get('conv_alpha', network_alpha)
+    dropout = kwargs.get('dropout', 0.)
     algo = kwargs.get('algo', 'lora')
     network_module = {
         'lora': LoConModule,
@@ -31,7 +32,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         multiplier=multiplier, 
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
         alpha=network_alpha, conv_alpha=conv_alpha,
-        network_module = network_module
+        dropout=dropout,
+        network_module=network_module
     )
     
     return network
