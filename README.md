@@ -86,7 +86,7 @@ usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--safete
 
 
 ## Example and Comparing for different algo
-see [Demo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Demo.md) and [Algo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Algo.md)
+see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Demo.md) and [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Algo.md)
 
 
 ## Todo list
