@@ -45,3 +45,9 @@ Note that the two files have almost the same size (around 30mb). For this I set 
 ```
 
 And there is more example about LoHA vs LoCon in same file size. (diff < 200KB)
+![xyz_grid-0330-2023-03-08_d4d1ef62c3_KBlueLeaf_KBlueLeaf-v1 1_4114224331_c2af89d9-2160x2789](https://user-images.githubusercontent.com/59680068/223930255-a1e4b91e-25da-41ce-9dd2-12bd0e976afc.jpg)
+![xyz_grid-0324-2023-03-08_d4d1ef62c3_KBlueLeaf_KBlueLeaf-v1 1_2496183095_a91c0526-2160x2789](https://user-images.githubusercontent.com/59680068/223930265-f1f1d658-3722-46ce-93e6-fdec18a58c19.jpg)
+
+![xyz_grid-0300-2023-03-08_b38775f1cf_download_谈秋-v2_3652865965_ed37959c-2640x2047](https://user-images.githubusercontent.com/59680068/223930346-c32a062c-4b3a-40a6-83e3-853127129b7d.jpg)
+![xyz_grid-0296-2023-03-08_d4d1ef62c3_KBlueLeaf_KBlueLeaf-v1 1_4001890147_ed37959c-2640x2047](https://user-images.githubusercontent.com/59680068/223930351-45653f67-7b0c-42e6-9a81-cc691d2b9dbf.jpg)
+
