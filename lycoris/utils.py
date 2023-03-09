@@ -1,3 +1,5 @@
+from typing import *
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,11 +10,11 @@ from tqdm import tqdm
 
 
 def extract_conv(
-    weight: nn.Parameter|torch.Tensor,
+    weight: Union[torch.Tensor, nn.Parameter],
     mode = 'fixed',
     mode_param = 0,
     device = 'cpu',
-) -> tuple[nn.Parameter, nn.Parameter]:
+) -> Tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch, kernel_size, _ = weight.shape
     
     U, S, Vh = linalg.svd(weight.reshape(out_ch, -1).to(device))
@@ -46,8 +48,8 @@ def extract_conv(
 
 
 def merge_conv(
-    weight_a: nn.Parameter|torch.Tensor,
-    weight_b: nn.Parameter|torch.Tensor,
+    weight_a: Union[torch.Tensor, nn.Parameter],
+    weight_b: Union[torch.Tensor, nn.Parameter],
     device = 'cpu'
 ):
     rank, in_ch, kernel_size, k_ = weight_a.shape
@@ -68,11 +70,11 @@ def merge_conv(
 
 
 def extract_linear(
-    weight: nn.Parameter|torch.Tensor,
+    weight: Union[torch.Tensor, nn.Parameter],
     mode = 'fixed',
     mode_param = 0,
     device = 'cpu',
-) -> tuple[nn.Parameter, nn.Parameter]:
+) -> Tuple[nn.Parameter, nn.Parameter]:
     out_ch, in_ch = weight.shape
     
     U, S, Vh = linalg.svd(weight.to(device))
@@ -106,8 +108,8 @@ def extract_linear(
 
 
 def merge_linear(
-    weight_a: nn.Parameter|torch.Tensor,
-    weight_b: nn.Parameter|torch.Tensor,
+    weight_a: Union[torch.Tensor, nn.Parameter],
+    weight_b: Union[torch.Tensor, nn.Parameter],
     device = 'cpu'
 ):
     rank, in_ch = weight_a.shape
@@ -210,7 +212,7 @@ def extract_diff(
 
 def merge_locon(
     base_model,
-    locon_state_dict: dict[str, torch.TensorType],
+    locon_state_dict: Dict[str, torch.TensorType],
     scale: float = 1.0,
     device = 'cpu'
 ):
