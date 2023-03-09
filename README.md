@@ -55,8 +55,8 @@ to train lycoris module for SD model
   * loha: Hadamard product representation introduced by FedPara
 
 * Tips:
-  * Use network_dim=0 or conv_dim=0 can disable linear/conv layer
-  * LoHa doesn't support dropout for now.
+  * Use network_dim=0 or conv_dim=0 to disable linear/conv layer
+  * LoHa doesn't support dropout yet.
 
 
 ### For a1111's sd-webui
@@ -86,7 +86,7 @@ usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--safete
 
 
 ## Example and Comparing for different algo
-see Demo.md and Algo.md
+see [Demo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Demo.md) and [Algo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Algo.md)
 
 
 ## Todo list
