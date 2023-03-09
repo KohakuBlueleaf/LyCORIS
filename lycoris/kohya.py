@@ -31,7 +31,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         multiplier=multiplier, 
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
         alpha=network_alpha, conv_alpha=conv_alpha,
-        module = network_module
+        network_module = network_module
     )
     
     return network
@@ -83,7 +83,7 @@ class LoRANetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        dropout = 0, module = LoConModule,
+        dropout = 0, network_module = LoConModule,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
@@ -113,19 +113,19 @@ class LoRANetwork(torch.nn.Module):
                         lora_name = prefix + '.' + name + '.' + child_name
                         lora_name = lora_name.replace('.', '_')
                         if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
-                            lora = module(
+                            lora = network_module(
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, self.dropout
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1 and lora_dim>0:
-                                lora = module(
+                                lora = network_module(
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, self.dropout
                                 )
                             elif conv_lora_dim>0:
-                                lora = module(
+                                lora = network_module(
                                     lora_name, child_module, self.multiplier, 
                                     self.conv_lora_dim, self.conv_alpha, self.dropout
                                 )
