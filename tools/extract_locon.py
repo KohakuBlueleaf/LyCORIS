@@ -1,5 +1,5 @@
 import os, sys
-sys.path.append(os.getcwd())
+sys.path.insert(0, os.getcwd())
 import argparse
 
 
@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument(
         "--mode", 
         help=(
-            'extraction mode, can be "fixed", "threshold", "ratio", "percentile". '
+            'extraction mode, can be "fixed", "threshold", "ratio", "quantile". '
             'If not "fixed", network_dim and conv_dim will be ignored'
         ),
         default='fixed', type=str
@@ -62,11 +62,11 @@ def get_args():
         default=0., type=float
     )
     parser.add_argument(
-        "--linear_percentile", help="singular value percentile for linear layer percentile mode",
+        "--linear_quantile", help="singular value quantile for linear layer quantile mode",
         default=1., type=float
     )
     parser.add_argument(
-        "--conv_percentile", help="singular value percentile for conv layer percentile mode",
+        "--conv_quantile", help="singular value quantile for conv layer quantile mode",
         default=1., type=float
     )
     return parser.parse_args()
@@ -89,13 +89,13 @@ def main():
         'fixed': args.linear_dim,
         'threshold': args.linear_threshold,
         'ratio': args.linear_ratio,
-        'percentile': args.linear_percentile,
+        'quantile': args.linear_quantile,
     }[args.mode]
     conv_mode_param = {
         'fixed': args.conv_dim,
         'threshold': args.conv_threshold,
         'ratio': args.conv_ratio,
-        'percentile': args.conv_percentile,
+        'quantile': args.conv_quantile,
     }[args.mode]
     
     state_dict = extract_diff(

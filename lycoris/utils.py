@@ -28,7 +28,7 @@ def extract_conv(
         assert 1>=mode_param>=0
         min_s = torch.max(S)*mode_param
         lora_rank = torch.sum(S>min_s)
-    elif mode=='percentile':
+    elif mode=='quantile':
         assert 1>=mode_param>=0
         s_cum = torch.cumsum(S, dim=0)
         min_cum_sum = mode_param * torch.sum(S)
@@ -88,7 +88,7 @@ def extract_linear(
         assert 1>=mode_param>=0
         min_s = torch.max(S)*mode_param
         lora_rank = torch.sum(S>min_s)
-    elif mode=='percentile':
+    elif mode=='quantile':
         assert 1>=mode_param>=0
         s_cum = torch.cumsum(S, dim=0)
         min_cum_sum = mode_param * torch.sum(S)
