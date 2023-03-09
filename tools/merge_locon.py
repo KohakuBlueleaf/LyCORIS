@@ -1,3 +1,6 @@
+import os, sys
+sys.path.append(os.getcwd())
+
 from lycoris.utils import merge_locon
 from lycoris.kohya_model_utils import (
     load_models_from_stable_diffusion_checkpoint,
