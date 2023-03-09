@@ -99,3 +99,15 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LoCon/blob/lycoris/Demo.md) and 
 - [ ] Automatically selecting an algorithm based on the specific rank requirement.
 - [ ] Explore other low-rank representations or parameter-efficient methods to fine-tune either the entire model or specific parts of it.
 - [ ] More experiments for different task, not only diffusion models.
+
+
+## Citation
+```bibtex
+@misc{LyCORIS,
+  author       = "Shih-Ying Yeh (Kohaku-BlueLeaf)",
+  title        = "LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
+  howpublished = "\url{https://github.com/KohakuBlueleaf/LyCORIS}",
+  month        = "Feb",
+  year         = "2023"
+}
+```
