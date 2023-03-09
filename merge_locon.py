@@ -1,5 +1,5 @@
-from locon.utils import merge_locon
-from locon.kohya_model_utils import (
+from lycoris.utils import merge_locon
+from lycoris.kohya_model_utils import (
     load_models_from_stable_diffusion_checkpoint,
     save_stable_diffusion_checkpoint,
     load_file
