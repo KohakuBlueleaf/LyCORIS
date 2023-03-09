@@ -304,11 +304,11 @@ def merge_loha(
                     lora_name = prefix + '.' + name + '.' + child_name
                     lora_name = lora_name.replace('.', '_')
                     
-                    w1a = loha_state_dict[f'{lora_name}.hada_w1_a'].float()
-                    w1b = loha_state_dict[f'{lora_name}.hada_w1_b'].float()
-                    w2a = loha_state_dict[f'{lora_name}.hada_w2_a'].float()
-                    w2b = loha_state_dict[f'{lora_name}.hada_w2_b'].float()
-                    alpha = loha_state_dict[f'{lora_name}.alpha'].float()
+                    w1a = loha_state_dict[f'{lora_name}.hada_w1_a'].float().to(device)
+                    w1b = loha_state_dict[f'{lora_name}.hada_w1_b'].float().to(device)
+                    w2a = loha_state_dict[f'{lora_name}.hada_w2_a'].float().to(device)
+                    w2b = loha_state_dict[f'{lora_name}.hada_w2_b'].float().to(device)
+                    alpha = loha_state_dict[f'{lora_name}.alpha'].float().to(device)
                     dim = w1b.shape[0]
                     
                     delta = (w1a @ w1b) * (w2a @ w2b)
