@@ -30,7 +30,7 @@ PATH_TO_SDSCRIPTS_VENV\Scripts\Activate.ps1 # or .bat for cmd
 And then you can install this package:
 * through pip
 ```bash
-pip install lycoris
+pip install lycoris_lora
 ```
 
 * from source
