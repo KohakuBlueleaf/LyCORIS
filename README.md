@@ -9,6 +9,8 @@ This project is started from LoCon(see archive branch).
 
 
 ## What we have now
+See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) for more example and explanation
+
 * Conventional LoRA
   * Include Conv layer implementation from LoCon
 
