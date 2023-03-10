@@ -6,11 +6,11 @@ Linear Layer:
 
 $Y = W \cdot X$
 
-finetuning is to get the $dW$
+finetuning is to get the $W'$
 
-$Y = W \cdot X + dW \cdot X$
+$Y = W \cdot X + W' \cdot X$
 
-and normally $shape(dW) = shape(W)$
+and normally $shape(W') = shape(W)$
 
 ---
 
@@ -44,7 +44,7 @@ $\xrightarrow{}Conv(dim, out, 1)\circ Conv(in, dim, ksize, padding, stride)$
 
 
 In this method, we can get that
-$dW = Wa \cdot Wb$ with $rank(dW) \le dim$
+$W' = Wa \cdot Wb$ with $rank(W') \le dim$
 
 ---
 
@@ -53,7 +53,7 @@ $dW = Wa \cdot Wb$ with $rank(dW) \le dim$
 ![image](https://user-images.githubusercontent.com/59680068/223942143-05b5ebff-06c4-4d07-a0eb-037fd6f04e77.png)
 
 
-consider $dW = Wa \odot Wb$, we can get $rank(dW) \le rank(Wa) \times rank(Wb)$.
+consider $W' = Wa \odot Wb$, we can get $rank(W') \le rank(Wa) \times rank(Wb)$.
 And then we use conventional method on $Wa$ and $Wb$. Which means it can use 2x dim to get square rank.
 
 **Rank != Information capacity, but they are relative**
