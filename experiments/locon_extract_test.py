@@ -1,8 +1,10 @@
+import os, sys
+sys.path.insert(0, os.getcwd())
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from locon.utils import extract_conv
+from lycoris.utils import extract_conv
 
 
 KERNEL_SIZE = 3
@@ -10,7 +12,7 @@ STRIDE = 1
 PADDING = 1
 IN_CH = 1280
 OUT_CH = 1280
-LORA_RANK = 1280
+LORA_RANK = 32
 SIZE = 32
 
 convA = nn.Conv2d(IN_CH, LORA_RANK, 3, 1, 1, bias=False)

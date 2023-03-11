@@ -1,5 +1,7 @@
 from typing import *
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,15 +11,24 @@ import torch.linalg as linalg
 from tqdm import tqdm
 
 
+def make_sparse(t: torch.Tensor, sparsity=0.95):
+    abs_t = torch.abs(t)
+    np_array = abs_t.detach().cpu().numpy()
+    quan = float(np.quantile(np_array, sparsity))
+    sparse_t = t.masked_fill(abs_t < quan, 0)
+    return sparse_t
+
+
 def extract_conv(
     weight: Union[torch.Tensor, nn.Parameter],
     mode = 'fixed',
     mode_param = 0,
     device = 'cpu',
 ) -> Tuple[nn.Parameter, nn.Parameter]:
+    weight = weight.to(device)
     out_ch, in_ch, kernel_size, _ = weight.shape
     
-    U, S, Vh = linalg.svd(weight.reshape(out_ch, -1).to(device))
+    U, S, Vh = linalg.svd(weight.reshape(out_ch, -1))
     
     if mode=='fixed':
         lora_rank = mode_param
@@ -43,10 +54,11 @@ def extract_conv(
     U = U @ torch.diag(S)
     Vh = Vh[:lora_rank, :]
     
-    extract_weight_A = Vh.reshape(lora_rank, in_ch, kernel_size, kernel_size).cpu()
-    extract_weight_B = U.reshape(out_ch, lora_rank, 1, 1).cpu()
+    diff = (weight - (U @ Vh).reshape(out_ch, in_ch, kernel_size, kernel_size)).detach()
+    extract_weight_A = Vh.reshape(lora_rank, in_ch, kernel_size, kernel_size).detach()
+    extract_weight_B = U.reshape(out_ch, lora_rank, 1, 1).detach()
     del U, S, Vh, weight
-    return extract_weight_A, extract_weight_B
+    return extract_weight_A, extract_weight_B, diff
 
 
 def merge_conv(
@@ -77,9 +89,10 @@ def extract_linear(
     mode_param = 0,
     device = 'cpu',
 ) -> Tuple[nn.Parameter, nn.Parameter]:
+    weight = weight.to(device)
     out_ch, in_ch = weight.shape
     
-    U, S, Vh = linalg.svd(weight.to(device))
+    U, S, Vh = linalg.svd(weight)
     
     if mode=='fixed':
         lora_rank = mode_param
@@ -105,10 +118,11 @@ def extract_linear(
     U = U @ torch.diag(S)
     Vh = Vh[:lora_rank, :]
     
-    extract_weight_A = Vh.reshape(lora_rank, in_ch).cpu()
-    extract_weight_B = U.reshape(out_ch, lora_rank).cpu()
+    diff = (weight - U @ Vh).detach()
+    extract_weight_A = Vh.reshape(lora_rank, in_ch).detach()
+    extract_weight_B = U.reshape(out_ch, lora_rank).detach()
     del U, S, Vh, weight
-    return extract_weight_A, extract_weight_B
+    return extract_weight_A, extract_weight_B, diff
 
 
 def merge_linear(
@@ -138,7 +152,9 @@ def extract_diff(
     mode = 'fixed',
     linear_mode_param = 0,
     conv_mode_param = 0,
-    extract_device = 'cpu'
+    extract_device = 'cpu',
+    use_bias = False,
+    sparsity = 0.98
 ):
     UNET_TARGET_REPLACE_MODULE = [
         "Transformer2DModel", 
@@ -176,7 +192,7 @@ def extract_diff(
                     
                     layer = child_module.__class__.__name__
                     if layer == 'Linear':
-                        extract_a, extract_b = extract_linear(
+                        extract_a, extract_b, diff = extract_linear(
                             (child_module.weight - weights[child_name]),
                             mode,
                             linear_mode_param,
@@ -185,7 +201,7 @@ def extract_diff(
                     elif layer == 'Conv2d':
                         is_linear = (child_module.weight.shape[2] == 1
                                      and child_module.weight.shape[3] == 1)
-                        extract_a, extract_b = extract_conv(
+                        extract_a, extract_b, diff = extract_conv(
                             (child_module.weight - weights[child_name]), 
                             mode,
                             linear_mode_param if is_linear else conv_mode_param,
@@ -196,7 +212,17 @@ def extract_diff(
                     loras[f'{lora_name}.lora_down.weight'] = extract_a.detach().cpu().contiguous().half()
                     loras[f'{lora_name}.lora_up.weight'] = extract_b.detach().cpu().contiguous().half()
                     loras[f'{lora_name}.alpha'] = torch.Tensor([extract_a.shape[0]]).half()
-                    del extract_a, extract_b
+                    
+                    if use_bias:
+                        diff = diff.detach().cpu().reshape(extract_b.size(0), -1)
+                        sparse_diff = make_sparse(diff, sparsity).to_sparse()
+                        
+                        indices = sparse_diff.indices().to(torch.int16)
+                        values = sparse_diff.values().half()
+                        loras[f'{lora_name}.bias_indices'] = indices
+                        loras[f'{lora_name}.bias_values'] = values
+                        loras[f'{lora_name}.bias_size'] = torch.tensor(diff.shape).to(torch.int16)
+                    del extract_a, extract_b, diff
         return loras
     
     text_encoder_loras = make_state_dict(

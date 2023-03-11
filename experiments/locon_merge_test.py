@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from locon.utils import merge_conv
+from lycoris.utils import merge_conv
 
 
 KERNEL_SIZE = 3
