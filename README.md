@@ -122,7 +122,7 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Demo.md) an
 ## Citation
 ```bibtex
 @misc{LyCORIS,
-  author       = "Shih-Ying Yeh (Kohaku-BlueLeaf), Zhidong Gao",
+  author       = "Shih-Ying Yeh (Kohaku-BlueLeaf), Yu-Guan Hsieh, Zhidong Gao",
   title        = "LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
   howpublished = "\url{https://github.com/KohakuBlueleaf/LyCORIS}",
   month        = "March",

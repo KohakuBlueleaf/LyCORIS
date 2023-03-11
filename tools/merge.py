@@ -49,7 +49,7 @@ import torch
 
 def main():
     base = load_models_from_stable_diffusion_checkpoint(ARGS.is_v2, ARGS.base_model)
-    if ARGS.lycoris_model.rsplit('.', 1)[-1] == '.safetensors':
+    if ARGS.lycoris_model.rsplit('.', 1)[-1] == 'safetensors':
         lyco = load_file(ARGS.lycoris_model)
     else:
         lyco = torch.load(ARGS.lycoris_model)
