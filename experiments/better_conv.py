@@ -3,49 +3,103 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def make_pro3(t, x1, x2):
-    x1 = x1.reshape(x1.size(0), -1)
-    x2 = x2.reshape(x2.size(0), -1).transpose(0, 1)
+class HadaWeightPro3(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
+        ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
+        
+        temp = torch.einsum('i j k l, j r -> i r k l', t1, w1b)
+        rebuild1 = torch.einsum('i j k l, i r -> r j k l', temp, w1a)
+        
+        temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
+        rebuild2 = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
+        
+        return orig_weight + rebuild1*rebuild2
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
+        
+        grad_out = grad_out*scale
+        
+        temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
+        rebuild = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
+        
+        grad_w = rebuild*grad_out
+        del rebuild
+        
+        grad_w1a = torch.einsum('r j k l, i j k l -> r i', temp, grad_w)
+        grad_temp = torch.einsum('i j k l, i r -> r j k l', grad_w, w1a.T)
+        del grad_w, temp
+        
+        grad_w1b = torch.einsum('i r k l, i j k l -> r j', t1, grad_temp)
+        grad_t1 = torch.einsum('i j k l, j r -> i r k l', grad_temp, w1b.T)
+        del grad_temp
+        
+        temp = torch.einsum('i j k l, j r -> i r k l', t1, w1b)
+        rebuild = torch.einsum('i j k l, i r -> r j k l', temp, w1a)
+        
+        grad_w = rebuild*grad_out
+        del rebuild
+        
+        grad_w2a = torch.einsum('r j k l, i j k l -> r i', temp, grad_w)
+        grad_temp = torch.einsum('i j k l, i r -> r j k l', grad_w, w2a.T)
+        del grad_w, temp
+        
+        grad_w2b = torch.einsum('i r k l, i j k l -> r j', t2, grad_temp)
+        grad_t2 = torch.einsum('i j k l, j r -> i r k l', grad_temp, w2b.T)
+        del grad_temp
+        return grad_out, grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
+
+
+def make_weight_pro3(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
+    return HadaWeightPro3.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
+
+
+def make_pro3(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
+    temp = torch.einsum('i j k l, j r -> i r k l', t1, w1b)
+    rebuild1 = torch.einsum('i j k l, i r -> r j k l', temp, w1a)
     
-    temp = (t.transpose(0, 3) @ x2).transpose(0, 3)
-    return (temp.transpose(1, 3) @ x1).transpose(1, 3)
+    temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
+    rebuild2 = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
+    
+    return orig_weight + rebuild1*rebuild2 * scale
 
 
 KERNEL_SIZE = 3
 STRIDE = 1
 PADDING = 1
-IN_CH = 1280
-OUT_CH = 1280
-LORA_RANK = 256
+IN_CH = 320
+OUT_CH = 320
+LORA_RANK = 16
 SIZE = 32
 
 
-conv_down = nn.Conv2d(IN_CH, LORA_RANK, 1, bias=False)
-conv_main = nn.Conv2d(LORA_RANK, LORA_RANK, 3, 1, 1, bias=False)
-conv_up = nn.Conv2d(LORA_RANK, OUT_CH, 1, bias=False)
+t1 = nn.Parameter(torch.randn(LORA_RANK, LORA_RANK, 3, 3))
+w1a = nn.Parameter(torch.randn(LORA_RANK, OUT_CH))
+w1b = nn.Parameter(torch.randn(LORA_RANK, IN_CH))
 
-conv_orig = nn.Conv2d(IN_CH, OUT_CH, 3, 1, 1, bias=False)
-conv_orig.weight = nn.Parameter(make_pro3(
-    conv_main.weight, conv_down.weight, conv_up.weight
-))
+t2 = nn.Parameter(torch.randn(LORA_RANK, LORA_RANK, 3, 3))
+w2a = nn.Parameter(torch.randn(LORA_RANK, OUT_CH))
+w2b = nn.Parameter(torch.randn(LORA_RANK, IN_CH))
 
+orig = nn.Parameter(torch.randn(OUT_CH, IN_CH, 3, 3))
 
-test_x = torch.randn(1, IN_CH, SIZE, SIZE)
-test_out_lora = conv_up(conv_main(conv_down(test_x)))
-test_out_orig = conv_orig(test_x)
-
-print('MSE Loss: ', F.mse_loss(test_out_orig, test_out_lora))
-print('L1 Loss : ', F.l1_loss(test_out_orig, test_out_lora))
-print('Distance: ', torch.dist(test_out_orig, test_out_lora))
+test_x = torch.randn(1, 4, 64, 64)
+test_t = torch.randn(1, 4, 64, 64)
 
 
-test_1 = torch.randn(256, 256)/16
-test_2 = torch.randn(256, 256)/16
-test_3 = torch.randn(256, 256)/16
+w1 = make_pro3(orig, t1, w1a, w1b, t2, w2a, w2b)
+w2 = make_weight_pro3(orig, t1, w1a, w1b, t2, w2a, w2b)
 
-test_a = test_1@test_3 + test_2@test_3
-test_b = (test_1+test_2) @ test_3
+torch.mean(w1).backward()
+grad1 = t1.grad.clone()
+t1.grad = None
 
-print('MSE Loss: ', F.mse_loss(test_a, test_b))
-print('L1 Loss : ', F.l1_loss(test_a, test_b))
-print('Distance: ', torch.dist(test_a, test_b))
+torch.mean(w2).backward()
+grad2 = t1.grad.clone()
+
+
+print('MSE Loss: ', F.mse_loss(grad1, grad2))
+print('L1 Loss : ', F.l1_loss(grad1, grad2))
+print('Distance: ', torch.dist(grad1, grad2))

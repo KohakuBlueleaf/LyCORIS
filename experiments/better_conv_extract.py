@@ -15,6 +15,17 @@ def make_sparse(t, sparsity=0.95):
     )
     return sparse_t
 
+def make_pro3(t, x1, x2):
+    x1 = x1.reshape(x1.size(0), -1)
+    x2 = x2.reshape(x2.size(0), -1)
+    
+    # [rank, rank, k, k] * [rank, out]
+    temp = torch.einsum('n m k l, i n -> i m k l', t, x2)
+    
+    # [out, rank, k, k] * [rank, in]
+    return torch.einsum('i m k l, m j -> i j k l', temp, x1)
+
+
 seed_everything(0)
 
 KERNEL_SIZE = 3
@@ -27,8 +38,8 @@ SIZE = 32
 
 conv_orig = nn.Conv2d(IN_CH, OUT_CH, 3, 1, 1, bias=False).cuda()
 conv_orig.weight = nn.Parameter(
-    (torch.randn(OUT_CH, LORA_RANK*2) 
-     @ torch.randn(LORA_RANK*2, IN_CH*9) 
+    (torch.randn(OUT_CH, LORA_RANK) 
+     @ torch.randn(LORA_RANK, IN_CH*9) 
      * 0.05
      ).reshape(conv_orig.weight.shape).cuda()
 )
@@ -38,34 +49,17 @@ extract_a, extract_b, diff = extract_conv(conv_orig.weight, 'fixed', LORA_RANK, 
 out_weight = extract_b.reshape(OUT_CH, -1) @ extract_a.reshape(LORA_RANK, -1)
 out_weight = out_weight.reshape(conv_orig.weight.shape)
 
+extract_a, extract_c, diff = extract_conv(extract_a.transpose(0, 1), 'fixed', LORA_RANK, 'cuda')
+extract_a = extract_a.transpose(0, 1)
+extract_c = extract_c.transpose(0, 1)
+print(extract_a.shape, extract_b.shape, extract_c.shape)
 
-conv_rebd.weight = nn.Parameter(out_weight)
+
+conv_rebd.weight = nn.Parameter(make_pro3(
+    extract_a, extract_c, extract_b
+))
 print()
 print('without sparse bias')
-print('MSE Loss: ', F.mse_loss(conv_orig.weight, conv_rebd.weight))
-print('L1 Loss : ', F.l1_loss(conv_orig.weight, conv_rebd.weight))
-print('Distance: ', torch.dist(conv_orig.weight, conv_rebd.weight))
-
-
-conv_rebd.weight = nn.Parameter(out_weight + make_sparse(diff, 0.99))
-print()
-print('with sparse bias, sparsity 99% ')
-print('MSE Loss: ', F.mse_loss(conv_orig.weight, conv_rebd.weight))
-print('L1 Loss : ', F.l1_loss(conv_orig.weight, conv_rebd.weight))
-print('Distance: ', torch.dist(conv_orig.weight, conv_rebd.weight))
-
-
-conv_rebd.weight = nn.Parameter(out_weight + make_sparse(diff, 0.98))
-print()
-print('with sparse bias, sparsity 98% ')
-print('MSE Loss: ', F.mse_loss(conv_orig.weight, conv_rebd.weight))
-print('L1 Loss : ', F.l1_loss(conv_orig.weight, conv_rebd.weight))
-print('Distance: ', torch.dist(conv_orig.weight, conv_rebd.weight))
-
-
-conv_rebd.weight = nn.Parameter(out_weight + make_sparse(diff, 0.95))
-print()
-print('with sparse bias, sparsity 95% ')
 print('MSE Loss: ', F.mse_loss(conv_orig.weight, conv_rebd.weight))
 print('L1 Loss : ', F.l1_loss(conv_orig.weight, conv_rebd.weight))
 print('Distance: ', torch.dist(conv_orig.weight, conv_rebd.weight))
