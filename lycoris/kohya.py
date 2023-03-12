@@ -58,30 +58,6 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     return network
 
 
-def create_network_from_weights(multiplier, file, vae, text_encoder, unet, **kwargs):
-    if os.path.splitext(file)[1] == '.safetensors':
-        from safetensors.torch import load_file, safe_open
-        weights_sd = load_file(file)
-    else:
-        weights_sd = torch.load(file, map_location='cpu')
-
-    # get dim (rank)
-    network_alpha = None
-    network_dim = None
-    for key, value in weights_sd.items():
-        if network_alpha is None and 'alpha' in key:
-            network_alpha = value
-        if network_dim is None and 'lora_down' in key and len(value.size()) == 2:
-            network_dim = value.size()[0]
-
-    if network_alpha is None:
-        network_alpha = network_dim
-
-    network = LycorisNetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, alpha=network_alpha)
-    network.weights_sd = weights_sd
-    return network
-
-
 class LycorisNetwork(torch.nn.Module):
     '''
     LoRA + LoCon

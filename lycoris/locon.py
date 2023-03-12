@@ -71,6 +71,7 @@ class LoConModule(nn.Module):
         self.org_module = [org_module]
 
     def apply_to(self):
+        self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
 
     def make_weight(self):
@@ -81,7 +82,7 @@ class LoConModule(nn.Module):
     def forward(self, x):
         if self.cp:
             return self.dropout(
-                self.org_module[0].forward(x) 
+                self.org_forward(x) 
                 + self.lora_up(self.lora_mid(self.lora_down(x)))
             ) * self.multiplier * self.scale
         else:
