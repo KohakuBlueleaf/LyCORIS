@@ -154,7 +154,8 @@ def extract_diff(
     conv_mode_param = 0,
     extract_device = 'cpu',
     use_bias = False,
-    sparsity = 0.98
+    sparsity = 0.98,
+    small_conv = True
 ):
     UNET_TARGET_REPLACE_MODULE = [
         "Transformer2DModel", 
@@ -207,6 +208,21 @@ def extract_diff(
                             linear_mode_param if is_linear else conv_mode_param,
                             device = extract_device,
                         )
+                        if small_conv and not is_linear:
+                            dim = extract_a.size(0)
+                            extract_c, extract_a, _ = extract_conv(
+                                extract_a.transpose(0, 1), 
+                                'fixed', dim, 
+                                extract_device
+                            )
+                            extract_a = extract_a.transpose(0, 1)
+                            extract_c = extract_c.transpose(0, 1)
+                            loras[f'{lora_name}.lora_mid.weight'] = extract_c.detach().cpu().contiguous().half()
+                            diff = child_module.weight - torch.einsum(
+                                'i j k l, j r, i p -> p r k l', 
+                                extract_c, extract_a, extract_b
+                            )
+                            del extract_c
                     else:
                         continue
                     loras[f'{lora_name}.lora_down.weight'] = extract_a.detach().cpu().contiguous().half()

@@ -6,8 +6,9 @@ import torch.nn.functional as F
 
 def ein(t, x1, x2, grad):
     #inference
-    temp = torch.einsum('i j k l, j r -> i r k l', t, x1)
-    rebuild = torch.einsum('i j k l, i r -> r j k l', temp, x2)
+    rebuild = torch.einsum('i j k l, j r, i p -> p r k l', t, x1, x2)
+    # temp = torch.einsum('i j k l, j r -> i r k l', t, x1)
+    # rebuild = torch.einsum('i j k l, i r -> r j k l', temp, x2)
     
     #backward
     temp = torch.einsum('i j k l, j r -> i r k l', t, x1)
@@ -82,6 +83,6 @@ print(f'Proposition 1 Params: {w1a.size().numel() + w1b.size().numel()}')
 print(f'Proposition 3 Params: {t.size().numel() + x1.size().numel() + x2.size().numel()}')
 
 NUM = 5000
-print('Pro3 einsum', timeit('ein(t, x1, x2, grad)', globals=globals(), number=NUM)/NUM)
-print('Pro3 matmul', timeit('mat(t, x1, x2, grad)', globals=globals(), number=NUM)/NUM)
+print('CP einsum', timeit('ein(t, x1, x2, grad)', globals=globals(), number=NUM)/NUM)
+print('CP matmul', timeit('mat(t, x1, x2, grad)', globals=globals(), number=NUM)/NUM)
 print('Pro1 matmul', timeit('fold(w1a, w1b, grad)', globals=globals(), number=NUM)/NUM)

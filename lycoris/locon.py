@@ -10,11 +10,19 @@ class LoConModule(nn.Module):
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """
 
-    def __init__(self, lora_name, org_module: nn.Module, multiplier=1.0, lora_dim=4, alpha=1, dropout=0.):
+    def __init__(
+        self, 
+        lora_name, org_module: nn.Module, 
+        multiplier=1.0, 
+        lora_dim=4, alpha=1, 
+        dropout=0.,
+        use_cp=True,
+    ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
+        self.cp = False
 
         if org_module.__class__.__name__ == 'Conv2d':
             # For general LoCon
@@ -23,7 +31,12 @@ class LoConModule(nn.Module):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
+            if use_cp and k_size != (1, 1):
+                self.lora_down = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
+                self.lora_mid = nn.Conv2d(lora_dim, lora_dim, k_size, stride, padding, bias=False)
+                self.cp = True
+            else:
+                self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
             self.op = F.conv2d
             self.extra_args = {
@@ -66,11 +79,17 @@ class LoConModule(nn.Module):
         return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape)
 
     def forward(self, x):
-        bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
-        return self.op(
-            x,
-            (self.org_module[0].weight.data 
-             + self.dropout(self.make_weight()) * self.multiplier * self.scale),
-            bias,
-            **self.extra_args,
-        )
+        if self.cp:
+            return self.dropout(
+                self.org_module[0].forward(x) 
+                + self.lora_up(self.lora_mid(self.lora_down(x)))
+            ) * self.multiplier * self.scale
+        else:
+            bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
+            return self.op(
+                x,
+                (self.org_module[0].weight.data 
+                + self.dropout(self.make_weight()) * self.multiplier * self.scale),
+                bias,
+                **self.extra_args,
+            )

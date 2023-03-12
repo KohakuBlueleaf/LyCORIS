@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class HadaWeightPro3(torch.autograd.Function):
+class HadaWeightCP(torch.autograd.Function):
     @staticmethod
     def forward(ctx, orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
@@ -14,7 +14,7 @@ class HadaWeightPro3(torch.autograd.Function):
         temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
         rebuild2 = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
         
-        return orig_weight + rebuild1*rebuild2
+        return orig_weight + rebuild1*rebuild2*scale
 
     @staticmethod
     def backward(ctx, grad_out):
@@ -52,11 +52,11 @@ class HadaWeightPro3(torch.autograd.Function):
         return grad_out, grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
 
 
-def make_weight_pro3(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
-    return HadaWeightPro3.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
+def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
+    return HadaWeightCP.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
-def make_pro3(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
+def make_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
     temp = torch.einsum('i j k l, j r -> i r k l', t1, w1b)
     rebuild1 = torch.einsum('i j k l, i r -> r j k l', temp, w1a)
     
@@ -69,9 +69,9 @@ def make_pro3(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25))
 KERNEL_SIZE = 3
 STRIDE = 1
 PADDING = 1
-IN_CH = 320
-OUT_CH = 320
-LORA_RANK = 16
+IN_CH = 1280
+OUT_CH = 1208
+LORA_RANK = 4
 SIZE = 32
 
 
@@ -89,8 +89,8 @@ test_x = torch.randn(1, 4, 64, 64)
 test_t = torch.randn(1, 4, 64, 64)
 
 
-w1 = make_pro3(orig, t1, w1a, w1b, t2, w2a, w2b)
-w2 = make_weight_pro3(orig, t1, w1a, w1b, t2, w2a, w2b)
+w1 = make_cp(orig, t1, w1a, w1b, t2, w2a, w2b)
+w2 = make_weight_cp(orig, t1, w1a, w1b, t2, w2a, w2b)
 
 torch.mean(w1).backward()
 grad1 = t1.grad.clone()

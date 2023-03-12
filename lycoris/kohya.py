@@ -22,6 +22,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     conv_alpha = float(kwargs.get('conv_alpha', network_alpha))
     dropout = float(kwargs.get('dropout', 0.))
     algo = kwargs.get('algo', 'lora')
+    disable_cp = kwargs.get('disable_conv_cp', False)
     network_module = {
         'lora': LoConModule,
         'loha': LohaModule,
@@ -44,12 +45,13 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         )
         print('='*20 + 'WARNING' + '='*20)
     
-    network = LoRANetwork(
+    network = LycorisNetwork(
         text_encoder, unet, 
         multiplier=multiplier, 
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
         alpha=network_alpha, conv_alpha=conv_alpha,
         dropout=dropout,
+        use_cp=(not bool(disable_cp)),
         network_module=network_module
     )
     
@@ -75,12 +77,12 @@ def create_network_from_weights(multiplier, file, vae, text_encoder, unet, **kwa
     if network_alpha is None:
         network_alpha = network_dim
 
-    network = LoRANetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, alpha=network_alpha)
+    network = LycorisNetwork(text_encoder, unet, multiplier=multiplier, lora_dim=network_dim, alpha=network_alpha)
     network.weights_sd = weights_sd
     return network
 
 
-class LoRANetwork(torch.nn.Module):
+class LycorisNetwork(torch.nn.Module):
     '''
     LoRA + LoCon
     '''
@@ -102,6 +104,7 @@ class LoRANetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
+        use_cp = True,
         dropout = 0, network_module = LoConModule,
     ) -> None:
         super().__init__()
@@ -110,13 +113,13 @@ class LoRANetwork(torch.nn.Module):
         self.conv_lora_dim = int(conv_lora_dim)
         if self.conv_lora_dim != self.lora_dim: 
             print('Apply different lora dim for conv layer')
-            print(f'LoCon Dim: {conv_lora_dim}, LoRA Dim: {lora_dim}')
+            print(f'Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}')
             
         self.alpha = alpha
         self.conv_alpha = float(conv_alpha)
         if self.alpha != self.conv_alpha: 
             print('Apply different alpha value for conv layer')
-            print(f'LoCon alpha: {conv_alpha}, LoRA alpha: {alpha}')
+            print(f'Conv alpha: {conv_alpha}, Linear alpha: {alpha}')
         
         if 1 >= dropout >= 0:
             print(f'Use Dropout value: {dropout}')
@@ -124,7 +127,7 @@ class LoRANetwork(torch.nn.Module):
         
         # create module instances
         def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[network_module]:
-            print('Create LoCon Module')
+            print('Create LyCORIS Module')
             loras = []
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
@@ -134,19 +137,19 @@ class LoRANetwork(torch.nn.Module):
                         if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
                             lora = network_module(
                                 lora_name, child_module, self.multiplier, 
-                                self.lora_dim, self.alpha, self.dropout
+                                self.lora_dim, self.alpha, self.dropout, use_cp
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1 and lora_dim>0:
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
-                                    self.lora_dim, self.alpha, self.dropout
+                                    self.lora_dim, self.alpha, self.dropout, use_cp
                                 )
                             elif conv_lora_dim>0:
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
-                                    self.conv_lora_dim, self.conv_alpha, self.dropout
+                                    self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp
                                 )
                             else:
                                 continue
@@ -156,14 +159,14 @@ class LoRANetwork(torch.nn.Module):
             return loras
 
         self.text_encoder_loras = create_modules(
-            LoRANetwork.LORA_PREFIX_TEXT_ENCODER,
+            LycorisNetwork.LORA_PREFIX_TEXT_ENCODER,
             text_encoder, 
-            LoRANetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
+            LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
         )
-        print(f"create LoRA for Text Encoder: {len(self.text_encoder_loras)} modules.")
+        print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
-        self.unet_loras = create_modules(LoRANetwork.LORA_PREFIX_UNET, unet, LoRANetwork.UNET_TARGET_REPLACE_MODULE)
-        print(f"create LoRA for U-Net: {len(self.unet_loras)} modules.")
+        self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
+        print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
         self.weights_sd = None
 
@@ -189,9 +192,9 @@ class LoRANetwork(torch.nn.Module):
         if self.weights_sd:
             weights_has_text_encoder = weights_has_unet = False
             for key in self.weights_sd.keys():
-                if key.startswith(LoRANetwork.LORA_PREFIX_TEXT_ENCODER):
+                if key.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
                     weights_has_text_encoder = True
-                elif key.startswith(LoRANetwork.LORA_PREFIX_UNET):
+                elif key.startswith(LycorisNetwork.LORA_PREFIX_UNET):
                     weights_has_unet = True
 
             if apply_text_encoder is None:
@@ -207,12 +210,12 @@ class LoRANetwork(torch.nn.Module):
             assert apply_text_encoder is not None and apply_unet is not None, f"internal error: flag not set"
 
         if apply_text_encoder:
-            print("enable LoRA for text encoder")
+            print("enable LyCORIS for text encoder")
         else:
             self.text_encoder_loras = []
 
         if apply_unet:
-            print("enable LoRA for U-Net")
+            print("enable LyCORIS for U-Net")
         else:
             self.unet_loras = []
 

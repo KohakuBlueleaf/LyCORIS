@@ -15,7 +15,7 @@ def make_sparse(t, sparsity=0.95):
     )
     return sparse_t
 
-def make_pro3(t, x1, x2):
+def make_cp(t, x1, x2):
     x1 = x1.reshape(x1.size(0), -1)
     x2 = x2.reshape(x2.size(0), -1)
     
@@ -23,7 +23,9 @@ def make_pro3(t, x1, x2):
     temp = torch.einsum('n m k l, i n -> i m k l', t, x2)
     
     # [out, rank, k, k] * [rank, in]
-    return torch.einsum('i m k l, m j -> i j k l', temp, x1)
+    result = torch.einsum('i m k l, m j -> i j k l', temp, x1)
+    print(result.shape)
+    return result
 
 
 seed_everything(0)
@@ -32,7 +34,7 @@ KERNEL_SIZE = 3
 STRIDE = 1
 PADDING = 1
 IN_CH = 1280
-OUT_CH = 1280
+OUT_CH = 640
 LORA_RANK = 32
 SIZE = 32
 
@@ -55,7 +57,7 @@ extract_c = extract_c.transpose(0, 1)
 print(extract_a.shape, extract_b.shape, extract_c.shape)
 
 
-conv_rebd.weight = nn.Parameter(make_pro3(
+conv_rebd.weight = nn.Parameter(make_cp(
     extract_a, extract_c, extract_b
 ))
 print()
