@@ -221,7 +221,7 @@ def extract_diff(
                             diff = child_module.weight - torch.einsum(
                                 'i j k l, j r, p i -> p r k l', 
                                 extract_c, extract_a.flatten(1, -1), extract_b.flatten(1, -1)
-                            )
+                            ).detach().cpu().contiguous()
                             del extract_c
                     else:
                         continue
