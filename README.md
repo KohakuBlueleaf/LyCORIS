@@ -30,7 +30,7 @@ See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [D
 
 **High dim with LoHa may cause unstable loss or just goes to NaN. If you want to use high dim LoHa, please use lower lr**
 
-**WARNING-AGAIN: Use parameter-efficient algorithim in parameter-unefficient way is not a good idea**
+**WARNING-AGAIN: Use parameter-efficient algorithm in parameter-unefficient way is not a good idea**
 
 ---
 
