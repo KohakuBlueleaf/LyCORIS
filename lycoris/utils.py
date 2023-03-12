@@ -220,7 +220,7 @@ def extract_diff(
                             loras[f'{lora_name}.lora_mid.weight'] = extract_c.detach().cpu().contiguous().half()
                             diff = child_module.weight - torch.einsum(
                                 'i j k l, j r, i p -> p r k l', 
-                                extract_c, extract_a, extract_b
+                                extract_c, extract_a.flatten(1, -1), extract_b.flatten(1, -1)
                             )
                             del extract_c
                     else:
