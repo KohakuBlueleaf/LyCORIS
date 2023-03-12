@@ -104,11 +104,11 @@ usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--safete
 
 
 ## Example and Comparing for different algo
-see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Demo.md) and [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Algo.md)
+see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md)
 
 
 ## Change Log
-For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/lycoris/Change.md)
+For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
 ### 2023/03/12 Update to 0.1.0
 * Add cp-decomposition implementation for convolution layer
