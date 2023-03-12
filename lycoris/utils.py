@@ -231,7 +231,7 @@ def extract_diff(
                     
                     if use_bias:
                         diff = diff.detach().cpu().reshape(extract_b.size(0), -1)
-                        sparse_diff = make_sparse(diff, sparsity).to_sparse()
+                        sparse_diff = make_sparse(diff, sparsity).to_sparse().coalesce()
                         
                         indices = sparse_diff.indices().to(torch.int16)
                         values = sparse_diff.values().half()
