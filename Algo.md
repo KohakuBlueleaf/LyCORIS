@@ -58,17 +58,39 @@ And then we use conventional method on $Wa$ and $Wb$. Which means it can use 2x 
 
 **Rank != Information capacity, but they are relative**
 
-based on the experiment result from the paper, it seems like although the rank(Wa) * rank(Wb) is just upper bound, but almost everytime it will produce dW with rank = rank(Wa)*rank(Wb).
+based on the experiment result from the paper, it seems like although the rank(Wa) * rank(Wb) is just upper bound, but almost everytime it will produce W' with rank = rank(Wa)*rank(Wb).
 
 ### Why custom backward
-with $dW = (Wa_1 \cdot Wa_2) \odot (Wb_1 \cdot Wb_2)$, when you need to calc the backpropogation, you will need $\Delta{dW}$ and $Wa$ to calc $\Delta{Wb}$, also $Wb$ for $\Delta{Wa}$.
+with $W' = (Wa_1 \cdot Wa_2) \odot (Wb_1 \cdot Wb_2)$, when you need to calc the backpropogation, you will need $\Delta{W'}$ and $Wa$ to calc $\Delta{Wb}$, also $Wb$ for $\Delta{Wa}$.
 
 With pytorch's autograd, this kind of operation will cache the $Wa$ and $Wb$ for calc the backward, which means it will cache 2x size of weight for backward.
 
 To avoid this terrible situation, I impl a custom backward which will reconstruct $Wa$ and $Wb$ when actually needed, this method saved tons of memory.
 
-### Special method for convolution kernels
-Todo...
+### CP-Decomposition
+[Ref](https://arxiv.org/abs/1412.6553)
+
+As mentioned before, the weight shape for convolution layer is $[out, in, kw, kh]$. And we just unfold it to $[out, in \times kw \times kh]$ for decomposition.
+
+But actually there is a method to decomposition any shape ot tensor called cp decomposition.
+
+Using cp-decomposition in Covolution will be something like:
+
+$\tau: [dim, dim, kw, kh]$ <br>
+$x_1: [dim, out]$<br>
+$x_2: [dim, in]$<br>
+$W' = \tau \times_1 x_1 \times_2 x_2$<br>
+$W': [out, in, kw, kh]$
+
+Or write this thing as multiple conv layer:
+
+Conv(in, dim, (1, 1))<br>
+↓<br>
+Conv(dim, dim, (kw, kh), stride, padding)<br>
+↓<br>
+conv(dim, out, (1, 1))<br>
+
+For hadamard product implementation, just use 2 different $W'$ and multiply them together.
 
 ---
 
