@@ -128,9 +128,11 @@ For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/b
 
 ## Todo list
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
-- [ ] Proposition3 in [FedPara](https://arxiv.org/abs/2108.06098)
+- [x] Proposition3 in [FedPara](https://arxiv.org/abs/2108.06098)
   * also need custom backward to save the vram
 - [ ] Low rank + sparse representation
+  - [x] For extraction
+  - [ ] For training
 - [ ] Support more operation, not only linear and conv2d.
 - [ ] Configure varying ranks or dimensions for specific modules as needed.
 - [ ] Automatically selecting an algorithm based on the specific rank requirement.
