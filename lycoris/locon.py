@@ -81,10 +81,9 @@ class LoConModule(nn.Module):
 
     def forward(self, x):
         if self.cp:
-            return self.dropout(
-                self.org_forward(x) 
-                + self.lora_up(self.lora_mid(self.lora_down(x)))
-            ) * self.multiplier * self.scale
+            return self.org_forward(x)  + self.dropout(
+                self.lora_up(self.lora_mid(self.lora_down(x)))* self.multiplier * self.scale
+            )
         else:
             bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
             return self.op(
