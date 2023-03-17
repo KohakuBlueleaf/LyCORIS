@@ -38,18 +38,11 @@ class LoConModule(nn.Module):
             else:
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
-            self.op = F.conv2d
-            self.extra_args = {
-                'stride': stride,
-                'padding': padding
-            }
         else:
             in_dim = org_module.in_features
             out_dim = org_module.out_features
             self.lora_down = nn.Linear(in_dim, lora_dim, bias=False)
             self.lora_up = nn.Linear(lora_dim, out_dim, bias=False)
-            self.op = F.linear
-            self.extra_args = {}
         self.shape = org_module.weight.shape
         
         if dropout:
@@ -66,6 +59,8 @@ class LoConModule(nn.Module):
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.lora_up.weight)
+        if self.cp:
+            torch.nn.init.kaiming_uniform_(self.lora_mid.weight, a=math.sqrt(5))
 
         self.multiplier = multiplier
         self.org_module = [org_module]
@@ -85,11 +80,6 @@ class LoConModule(nn.Module):
                 self.lora_up(self.lora_mid(self.lora_down(x)))* self.multiplier * self.scale
             )
         else:
-            bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
-            return self.op(
-                x,
-                (self.org_module[0].weight.data 
-                + self.dropout(self.make_weight()) * self.multiplier * self.scale),
-                bias,
-                **self.extra_args,
+            return self.org_forward(x)  + self.dropout(
+                self.lora_up(self.lora_down(x))* self.multiplier * self.scale
             )
