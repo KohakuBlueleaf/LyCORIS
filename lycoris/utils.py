@@ -164,6 +164,12 @@ def extract_diff(
         "Downsample2D", 
         "Upsample2D"
     ]
+    UNET_TARGET_REPLACE_NAME = [
+        "conv_in",
+        "conv_out",
+        "time_embedding.linear_1",
+        "time_embedding.linear_2",
+    ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
@@ -171,10 +177,12 @@ def extract_diff(
         prefix, 
         root_module: torch.nn.Module,
         target_module: torch.nn.Module,
-        target_replace_modules
+        target_replace_modules,
+        target_replace_names = []
     ):
         loras = {}
         temp = {}
+        temp_name = {}
         
         for name, module in root_module.named_modules():
             if module.__class__.__name__ in target_replace_modules:
@@ -183,6 +191,8 @@ def extract_diff(
                     if child_module.__class__.__name__ not in {'Linear', 'Conv2d'}:
                         continue
                     temp[name][child_name] = child_module.weight
+            elif name in target_replace_names:
+                temp_name[name] = module.weight
         
         for name, module in tqdm(list(target_module.named_modules())):
             if name in temp:
@@ -239,6 +249,63 @@ def extract_diff(
                         loras[f'{lora_name}.bias_values'] = values
                         loras[f'{lora_name}.bias_size'] = torch.tensor(diff.shape).to(torch.int16)
                     del extract_a, extract_b, diff
+            elif name in temp_name:
+                weight = temp_name[name]
+                lora_name = prefix + '.' + name
+                lora_name = lora_name.replace('.', '_')
+                
+                if weight.size(0)<32 or weight.size(1)<32:
+                    loras[f'{lora_name}.diff'] = module.weight - weight
+                    continue
+                
+                layer = module.__class__.__name__
+                if layer == 'Linear':
+                    extract_a, extract_b, diff = extract_linear(
+                        (module.weight - weight),
+                        mode,
+                        linear_mode_param,
+                        device = extract_device,
+                    )
+                elif layer == 'Conv2d':
+                    is_linear = (module.weight.shape[2] == 1
+                                and module.weight.shape[3] == 1)
+                    extract_a, extract_b, diff = extract_conv(
+                        (module.weight - weight), 
+                        mode,
+                        linear_mode_param if is_linear else conv_mode_param,
+                        device = extract_device,
+                    )
+                    if small_conv and not is_linear:
+                        dim = extract_a.size(0)
+                        extract_c, extract_a, _ = extract_conv(
+                            extract_a.transpose(0, 1), 
+                            'fixed', dim, 
+                            extract_device
+                        )
+                        extract_a = extract_a.transpose(0, 1)
+                        extract_c = extract_c.transpose(0, 1)
+                        loras[f'{lora_name}.lora_mid.weight'] = extract_c.detach().cpu().contiguous().half()
+                        diff = module.weight - torch.einsum(
+                            'i j k l, j r, p i -> p r k l', 
+                            extract_c, extract_a.flatten(1, -1), extract_b.flatten(1, -1)
+                        ).detach().cpu().contiguous()
+                        del extract_c
+                else:
+                    continue
+                loras[f'{lora_name}.lora_down.weight'] = extract_a.detach().cpu().contiguous().half()
+                loras[f'{lora_name}.lora_up.weight'] = extract_b.detach().cpu().contiguous().half()
+                loras[f'{lora_name}.alpha'] = torch.Tensor([extract_a.shape[0]]).half()
+                
+                if use_bias:
+                    diff = diff.detach().cpu().reshape(extract_b.size(0), -1)
+                    sparse_diff = make_sparse(diff, sparsity).to_sparse().coalesce()
+                    
+                    indices = sparse_diff.indices().to(torch.int16)
+                    values = sparse_diff.values().half()
+                    loras[f'{lora_name}.bias_indices'] = indices
+                    loras[f'{lora_name}.bias_values'] = values
+                    loras[f'{lora_name}.bias_size'] = torch.tensor(diff.shape).to(torch.int16)
+                del extract_a, extract_b, diff
         return loras
     
     text_encoder_loras = make_state_dict(
@@ -250,7 +317,8 @@ def extract_diff(
     unet_loras = make_state_dict(
         LORA_PREFIX_UNET,
         base_model[2], db_model[2], 
-        UNET_TARGET_REPLACE_MODULE
+        UNET_TARGET_REPLACE_MODULE,
+        UNET_TARGET_REPLACE_NAME
     )
     print(len(text_encoder_loras), len(unet_loras))
     return text_encoder_loras|unet_loras

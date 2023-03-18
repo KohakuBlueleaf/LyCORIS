@@ -70,6 +70,12 @@ class LycorisNetwork(torch.nn.Module):
         "Downsample2D", 
         "Upsample2D"
     ]
+    UNET_TARGET_REPLACE_NAME = [
+        "conv_in",
+        "conv_out",
+        "time_embedding.linear_1",
+        "time_embedding.linear_2",
+    ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
@@ -102,7 +108,12 @@ class LycorisNetwork(torch.nn.Module):
         self.dropout = dropout
         
         # create module instances
-        def create_modules(prefix, root_module: torch.nn.Module, target_replace_modules) -> List[network_module]:
+        def create_modules(
+            prefix, 
+            root_module: torch.nn.Module, 
+            target_replace_modules,
+            target_replace_names = []
+        ) -> List[network_module]:
             print('Create LyCORIS Module')
             loras = []
             for name, module in root_module.named_modules():
@@ -132,6 +143,31 @@ class LycorisNetwork(torch.nn.Module):
                         else:
                             continue
                         loras.append(lora)
+                elif name in target_replace_names:
+                    lora_name = prefix + '.' + name
+                    lora_name = lora_name.replace('.', '_')
+                    if module.__class__.__name__ == 'Linear' and lora_dim>0:
+                        lora = network_module(
+                            lora_name, module, self.multiplier, 
+                            self.lora_dim, self.alpha, self.dropout, use_cp
+                        )
+                    elif module.__class__.__name__ == 'Conv2d':
+                        k_size, *_ = module.kernel_size
+                        if k_size==1 and lora_dim>0:
+                            lora = network_module(
+                                lora_name, module, self.multiplier, 
+                                self.lora_dim, self.alpha, self.dropout, use_cp
+                            )
+                        elif conv_lora_dim>0:
+                            lora = network_module(
+                                lora_name, module, self.multiplier, 
+                                self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp
+                            )
+                        else:
+                            continue
+                    else:
+                        continue
+                    loras.append(lora)
             return loras
 
         self.text_encoder_loras = create_modules(
