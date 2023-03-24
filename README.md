@@ -40,7 +40,7 @@ You can just use these training scripts.
 * [derrian-distro/LoRA_Easy_Training_Scripts](https://github.com/derrian-distro/LoRA_Easy_Training_Scripts)
 * [Linaqruf/kohya-trainer](https://github.com/Linaqruf/kohya-trainer)
 * [bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)
-* [New Hollowstrawberry Lora Trainer](https://colab.research.google.com/drive/1fs7oHytA4Va0IzDK-F8q_q9RIJRIh5Dv)
+* [hollowstrawberry/kohya-colab](https://github.com/hollowstrawberry/kohya-colab)
 
 ### For kohya script
 Activate sd-scripts' venv and then install this package
