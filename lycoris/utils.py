@@ -331,39 +331,58 @@ def merge_locon(
     device = 'cpu'
 ):
     UNET_TARGET_REPLACE_MODULE = [
-        "Transformer2DModel", 
-        "Attention", 
-        "ResnetBlock2D", 
-        "Downsample2D", 
+        "Transformer2DModel",
+        "Attention",
+        "ResnetBlock2D",
+        "Downsample2D",
         "Upsample2D"
+    ]
+    UNET_TARGET_REPLACE_NAME = [
+        "conv_in",
+        "conv_out",
+        "time_embedding.linear_1",
+        "time_embedding.linear_2",
     ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
     def merge(
-        prefix, 
+        prefix,
         root_module: torch.nn.Module,
-        target_replace_modules
+        target_replace_modules,
+        target_replace_names = []
     ):
         temp = {}
-        
         for name, module in tqdm(list(root_module.named_modules())):
-            if module.__class__.__name__ in target_replace_modules:
+            if module.__class__.__name__ in target_replace_modules or name in target_replace_names:
                 temp[name] = {}
                 for child_name, child_module in module.named_modules():
                     layer = child_module.__class__.__name__
                     if layer not in {'Linear', 'Conv2d'}:
                         continue
-                    lora_name = prefix + '.' + name + '.' + child_name
+                    lora_name = prefix + '.' + name
+                    if child_name:
+                        lora_name += '.' + child_name
                     lora_name = lora_name.replace('.', '_')
-                    
+                    lora_diff_name = prefix + '_' + name + ".diff"
+
+                    if lora_diff_name in locon_state_dict:
+                        child_module.weight.requires_grad_(False)
+                        child_module.weight += locon_state_dict[lora_diff_name].cpu()
+                        continue
+
                     down = locon_state_dict[f'{lora_name}.lora_down.weight'].float()
                     up = locon_state_dict[f'{lora_name}.lora_up.weight'].float()
                     alpha = locon_state_dict[f'{lora_name}.alpha'].float()
                     rank = down.shape[0]
-                    
+
                     if layer == 'Conv2d':
-                        delta = merge_conv(down, up, device)
+                        if f'{lora_name}.lora_mid.weight' in locon_state_dict:
+                            mid = locon_state_dict[f'{lora_name}.lora_mid.weight'].transpose(0,1).float()
+                            down = merge_conv(mid, down.transpose(0,1), device).transpose(0,1)
+                            delta = merge_conv(down, up, device)
+                        else:
+                            delta = merge_conv(down, up, device)
                         child_module.weight.requires_grad_(False)
                         child_module.weight += (alpha.to(device)/rank * scale * delta).cpu()
                         del delta
@@ -372,16 +391,18 @@ def merge_locon(
                         child_module.weight.requires_grad_(False)
                         child_module.weight += (alpha.to(device)/rank * scale * delta).cpu()
                         del delta
-    
+
     merge(
-        LORA_PREFIX_TEXT_ENCODER, 
+        LORA_PREFIX_TEXT_ENCODER,
         base_model[0], 
-        TEXT_ENCODER_TARGET_REPLACE_MODULE
+        TEXT_ENCODER_TARGET_REPLACE_MODULE,
+        UNET_TARGET_REPLACE_NAME
     )
     merge(
         LORA_PREFIX_UNET,
-        base_model[2], 
-        UNET_TARGET_REPLACE_MODULE
+        base_model[2],
+        UNET_TARGET_REPLACE_MODULE,
+        UNET_TARGET_REPLACE_NAME
     )
 
 
