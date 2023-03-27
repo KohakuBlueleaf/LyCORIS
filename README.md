@@ -85,14 +85,10 @@ to train lycoris module for SD model
 
 
 ### For a1111's sd-webui
-download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) into sd-webui, and then use your model as how you use lora model.
+download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) into sd-webui, and then use built-in lora system to run your model.
 **LoHa Model supported**
 
-
-### Additional Networks
-Once you install the extension. You can also use your model in [addnet](https://github.com/kohya-ss/sd-webui-additional-networks/releases)<br>
-just use it as LoRA model.
-**LoHa Model not supported yet**
+**Not For Kohya-ss' Additional Network**
 
 
 ### Extract LoCon
