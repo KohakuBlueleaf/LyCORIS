@@ -22,7 +22,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     conv_alpha = float(kwargs.get('conv_alpha', network_alpha))
     dropout = float(kwargs.get('dropout', 0.))
     algo = kwargs.get('algo', 'lora')
-    disable_cp = kwargs.get('disable_conv_cp', False)
+    use_cp = (not kwargs.get('disable_conv_cp', True) 
+              or kwargs.get('use_conv_cp', False))
     network_module = {
         'lora': LoConModule,
         'loha': LohaModule,
@@ -51,7 +52,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         lora_dim=network_dim, conv_lora_dim=conv_dim, 
         alpha=network_alpha, conv_alpha=conv_alpha,
         dropout=dropout,
-        use_cp=(not bool(disable_cp)),
+        use_cp=use_cp,
         network_module=network_module
     )
     
@@ -86,7 +87,7 @@ class LycorisNetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        use_cp = True,
+        use_cp = False,
         dropout = 0, network_module = LoConModule,
     ) -> None:
         super().__init__()

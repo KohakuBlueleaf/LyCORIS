@@ -16,7 +16,7 @@ class LoConModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0.,
-        use_cp=True,
+        use_cp=False,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
