@@ -371,9 +371,16 @@ def merge_locon(
                         child_module.weight += locon_state_dict[lora_diff_name].cpu()
                         continue
 
-                    down = locon_state_dict[f'{lora_name}.lora_down.weight'].float()
-                    up = locon_state_dict[f'{lora_name}.lora_up.weight'].float()
-                    alpha = locon_state_dict[f'{lora_name}.alpha'].float()
+                    down_name = f'{lora_name}.lora_down.weight'
+                    up_name = f'{lora_name}.lora_up.weight'
+                    alpha_name = f'{lora_name}.alpha'
+
+                    if down_name not in locon_state_dict or up_name not in locon_state_dict or alpha_name not in locon_state_dict:
+                        continue
+
+                    down = locon_state_dict[down_name].float()
+                    up = locon_state_dict[up_name].float()
+                    alpha = locon_state_dict[alpha_name].float()
                     rank = down.shape[0]
 
                     if layer == 'Conv2d':
