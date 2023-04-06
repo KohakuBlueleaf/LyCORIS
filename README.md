@@ -17,7 +17,6 @@ See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [D
   * dim <= 64
   * alpha = 1 (or lower, like 0.3)
 
-
 ### LoRA with Hadamard Product representation (LoHa)
 * Ref: [FedPara Low-Rank Hadamard Product For Communication-Efficient Federated Learning](https://openreview.net/pdf?id=d71n4ftoCBy)
 * designed for federated learning, but has some cool property like rank<=dim^2 so should be good for parameter-efficient finetuning.
@@ -31,6 +30,14 @@ See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [D
 **High dim with LoHa may cause unstable loss or just goes to NaN. If you want to use high dim LoHa, please use lower lr**
 
 **WARNING-AGAIN: Use parameter-efficient algorithim in parameter-unefficient way is not a good idea**
+
+### (IA)^3
+* Ref: [Few-Shot Parameter-Efficient Fine-Tuning is Better and Cheaper than In-Context Learning](https://arxiv.org/abs/2205.05638)
+* You can try this algo with dev version package(or install from source code) and set algo=ia3
+* This algo need much higher lr (about 5e-3~1e-2)
+* This algo is good at learning style, but hard to transfer(You can only get reasonable result on the model you trained on).
+* This algo produce very tiny file(about 200~300KB)
+* **Experimental**
 
 ---
 
@@ -113,9 +120,8 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-### 2023/03/29 Update to 0.1.4
-* cp decomposition is default to disable now
-* add 4 more layer to train (conv_in/out, time_embedding)
+### 2023/04/05 Update to 0.1.5.dev1
+* Add (IA)^3 algorithm
 
 ## Todo list
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
