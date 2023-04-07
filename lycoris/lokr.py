@@ -59,7 +59,6 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
 
 def make_weight(orig_weight, w1, w2a, w2b, scale):
     diff_weight = torch.kron(w1, w2a@w2b)*scale
-    orig_weight.reshape(diff_weight.shape) + diff_weight
     return orig_weight.reshape(diff_weight.shape) + diff_weight 
     
     # to do 
