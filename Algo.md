@@ -96,17 +96,17 @@ For hadamard product implementation, just use 2 different $W'$ and multiply them
 
 ## Kronercker Product
 
-### About rank
-
-In same way as Hadamard Product, we can replace Hadamard Product with Kronecker Product.
+### Definition
 
 If $W_1$ is an a x b matrix and $W_2$ is a c x d matrix, then the Kronecker Product of two matrices is 
 
 $W' = W_1 \otimes W_2$ and an ac x bd matrix.
 
-If a < c and b < d then, ,in meaning of matrix, $W_2$ becomes weight and $W_1$ becomes weight scale of $W_2$
+In meaning of matrix, $W_2$ becomes weight and $W_1$ becomes weight scale of $W_2$
 
-Now, we can decompose $W_2$ using LoRA with rank, r.
+## About rank
+
+And we can decompose $W_2$ using LoRA with rank, r.
 
 $W_2 = Wa_2 \cdot Wb_2$
 
@@ -118,19 +118,19 @@ $rank(W_1) \le min(a, b), rank(Wa_2 \cdot Wb_2) \le r$
 
 => $rank(W') \le min(a, b) \times r$
 
-Remember that $min(a, b) \times r$ is upper bound. $rank(W') = min(a, b) \times r$ does not guarantee.
+Remember that $min(a, b) \times r$ is upper bound. $rank(W') = min(a, b) \times r$ does not guarantee. Experiment needs.
 
 ### Number of parameters
 
-We decompose $W' = W_1 \otimes (Wa_2 \cdot Wb_2)$.
+We decompose matrix, $W' = W_1 \otimes (Wa_2 \cdot Wb_2)$.
 
-(# of parameters) = (a x b) + (c x r + r x d) = r x (c + d) + a x b, m = ac, n = bd
+(# of parameters) = $(a \times b) + (c \times r + r \times d) = a \times b + r \times (c + d)$, m = ac, n = bd.
 
 and suppose best case $a=c= \sqrt{m}, b=d= \sqrt{n}$
 
 then, (# of parameters) = $\sqrt{mn} + r \times (\sqrt{m} + \sqrt{n})$
 
-We can reduce the number of parameters to square root maximally.
+We can reduce the number of parameters to order of square root maximally.
 
 ---
 
