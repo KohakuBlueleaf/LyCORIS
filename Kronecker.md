@@ -140,5 +140,5 @@ rank_lora, optimizer, learning rate, filesize. alpha=rank
 
 16_LoKr  : lion, unet lr=3.0e-4, TE lr = 1.5e-4,   1,817KB (-95%)
 
-images
+images are in result folder.
 
