@@ -4,13 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# to do
-# 1, use more flexible factorization
-#  - done
-# 2, only decpompose larger matrix
-#  - done
-# 3, use [16, 16, 1, 1], [20, 20, 3, 3] format for convolution
-#  - done
 # 4, build custom backward function
 #  - 
 
@@ -57,12 +50,11 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
         n, m = m, n
     return m, n
 
+
 def make_weight(orig_weight, w1, w2a, w2b, scale):
     diff_weight = torch.kron(w1, w2a@w2b)*scale
     return orig_weight.reshape(diff_weight.shape) + diff_weight 
-    
-    # to do 
-    #  - build custom backward function
+
 
 def make_weight_cp(orig_weight, w1, t2, w2a, w2b, scale):
     # w1 = [a, b, k1, k2], t2 = [dim, dim, k1, k2], w2a = [dim, c], w2b = [dim, d]
@@ -78,13 +70,13 @@ def make_weight_cp(orig_weight, w1, t2, w2a, w2b, scale):
     rebuild2 = torch.kron(temp_ab, rebuild2)    # [a, b, 1, 1] ⊗ [c, d, k1, k2] = [ac, bd, k1, k2]
     
     return orig_weight+rebuild1*rebuild2*scale  # [ac, bd, k1, k2]
-    
 
 
 class LokrModule(nn.Module):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
         and from KohakuBlueleaf/LyCORIS/lycoris:loha:LoHaModule
+        and from KohakuBlueleaf/LyCORIS/lycoris:locon:LoconModule
     """
 
     def __init__(
@@ -149,7 +141,7 @@ class LokrModule(nn.Module):
             
             # smaller part. weight scale
             self.lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[0][1]))
-            
+
             # bigger part. weight and LoRA. [b, dim] x [dim, d]
             self.lokr_w2_a = nn.Parameter(torch.empty(shape[1][0], lora_dim))
             self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1]))
@@ -157,11 +149,6 @@ class LokrModule(nn.Module):
 
             self.op = F.linear
             self.extra_args = {}
-            
-        # f = open('./log.txt', 'a', encoding='utf-8')
-        # print(f'{self.lora_name} : ({in_dim}, {out_dim}) -> ({in_m}, {out_l})⊗({in_n}, {out_k})', file=f)
-        # f.close()
-        
         
         if dropout:
             self.dropout = nn.Dropout(dropout)
@@ -174,7 +161,6 @@ class LokrModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
-        # Same as loha.py
         if self.cp:
             torch.nn.init.normal_(self.lokr_t2, std=0.1)
         torch.nn.init.normal_(self.lokr_w2_b, std=0.01)
