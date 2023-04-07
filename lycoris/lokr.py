@@ -11,6 +11,8 @@ import torch.nn.functional as F
 #  - done
 # 3, use [16, 16, 1, 1], [20, 20, 3, 3] format for convolution
 #  - done
+# 4, build custom backward function
+#  - 
 
 
 def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
@@ -18,10 +20,10 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     return a tuple of two value of input dimension decomposed by the number closest to factor
     second value is higher or equal than first value.
     
-    In LoRA with Kroneckor Product, first value is a value for weight.
-    secon value is a value for weight scale.
+    In LoRA with Kroneckor Product, first value is a value for weight scale.
+    secon value is a value for weight.
     
-    Becuase of non-commutative property, A⊗B ≠ B⊗A. Meaning of two value is slightly different.
+    Becuase of non-commutative property, A⊗B ≠ B⊗A. Meaning of two matrices is slightly different.
     
     examples)
     factor
@@ -62,21 +64,22 @@ def make_weight(orig_weight, w1, w2a, w2b, scale):
     
     # to do 
     #  - build custom backward function
-    #  - grad of A, B, C on W = A ⊗ (BC)
 
 def make_weight_cp(orig_weight, w1, t2, w2a, w2b, scale):
-    # a, b, c, d = w1a.shape[1], w1b.shape[1], w2a.shape[1], w2b.shape[1]
-    # rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a) # [a, b, k1, k2]
-    # rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a) # [c, d, k1, k2]
+    # w1 = [a, b, k1, k2], t2 = [dim, dim, k1, k2], w2a = [dim, c], w2b = [dim, d]
+    # we want shape is [ac, bd, k1, k2] after some operation
+    a, b, c, d = w1.shape[0], w1.shape[1], w2a.shape[0], w2b.shape[1]
     
-    # temp_ab = torch.ones((a, b, 1, 1))
-    # temp_cd = torch.ones((c, d, 1, 1))
+    rebuild2 = torch.einsum('i j k l, i p, j r -> p r k l', t2, w2a, w2b) # [c, d, k1, k2]
+    temp_ab = torch.ones((a, b, 1, 1))
+    temp_cd = torch.ones((c, d, 1, 1))
     
-    # rebuild1 = torch.kron(rebuild1, temp_cd) # [a, b, k1, k2] -> [ac, bd, k1, k2]
-    # rebuild2 = torch.kron(temp_ab, rebuild2) # [c, d, k1, k2] -> [ac, bd, k1, k2]
+    # due to part of [k1, k2] in w1, t2, two-step needs.
+    rebuild1 = torch.kron(w1, temp_cd)          # [a, b, k1, k2] ⊗ [c, d, 1, 1] = [ac, bd, k1, k2]
+    rebuild2 = torch.kron(temp_ab, rebuild2)    # [a, b, 1, 1] ⊗ [c, d, k1, k2] = [ac, bd, k1, k2]
     
-    # return orig_weight+rebuild1*rebuild2*scale
-    raise NotImplementedError()
+    return orig_weight+rebuild1*rebuild2*scale  # [ac, bd, k1, k2]
+    
 
 
 class LokrModule(nn.Module):
@@ -92,7 +95,7 @@ class LokrModule(nn.Module):
         lora_dim=4, alpha=1, 
         dropout=0.,
         use_cp=False,
-        factor=None
+        factor:int=-1 # factorization factor
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
@@ -106,8 +109,8 @@ class LokrModule(nn.Module):
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             
-            in_m, in_n = factorization(in_dim)
-            out_l, out_k = factorization(out_dim)
+            in_m, in_n = factorization(in_dim, factor)
+            out_l, out_k = factorization(out_dim, factor)
             
             self.cp = use_cp and k_size!=(1, 1)
             if self.cp:
@@ -141,8 +144,8 @@ class LokrModule(nn.Module):
             in_dim = org_module.in_features
             out_dim = org_module.out_features
             
-            in_m, in_n = factorization(in_dim)
-            out_l, out_k = factorization(out_dim)
+            in_m, in_n = factorization(in_dim, factor)
+            out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n)) # ((a, b), (c, d)), out_dim = a*c, in_dim = b*d
             
             # smaller part. weight scale
@@ -156,9 +159,9 @@ class LokrModule(nn.Module):
             self.op = F.linear
             self.extra_args = {}
             
-#         f = open('./log.txt', 'a', encoding='utf-8')
-#         print(f'{self.lora_name} : ({in_dim}, {out_dim}) -> ({in_m}, {out_l})⊗({in_n}, {out_k})', file=f)
-#         f.close()
+        f = open('./log.txt', 'a', encoding='utf-8')
+        print(f'{self.lora_name} : ({in_dim}, {out_dim}) -> ({in_m}, {out_l})⊗({in_n}, {out_k})', file=f)
+        f.close()
         
         
         if dropout:
