@@ -57,19 +57,12 @@ def make_weight(orig_weight, w1, w2a, w2b, scale):
 
 
 def make_weight_cp(orig_weight, w1, t2, w2a, w2b, scale):
-    # w1 = [a, b, k1, k2], t2 = [dim, dim, k1, k2], w2a = [dim, c], w2b = [dim, d]
+    # w1 = [a, b, 1, 1], t2 = [dim, dim, k1, k2], w2a = [dim, c], w2b = [dim, d]
     # we want shape is [ac, bd, k1, k2] after some operation
-    a, b, c, d = w1.shape[0], w1.shape[1], w2a.shape[0], w2b.shape[1]
-    
     rebuild2 = torch.einsum('i j k l, i p, j r -> p r k l', t2, w2a, w2b) # [c, d, k1, k2]
-    temp_ab = torch.ones((a, b, 1, 1))
-    temp_cd = torch.ones((c, d, 1, 1))
-    
-    # due to part of [k1, k2] in w1, t2, two-step needs.
-    rebuild1 = torch.kron(w1, temp_cd)          # [a, b, k1, k2] ⊗ [c, d, 1, 1] = [ac, bd, k1, k2]
-    rebuild2 = torch.kron(temp_ab, rebuild2)    # [a, b, 1, 1] ⊗ [c, d, k1, k2] = [ac, bd, k1, k2]
-    
-    return orig_weight+rebuild1*rebuild2*scale  # [ac, bd, k1, k2]
+    rebuild2 = rebuild2.contiguous()
+    rebuild = torch.kron(w1, rebuild2) # [ac, bd, k1, k2]
+    return orig_weight + rebuild*scale
 
 
 class LokrModule(nn.Module):
@@ -107,7 +100,7 @@ class LokrModule(nn.Module):
             if self.cp:
                 shape = ((out_l, out_k), (in_m, in_n), *k_size) # ((a, b), (c, d), *k_size)
                 
-                self.lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0], shape[2], shape[3]))  # a*c, 1-mode
+                self.lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0], 1, 1))  # a*c, 1-mode
                 
                 self.lokr_t2 = nn.Parameter(torch.empty(lora_dim, lora_dim, shape[2], shape[3]))
                 self.lokr_w2_a = nn.Parameter(torch.empty(lora_dim, shape[0][1])) # b, 1-mode
@@ -163,22 +156,32 @@ class LokrModule(nn.Module):
 
         if self.cp:
             torch.nn.init.normal_(self.lokr_t2, std=0.1)
-        torch.nn.init.normal_(self.lokr_w2_b, std=0.01)
+        torch.nn.init.normal_(self.lokr_w2_b, std=0.05)
         torch.nn.init.normal_(self.lokr_w1, std=1)
         torch.nn.init.constant_(self.lokr_w2_a, 0)
 
         self.multiplier = multiplier
         self.org_module = [org_module]
+        if self.cp:
+            weight = make_weight_cp(
+                self.org_module[0].weight.data, 
+                self.lokr_w1,
+                self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b,
+                scale = torch.tensor(self.scale*self.multiplier),
+            )
+        else:
+            weight = make_weight(
+                self.org_module[0].weight.data, 
+                self.lokr_w1,
+                self.lokr_w2_a, self.lokr_w2_b,
+                scale = torch.tensor(self.scale*self.multiplier),
+            )
 
     # Same as locon.py
     def apply_to(self):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
 
-    def get_weight(self):
-        d_weight = torch.kron(self.lokr_w1, self.lokr_w2_a@self.lokr_w2_b)
-        return (d_weight).reshape(self.shape)
-    
     def forward(self, x):
         if self.cp:
             weight = make_weight_cp(
