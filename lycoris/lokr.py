@@ -4,10 +4,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# to do
+# 1, use more flexible factorization
+#  - done
+# 2, only decpompose larger matrix
+# 3, use [16, 16, 1, 1], [20, 20, 3, 3] format for convolution
+
 
 def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     '''
-    return a tuple of two value of input dimension decomposed by power of 2
+    return a tuple of two value of input dimension decomposed by factor
     second value is higher or equal than first value.
     
     In LoRA with Kroneckor Product, first value is a value for weight.
@@ -55,17 +61,18 @@ def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
     
 
 def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale):
-    a, b, c, d = w1a.shape[1], w1b.shape[1], w2a.shape[1], w2b.shape[1]
-    rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a) # [a, b, k1, k2]
-    rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a) # [c, d, k1, k2]
+    # a, b, c, d = w1a.shape[1], w1b.shape[1], w2a.shape[1], w2b.shape[1]
+    # rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a) # [a, b, k1, k2]
+    # rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a) # [c, d, k1, k2]
     
-    temp_ab = torch.ones((a, b, 1, 1))
-    temp_cd = torch.ones((c, d, 1, 1))
+    # temp_ab = torch.ones((a, b, 1, 1))
+    # temp_cd = torch.ones((c, d, 1, 1))
     
-    rebuild1 = torch.kron(rebuild1, temp_cd) # [a, b, k1, k2] -> [ac, bd, k1, k2]
-    rebuild2 = torch.kron(temp_ab, rebuild2) # [c, d, k1, k2] -> [ac, bd, k1, k2]
+    # rebuild1 = torch.kron(rebuild1, temp_cd) # [a, b, k1, k2] -> [ac, bd, k1, k2]
+    # rebuild2 = torch.kron(temp_ab, rebuild2) # [c, d, k1, k2] -> [ac, bd, k1, k2]
     
-    return orig_weight+rebuild1*rebuild2*scale
+    # return orig_weight+rebuild1*rebuild2*scale
+    raise NotImplemented()
 
 
 class LokrModule(nn.Module):
@@ -134,6 +141,13 @@ class LokrModule(nn.Module):
             self.lokr_w2_a = nn.Parameter(torch.empty(lora_dim, shape[0][1])) # c, 1-mode
             self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1])) # d , 2-mode
         else:
+            self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
+            self.lokr_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1][0]))
+            
+            self.lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], lora_dim))
+            self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1]))
+            
+            
             self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
             self.lokr_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1][0]))
             
