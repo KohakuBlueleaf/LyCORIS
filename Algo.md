@@ -108,13 +108,9 @@ In meaning of matrix, $W_2$ becomes weight and $W_1$ becomes weight scale of $W_
 
 And we can decompose $W_2$ using LoRA with rank, r.
 
-$W_2 = Wa_2 \cdot Wb_2$
+$W_2 = Wa_2 \cdot Wb_2$ then $W' = W_1 \otimes (Wa_2 \cdot Wb_2)$
 
-then $W' = W_1 \otimes (Wa_2 \cdot Wb_2)$
-
-consider $W' = W_1 \otimes (Wa_2 \cdot Wb_2)$, we can get $rank(W') \le rank(W_1) \times rank(Wa_2 \cdot Wb_2)$.
-
-$rank(W_1) \le min(a, b), rank(Wa_2 \cdot Wb_2) \le r$ 
+we can get $rank(W') \le rank(W_1) \times rank(Wa_2 \cdot Wb_2)$ and $rank(W_1) \le min(a, b), rank(Wa_2 \cdot Wb_2) \le r$ 
 
 => $rank(W') \le min(a, b) \times r$
 
