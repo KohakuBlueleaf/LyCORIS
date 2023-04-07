@@ -64,7 +64,9 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             alpha=network_alpha, conv_alpha=conv_alpha,
             dropout=dropout,
             use_cp=use_cp,
-            network_module=network_module
+            network_module=network_module,
+            decompose_both=kwargs.get('decompose_both', False),
+            factor=kwargs.get('factor', -1),
         )
     
     return network
@@ -100,6 +102,7 @@ class LycorisNetwork(torch.nn.Module):
         alpha=1, conv_alpha=1,
         use_cp = False,
         dropout = 0, network_module = LoConModule,
+        **kwargs,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
@@ -136,19 +139,22 @@ class LycorisNetwork(torch.nn.Module):
                         if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
                             lora = network_module(
                                 lora_name, child_module, self.multiplier, 
-                                self.lora_dim, self.alpha, self.dropout, use_cp
+                                self.lora_dim, self.alpha, self.dropout, use_cp,
+                                **kwargs
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1 and lora_dim>0:
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
-                                    self.lora_dim, self.alpha, self.dropout, use_cp
+                                    self.lora_dim, self.alpha, self.dropout, use_cp,
+                                    **kwargs
                                 )
                             elif conv_lora_dim>0:
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
-                                    self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp
+                                    self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp,
+                                    **kwargs
                                 )
                             else:
                                 continue
@@ -161,19 +167,22 @@ class LycorisNetwork(torch.nn.Module):
                     if module.__class__.__name__ == 'Linear' and lora_dim>0:
                         lora = network_module(
                             lora_name, module, self.multiplier, 
-                            self.lora_dim, self.alpha, self.dropout, use_cp
+                            self.lora_dim, self.alpha, self.dropout, use_cp,
+                            **kwargs
                         )
                     elif module.__class__.__name__ == 'Conv2d':
                         k_size, *_ = module.kernel_size
                         if k_size==1 and lora_dim>0:
                             lora = network_module(
                                 lora_name, module, self.multiplier, 
-                                self.lora_dim, self.alpha, self.dropout, use_cp
+                                self.lora_dim, self.alpha, self.dropout, use_cp,
+                                **kwargs
                             )
                         elif conv_lora_dim>0:
                             lora = network_module(
                                 lora_name, module, self.multiplier, 
-                                self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp
+                                self.conv_lora_dim, self.conv_alpha, self.dropout, use_cp,
+                                **kwargs
                             )
                         else:
                             continue
@@ -360,7 +369,8 @@ class IA3Network(torch.nn.Module):
                         if child_module.__class__.__name__ in {'Linear', 'Conv2d'}:
                             lora = IA3Module(
                                 lora_name, child_module, self.multiplier,
-                                name in target_train_input
+                                name in target_train_input,
+                                **kwargs,
                             )
                             loras.append(lora)
                 elif any(i in name for i in target_replace_names):
@@ -369,7 +379,8 @@ class IA3Network(torch.nn.Module):
                     if module.__class__.__name__ in {'Linear', 'Conv2d'}:
                         lora = IA3Module(
                             lora_name, module, self.multiplier,
-                            name in target_train_input
+                            name in target_train_input,
+                            **kwargs,
                         )
                         loras.append(lora)
             return loras
