@@ -55,7 +55,7 @@ def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
     
 
 def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale):
-    a, b, c, d = w1a.shape[1], w1b.shape[1], w2a.shape[1], w2b.shape[2]
+    a, b, c, d = w1a.shape[1], w1b.shape[1], w2a.shape[1], w2b.shape[1]
     rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a) # [a, b, k1, k2]
     rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a) # [c, d, k1, k2]
     
