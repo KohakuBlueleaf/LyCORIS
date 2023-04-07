@@ -156,9 +156,9 @@ class LokrModule(nn.Module):
             self.op = F.linear
             self.extra_args = {}
             
-        f = open('./log.txt', 'a', encoding='utf-8')
-        print(f'{self.lora_name} : ({in_dim}, {out_dim}) -> ({in_m}, {out_l})⊗({in_n}, {out_k})', file=f)
-        f.close()
+#         f = open('./log.txt', 'a', encoding='utf-8')
+#         print(f'{self.lora_name} : ({in_dim}, {out_dim}) -> ({in_m}, {out_l})⊗({in_n}, {out_k})', file=f)
+#         f.close()
         
         
         if dropout:
