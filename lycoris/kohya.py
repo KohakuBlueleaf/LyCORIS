@@ -14,6 +14,7 @@ from .kohya_utils import *
 from .locon import LoConModule
 from .loha import LohaModule
 from .ia3 import IA3Module
+from .lokr import LokrModule
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -28,24 +29,26 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     network_module = {
         'lora': LoConModule,
         'loha': LohaModule,
-        'ia3':  IA3Module
+        'ia3':  IA3Module,
+        'lokr': LokrModule,
     }[algo]
     
     print(f'Using rank adaptation algo: {algo}')
     
-    if (algo == 'loha' 
+    if ((algo == 'loha' or algo == 'lokr')
         and not kwargs.get('no_dim_warn', False) 
         and (network_dim>64 or conv_dim>64)):
         print('='*20 + 'WARNING' + '='*20)
-        warn(
-            (
-                "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)"
-                "in Hadamard Product representation!\n"
-                "Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n"
-                "If you just want to use high dim loha, please consider use lower lr."
-            ),
-            stacklevel=2,
-        )
+        warning_type ={
+            'loha': "Hadamard Product representation",
+            'lokr': "Kronecker Product representation"
+        }
+        warning_msg = f"""You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n
+            in {warning_type[algo]}!\n
+            Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n
+            If you just want to use high dim {algo}, please consider use lower lr.
+        """
+        warn(warning_msg, stacklevel=2)
         print('='*20 + 'WARNING' + '='*20)
     
     if algo == 'ia3':
