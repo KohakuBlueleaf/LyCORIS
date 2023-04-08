@@ -183,7 +183,7 @@ class LokrModule(nn.Module):
             torch.nn.init.normal_(self.lokr_w1, std=1)
         else:
             torch.nn.init.normal_(self.lokr_w1_a, std=1)
-            torch.nn.init.normal_(self.lokr_w1_b, std=0.3)
+            torch.nn.init.normal_(self.lokr_w1_b, std=0.1)
 
         self.multiplier = multiplier
         self.org_module = [org_module]
