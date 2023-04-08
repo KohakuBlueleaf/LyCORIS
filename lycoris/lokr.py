@@ -176,14 +176,14 @@ class LokrModule(nn.Module):
         else:
             if self.cp:
                 torch.nn.init.normal_(self.lokr_t2, std=0.1)
-            torch.nn.init.constant_(self.lokr_w2_a, 0)
-            torch.nn.init.normal_(self.lokr_w2_b, std=0.05)
+            torch.nn.init.normal_(self.lokr_w2_a, std=1)
+            torch.nn.init.constant_(self.lokr_w2_b, 0)
         
         if self.use_w1:
             torch.nn.init.normal_(self.lokr_w1, std=1)
         else:
             torch.nn.init.normal_(self.lokr_w1_a, std=1)
-            torch.nn.init.normal_(self.lokr_w1_b, std=0.05)
+            torch.nn.init.normal_(self.lokr_w1_b, std=0.3)
 
         self.multiplier = multiplier
         self.org_module = [org_module]
