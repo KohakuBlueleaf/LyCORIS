@@ -165,6 +165,9 @@ class LokrModule(nn.Module):
         if isinstance(alpha, torch.Tensor):
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = lora_dim if alpha is None or alpha == 0 else alpha
+        if self.use_w2 and self.use_w1:
+            #use scale = 1
+            alpha = lora_dim
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
