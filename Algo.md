@@ -104,7 +104,7 @@ $W' = W_1 \otimes W_2$ and an ac x bd matrix.
 
 In meaning of matrix, $W_2$ becomes weight and $W_1$ becomes weight scale of $W_2$
 
-## About rank
+### About rank
 
 And we can decompose $W_2$ using LoRA with rank, r.
 
