@@ -39,6 +39,13 @@ See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [D
 * This algo produce very tiny file(about 200~300KB)
 * **Experimental**
 
+### LoKR
+* Basically same idea of LoHA, but use kronecker product
+* This algo is quite sensitive and you may need to tune the lr
+* This algo can learn both character and style, but since it is small (auto factor, full rank, 2.5MB), it is also hard to transfer.
+* This algo produce relatively small file(auto factor: 900~2500KB)
+* Use smaller factor will produce bigger file, you can tune it if you think 2.5MB full rank is not good enough.
+
 ---
 
 ## usage
@@ -92,8 +99,7 @@ to train lycoris module for SD model
 
 
 ### For a1111's sd-webui
-download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-locon) into sd-webui, and then use built-in lora system to run your model.
-**LoHa Model supported**
+download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris) into sd-webui, and then use LyCORIS model in the extra netowrks tabs.
 
 **Not For Kohya-ss' Additional Network**
 
@@ -120,8 +126,9 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-### 2023/04/05 Update to 0.1.5.dev1
+### 2023/04/08 Update for 0.1.5
 * Add (IA)^3 algorithm
+* Add lokr algorithm
 
 ## Todo list
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
