@@ -376,7 +376,7 @@ def rebuild_weight(module_type, params, orig_weight, scale=1):
         if mid is not None:
             rebuild = cp_weight_from_conv(up, down, mid)
         else:
-            rebuild = up @ down.reshape(down.size(0), -1)
+            rebuild = up.reshape(up.size(0),-1) @ down.reshape(down.size(0), -1)
         merged = orig_weight + rebuild.reshape(orig_weight.shape) * scale
         del up, down, mid, alpha, params, rebuild
     elif module_type == 'hada':
