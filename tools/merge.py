@@ -37,7 +37,7 @@ def get_args():
 ARGS = get_args()
 
 
-from lycoris.utils import merge_loha, merge_locon
+from lycoris.utils import merge
 from lycoris.kohya_model_utils import (
     load_models_from_stable_diffusion_checkpoint,
     save_stable_diffusion_checkpoint,
@@ -54,17 +54,6 @@ def main():
     else:
         lyco = torch.load(ARGS.lycoris_model)
     
-    algo = None
-    for key in lyco:
-        if 'hada' in key:
-            algo = 'loha'
-            break
-        elif 'lora_up' in key:
-            algo = 'lora'
-            break
-    else:
-        raise NotImplementedError('Cannot find the algo for this lycoris model file.')
-    
     dtype_str = ARGS.dtype.replace('fp', 'float').replace('bf', 'bfloat')
     dtype = {
         'float': torch.float,
@@ -77,20 +66,12 @@ def main():
     if dtype is None:
         raise ValueError(f'Cannot Find the dtype "{dtype}"')
     
-    if algo == 'loha':
-        merge_loha(
-            base,
-            lyco,
-            ARGS.weight,
-            ARGS.device
-        )
-    elif algo == 'lora':
-        merge_locon(
-            base,
-            lyco,
-            ARGS.weight,
-            ARGS.device
-        )
+    merge(
+        base,
+        lyco,
+        ARGS.weight,
+        ARGS.device
+    )
     
     save_stable_diffusion_checkpoint(
         ARGS.is_v2, ARGS.output_name, 

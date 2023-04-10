@@ -64,28 +64,6 @@ def extract_conv(
     return (extract_weight_A, extract_weight_B, diff), 'low rank'
 
 
-def merge_conv(
-    weight_a: Union[torch.Tensor, nn.Parameter],
-    weight_b: Union[torch.Tensor, nn.Parameter],
-    device = 'cpu'
-):
-    rank, in_ch, kernel_size, k_ = weight_a.shape
-    out_ch, rank_, _, _ = weight_b.shape
-    assert rank == rank_ and kernel_size == k_
-    
-    wa = weight_a.to(device)
-    wb = weight_b.to(device)
-    
-    if device == 'cpu':
-        wa = wa.float()
-        wb = wb.float()
-    
-    merged = wb.reshape(out_ch, -1) @ wa.reshape(rank, -1)
-    weight = merged.reshape(out_ch, in_ch, kernel_size, kernel_size)
-    del wb, wa
-    return weight
-
-
 def extract_linear(
     weight: Union[torch.Tensor, nn.Parameter],
     mode = 'fixed',
@@ -128,27 +106,6 @@ def extract_linear(
     extract_weight_B = U.reshape(out_ch, lora_rank).detach()
     del U, S, Vh, weight
     return (extract_weight_A, extract_weight_B, diff), 'low rank'
-
-
-def merge_linear(
-    weight_a: Union[torch.Tensor, nn.Parameter],
-    weight_b: Union[torch.Tensor, nn.Parameter],
-    device = 'cpu'
-):
-    rank, in_ch = weight_a.shape
-    out_ch, rank_ = weight_b.shape
-    assert rank == rank_
-    
-    wa = weight_a.to(device)
-    wb = weight_b.to(device)
-    
-    if device == 'cpu':
-        wa = wa.float()
-        wb = wb.float()
-    
-    weight = wb @ wa
-    del wb, wa
-    return weight
 
 
 def extract_diff(
@@ -352,17 +309,133 @@ def extract_diff(
     return text_encoder_loras|unet_loras
 
 
-def merge_locon(
+def get_module(
+    lyco_state_dict: Dict,
+    lora_name
+):
+    if f'{lora_name}.lora_up.weight' in lyco_state_dict:
+        up = lyco_state_dict[f'{lora_name}.lora_up.weight']
+        down = lyco_state_dict[f'{lora_name}.lora_down.weight']
+        mid = lyco_state_dict.get(f'{lora_name}.lora_mid.weight', None)
+        alpha = lyco_state_dict.get(f'{lora_name}.alpha', None)
+        return 'locon', (up, down, mid, alpha)
+    elif f'{lora_name}.hada_w1_a' in lyco_state_dict:
+        w1a = lyco_state_dict[f'{lora_name}.hada_w1_a']
+        w1b = lyco_state_dict[f'{lora_name}.hada_w1_b']
+        w2a = lyco_state_dict[f'{lora_name}.hada_w2_a']
+        w2b = lyco_state_dict[f'{lora_name}.hada_w2_b']
+        t1 = lyco_state_dict.get(f'{lora_name}.hada_t1', None)
+        t2 = lyco_state_dict.get(f'{lora_name}.hada_t2', None)
+        alpha = lyco_state_dict.get(f'{lora_name}.alpha', None)
+        return 'hada', (w1a, w1b, w2a, w2b, t1, t2, alpha)
+    elif f'{lora_name}.weight' in lyco_state_dict:
+        weight = lyco_state_dict[f'{lora_name}.weight']
+        on_input = lyco_state_dict.get(f'{lora_name}.on_input', False)
+        return 'ia3', (weight, on_input)
+    elif (f'{lora_name}.lokr_w1' in lyco_state_dict
+          or f'{lora_name}.lokr_w1_a' in lyco_state_dict):
+        w1 = lyco_state_dict.get(f'{lora_name}.lokr_w1', None)
+        w1a = lyco_state_dict.get(f'{lora_name}.lokr_w1_a', None)
+        w1b = lyco_state_dict.get(f'{lora_name}.lokr_w1_b', None)
+        w2 = lyco_state_dict.get(f'{lora_name}.lokr_w2', None)
+        w2a = lyco_state_dict.get(f'{lora_name}.lokr_w2_a', None)
+        w2b = lyco_state_dict.get(f'{lora_name}.lokr_w2_b', None)
+        t1 = lyco_state_dict.get(f'{lora_name}.lokr_t1', None)
+        t2 = lyco_state_dict.get(f'{lora_name}.lokr_t2', None)
+        alpha = lyco_state_dict.get(f'{lora_name}.alpha', None)
+        return 'kron', (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha)
+    elif f'{lora_name}.diff' in lyco_state_dict:
+        return 'full', lyco_state_dict[f'{lora_name}.diff']
+    else:
+        return 'None', ()
+
+
+def cp_weight_from_conv(
+    up, down, mid
+):
+    up = up.reshape(up.size(0), up.size(1))
+    down = down.reshape(down.size(0), down.size(1))
+    return torch.einsum('m n w h, i m, n j -> i j w h', mid, up, down)
+
+def cp_weight(
+    wa, wb, t
+):
+    temp = torch.einsum('i j k l, j r -> i r k l', t, wb)
+    return torch.einsum('i j k l, i r -> r j k l', temp, wa)
+
+
+@torch.no_grad()
+def rebuild_weight(module_type, params, orig_weight, scale=1):
+    if orig_weight is None:
+        return orig_weight
+    merged = orig_weight
+    if module_type == 'locon':
+        up, down, mid, alpha = params
+        if alpha is not None:
+            scale *= alpha/up.size(1)
+        if mid is not None:
+            rebuild = cp_weight_from_conv(up, down, mid)
+        else:
+            rebuild = up @ down.reshape(down.size(0), -1)
+        merged = orig_weight + rebuild.reshape(orig_weight.shape) * scale
+        del up, down, mid, alpha, params, rebuild
+    elif module_type == 'hada':
+        w1a, w1b, w2a, w2b, t1, t2, alpha = params
+        if alpha is not None:
+            scale *= alpha / w1b.size(0)
+        if t1 is not None:
+            rebuild1 = cp_weight(w1a, w1b, t1)
+        else:
+            rebuild1 = w1a @ w1b
+        if t2 is not None:
+            rebuild2 = cp_weight(w2a, w2b, t2)
+        else:
+            rebuild2 = w2a @ w2b
+        rebuild = (rebuild1 * rebuild2).reshape(orig_weight.shape)
+        merged = orig_weight + rebuild * scale
+        del w1a, w1b, w2a, w2b, t1, t2, alpha, params, rebuild, rebuild1, rebuild2
+    elif module_type == 'ia3':
+        weight, on_input = params
+        if not on_input:
+            weight = weight.reshape(-1, 1)
+        merged = orig_weight + weight * orig_weight * scale
+        del weight, on_input, params
+    elif module_type == 'kron':
+        w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha = params
+        if alpha is not None and (w1b is not None or w2b is not None):
+            scale *= alpha / (w1b.size(0) if w1b else w2b.size(0))
+        if w1a is not None and w1b is not None:
+            if t1:
+                w1 = cp_weight(w1a, w1b, t1)
+            else:
+                w1 = w1a @ w1b
+        if w2a is not None and w2b is not None:
+            if t2:
+                w2 = cp_weight(w2a, w2b, t2)
+            else:
+                w2 = w2a @ w2b
+        rebuild = torch.kron(w1, w2).reshape(orig_weight.shape) 
+        merged = orig_weight + rebuild* scale
+        del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
+    elif module_type == 'full':
+        rebuild = params.reshape(orig_weight.shape) 
+        merged = orig_weight + rebuild * scale
+        del params, rebuild
+    
+    return merged
+
+
+def merge(
     base_model,
-    locon_state_dict: Dict[str, torch.TensorType],
+    lyco_state_dict,
     scale: float = 1.0,
     device = 'cpu'
 ):
     UNET_TARGET_REPLACE_MODULE = [
-        "Transformer2DModel",
-        "Attention",
-        "ResnetBlock2D",
-        "Downsample2D",
+        "Transformer2DModel", 
+        "Attention", 
+        "ResnetBlock2D", 
+        "Downsample2D", 
         "Upsample2D"
     ]
     UNET_TARGET_REPLACE_NAME = [
@@ -374,133 +447,58 @@ def merge_locon(
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
-    def merge(
-        prefix,
+    merged = 0
+    def merge_state_dict(
+        prefix, 
         root_module: torch.nn.Module,
+        lyco_state_dict: Dict[str,torch.Tensor],
         target_replace_modules,
         target_replace_names = []
     ):
-        temp = {}
-        for name, module in tqdm(list(root_module.named_modules())):
-            if module.__class__.__name__ in target_replace_modules or name in target_replace_names:
-                temp[name] = {}
-                for child_name, child_module in module.named_modules():
-                    layer = child_module.__class__.__name__
-                    if layer not in {'Linear', 'Conv2d'}:
-                        continue
-                    lora_name = prefix + '.' + name
-                    if child_name:
-                        lora_name += '.' + child_name
-                    lora_name = lora_name.replace('.', '_')
-                    lora_diff_name = prefix + '_' + name + ".diff"
-
-                    if lora_diff_name in locon_state_dict:
-                        child_module.weight.requires_grad_(False)
-                        child_module.weight += locon_state_dict[lora_diff_name].cpu()
-                        continue
-
-                    down_name = f'{lora_name}.lora_down.weight'
-                    up_name = f'{lora_name}.lora_up.weight'
-                    alpha_name = f'{lora_name}.alpha'
-
-                    if (down_name not in locon_state_dict 
-                        or up_name not in locon_state_dict 
-                        or alpha_name not in locon_state_dict):
-                        continue
-
-                    down = locon_state_dict[down_name].float()
-                    up = locon_state_dict[up_name].float()
-                    alpha = locon_state_dict[alpha_name].float()
-                    rank = down.shape[0]
-
-                    if layer == 'Conv2d':
-                        if f'{lora_name}.lora_mid.weight' in locon_state_dict:
-                            mid = locon_state_dict[f'{lora_name}.lora_mid.weight'].transpose(0,1).float()
-                            down = merge_conv(mid, down.transpose(0,1), device).transpose(0,1)
-                            delta = merge_conv(down, up, device)
-                        else:
-                            delta = merge_conv(down, up, device)
-                        child_module.weight.requires_grad_(False)
-                        child_module.weight += (alpha.to(device)/rank * scale * delta).cpu()
-                        del delta
-                    elif layer == 'Linear':
-                        delta = merge_linear(down, up, device)
-                        child_module.weight.requires_grad_(False)
-                        child_module.weight += (alpha.to(device)/rank * scale * delta).cpu()
-                        del delta
-
-    merge(
-        LORA_PREFIX_TEXT_ENCODER,
-        base_model[0], 
-        TEXT_ENCODER_TARGET_REPLACE_MODULE,
-        UNET_TARGET_REPLACE_NAME
-    )
-    merge(
-        LORA_PREFIX_UNET,
-        base_model[2],
-        UNET_TARGET_REPLACE_MODULE,
-        UNET_TARGET_REPLACE_NAME
-    )
-
-
-def merge_loha(
-    base_model,
-    loha_state_dict: Dict[str, torch.TensorType],
-    scale: float = 1.0,
-    device = 'cpu'
-):
-    UNET_TARGET_REPLACE_MODULE = [
-        "Transformer2DModel", 
-        "Attention", 
-        "ResnetBlock2D", 
-        "Downsample2D", 
-        "Upsample2D"
-    ]
-    TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
-    LORA_PREFIX_UNET = 'lora_unet'
-    LORA_PREFIX_TEXT_ENCODER = 'lora_te'
-    def merge(
-        prefix, 
-        root_module: torch.nn.Module,
-        target_replace_modules
-    ):
-        temp = {}
-        
-        for name, module in tqdm(list(root_module.named_modules())):
+        nonlocal merged
+        for name, module in tqdm(list(root_module.named_modules()), desc=f'Merging {prefix}'):
             if module.__class__.__name__ in target_replace_modules:
-                temp[name] = {}
                 for child_name, child_module in module.named_modules():
-                    layer = child_module.__class__.__name__
-                    if layer not in {'Linear', 'Conv2d'}:
+                    if child_module.__class__.__name__ not in {'Linear', 'Conv2d'}:
                         continue
                     lora_name = prefix + '.' + name + '.' + child_name
                     lora_name = lora_name.replace('.', '_')
                     
-                    w1a = loha_state_dict[f'{lora_name}.hada_w1_a'].float().to(device)
-                    w1b = loha_state_dict[f'{lora_name}.hada_w1_b'].float().to(device)
-                    w2a = loha_state_dict[f'{lora_name}.hada_w2_a'].float().to(device)
-                    w2b = loha_state_dict[f'{lora_name}.hada_w2_b'].float().to(device)
-                    alpha = loha_state_dict[f'{lora_name}.alpha'].float().to(device)
-                    dim = w1b.shape[0]
+                    result = rebuild_weight(*get_module(
+                        lyco_state_dict, lora_name
+                    ), getattr(child_module, 'weight'), scale)
+                    if result is not None:
+                        merged += 1
+                        child_module.requires_grad_(False)
+                        child_module.weight.copy_(result)
+            elif name in target_replace_names:
+                lora_name = prefix + '.' + name
+                lora_name = lora_name.replace('.', '_')
                     
-                    delta = (w1a @ w1b) * (w2a @ w2b)
-                    delta = delta.reshape(child_module.weight.shape)
-                    
-                    if layer == 'Conv2d':
-                        child_module.weight.requires_grad_(False)
-                        child_module.weight += (alpha.to(device)/dim * scale * delta).cpu()
-                    elif layer == 'Linear':
-                        child_module.weight.requires_grad_(False)
-                        child_module.weight += (alpha.to(device)/dim * scale * delta).cpu()
-                    del delta
+                result = rebuild_weight(*get_module(
+                    lyco_state_dict, lora_name
+                ), getattr(module, 'weight'), scale)
+                if result is not None:
+                    merged += 1
+                    module.requires_grad_(False)
+                    module.weight.copy_(result)
     
-    merge(
-        LORA_PREFIX_TEXT_ENCODER, 
-        base_model[0], 
-        TEXT_ENCODER_TARGET_REPLACE_MODULE
+    if device == 'cpu':
+        for k, v in tqdm(list(lyco_state_dict.items()), desc='Converting Dtype'):
+            lyco_state_dict[k] = v.float()
+    
+    merge_state_dict(
+        LORA_PREFIX_TEXT_ENCODER,
+        base_model[0],
+        lyco_state_dict,
+        TEXT_ENCODER_TARGET_REPLACE_MODULE,
+        UNET_TARGET_REPLACE_NAME
     )
-    merge(
+    merge_state_dict(
         LORA_PREFIX_UNET,
-        base_model[2], 
-        UNET_TARGET_REPLACE_MODULE
+        base_model[2],
+        lyco_state_dict,
+        UNET_TARGET_REPLACE_MODULE,
+        UNET_TARGET_REPLACE_NAME
     )
+    print(f'{merged} Modules been merged')
