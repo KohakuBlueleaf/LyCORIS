@@ -85,17 +85,19 @@ python3 sd-scripts/train_network.py \
   --network_module lycoris.kohya \
   --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
   --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
-  "dropout=DROPOUT_RATE" "algo=lora" \
+  "dropout=DROPOUT_RATE" "algo=locon" \
 ```
 to train lycoris module for SD model
 
 * algo list:
-  * lora: Conventional Methods
+  * locon: Conventional Methods
   * loha: Hadamard product representation introduced by FedPara
+  * lokr: Kronecker product representation
+  * ia3 : (IA)^3
 
 * Tips:
   * Use network_dim=0 or conv_dim=0 to disable linear/conv layer
-  * LoHa doesn't support dropout yet.
+  * LoHa/LoKr/(IA)^3 doesn't support dropout yet.
 
 
 ### For a1111's sd-webui

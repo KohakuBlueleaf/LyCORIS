@@ -28,6 +28,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
               or kwargs.get('use_conv_cp', False))
     network_module = {
         'lora': LoConModule,
+        'locon': LoConModule,
         'loha': LohaModule,
         'ia3':  IA3Module,
         'lokr': LokrModule,
