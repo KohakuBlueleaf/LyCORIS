@@ -114,10 +114,10 @@ class DyLoraModule(nn.Module):
             destination._metadata[prefix[:-1]] = local_metadata
 
         destination[f'{prefix}alpha'] = self.alpha
-        destination[f'{prefix}dyn_up'] = nn.Parameter(
+        destination[f'{prefix}lora_up.weight'] = nn.Parameter(
             torch.concat(self.up_update, dim=1)
         )
-        destination[f'{prefix}dyn_down'] = nn.Parameter(
+        destination[f'{prefix}lora_down.weight'] = nn.Parameter(
             torch.concat(self.down_update)
         )
         return destination
