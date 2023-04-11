@@ -15,6 +15,7 @@ from .locon import LoConModule
 from .loha import LohaModule
 from .ia3 import IA3Module
 from .lokr import LokrModule
+from .dylora import DyLoraModule
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -32,6 +33,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'loha': LohaModule,
         'ia3':  IA3Module,
         'lokr': LokrModule,
+        'dylora': DyLoraModule,
     }[algo]
     
     print(f'Using rank adaptation algo: {algo}')
