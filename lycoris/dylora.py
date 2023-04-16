@@ -17,22 +17,26 @@ class DyLoraModule(nn.Module):
         self, 
         lora_name, 
         org_module: nn.Module, 
-        multiplier=1.0, lora_dim=4, alpha=1, dropout=0.,
-        use_cp=False,
+        multiplier=1.0, 
+        lora_dim=4, alpha=1, 
+        dropout=0.,
+        use_cp=False, 
+        block_size=1,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
-        self.cp=False
+        assert lora_dim % block_size == 0, 'lora_dim must be a multiple of block_size'
+        self.block_count = lora_dim//block_size
+        self.block_size = block_size
         
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == 'Conv2d':
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
-            self.cp = use_cp and k_size!=(1, 1)
             shape = (out_dim, in_dim*k_size[0]*k_size[1])
             self.op = F.conv2d
             self.extra_args = {
@@ -128,20 +132,22 @@ class DyLoraModule(nn.Module):
     def apply_train(self, b:int):
         self.up_list.requires_grad_(False)
         self.down_list.requires_grad_(False)
+            
+        for i in range(self.index*self.block_size, (self.index+1)*self.block_size):
+            self.up_update[i].copy_(self.up_list[i])
+            self.down_update[i].copy_(self.down_list[i])
         
-        self.up_list[b].copy_(self.up_update[b])
-        self.down_list[b].copy_(self.down_update[b])
-        self.up_update[self.index].copy_(self.up_list[self.index])
-        self.down_update[self.index].copy_(self.down_list[self.index])
+        for i in range(b*self.block_size, (b+1)*self.block_size):
+            self.up_list[i].copy_(self.up_update[i])
+            self.down_list[i].copy_(self.down_update[i])
         
         self.up_list.requires_grad_(True)
         self.down_list.requires_grad_(True)
-        
         self.index = b
 
     @torch.enable_grad()
     def forward(self, x):
-        b = random.randint(0, self.lora_dim-1)
+        b = random.randint(0, self.block_count-1)
         if self.up_update[b].device != self.up_list[b].device:
             device = self.up_list[b].device
             for i in range(self.lora_dim):
@@ -150,8 +156,15 @@ class DyLoraModule(nn.Module):
         
         if self.training:
             self.apply_train(b)
-        down = torch.concat(list(self.down_update[:b]) + [self.down_list[b]])
-        up = torch.concat(list(self.up_update[:b]) + [self.up_list[b]], dim=1)
+        down = torch.concat(
+            list(self.down_update[:b*self.block_size]) 
+            + list(self.down_list[b*self.block_size:(b+1)*self.block_size])
+        )
+        up = torch.concat(
+            list(self.up_update[:b*self.block_size]) 
+            + list(self.up_list[b*self.block_size:(b+1)*self.block_size]),
+            dim=1
+        )
         
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
