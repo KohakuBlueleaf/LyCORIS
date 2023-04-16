@@ -24,7 +24,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     conv_dim = int(kwargs.get('conv_dim', network_dim))
     conv_alpha = float(kwargs.get('conv_alpha', network_alpha))
     dropout = float(kwargs.get('dropout', 0.))
-    algo = kwargs.get('algo', 'lora')
+    algo = kwargs.get('algo', 'lora').lower()
     use_cp = (not kwargs.get('disable_conv_cp', True) 
               or kwargs.get('use_conv_cp', False))
     network_module = {
