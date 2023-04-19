@@ -46,6 +46,16 @@ See [Algo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Algo.md) or [D
 * This algo produce relatively small file(auto factor: 900~2500KB)
 * Use smaller factor will produce bigger file, you can tune it if you think 2.5MB full rank is not good enough.
 
+### DyLoRA
+* Ref [DyLoRA: Parameter Efficient Tuning of Pre-trained Models using Dynamic Search-Free Low Rank Adaptation](https://arxiv.org/pdf/2210.07558.pdf)
+* Basically a training trick of lora.
+* Every step, only update one row/col of LoRA weight.
+* When we want to update k row/col, we only use 0~k row/col to rebuild the weight (0<=k<=dim)
+* You can easily resize DyLoRA to target and get similar or even better result than LoRA trained at target dim. (And you don't need to train lot loras with different dim to check which is better)
+* You should use large dim with alpha=dim/4~dim (1 or dim is not very recommended)
+    * Example: dim=128, alpha=64
+* Since we only update 1 row/col each step, you will need more step to get reasonable result. If you want to train it with few steps, you may need to set block_size (update multiple row/col every step) to higer value (default=0)
+
 ---
 
 ## usage
