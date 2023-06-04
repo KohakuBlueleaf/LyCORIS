@@ -21,13 +21,13 @@ from .dylora import DyLoraModule
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
     if network_dim is None:
         network_dim = 4                     # default
-    conv_dim = int(kwargs.get('conv_dim', network_dim))
-    conv_alpha = float(kwargs.get('conv_alpha', network_alpha))
-    dropout = float(kwargs.get('dropout', 0.))
-    algo = kwargs.get('algo', 'lora').lower()
-    use_cp = (not kwargs.get('disable_conv_cp', True) 
+    conv_dim = int(kwargs.get('conv_dim', network_dim) or network_dim)
+    conv_alpha = float(kwargs.get('conv_alpha', network_alpha) or network_alpha)
+    dropout = float(kwargs.get('dropout', 0.) or 0.)
+    algo = (kwargs.get('algo', 'lora') or 'lora').lower()
+    use_cp = (not kwargs.get('disable_conv_cp', True)
               or kwargs.get('use_conv_cp', False))
-    block_size = int(kwargs.get('block_size', 4))
+    block_size = int(kwargs.get('block_size', 4) or 4)
     network_module = {
         'lora': LoConModule,
         'locon': LoConModule,
