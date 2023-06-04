@@ -1,5 +1,8 @@
 # Change Log
 
+## 2023/06/04 update to 0.1.6
+* add dylora and IA^3 algorithm
+
 ## 2023/03/29 Update to 0.1.4
 * cp decomposition is default to disable now
 * add 4 more layer to train (conv_in/out, time_embedding)
