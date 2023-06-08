@@ -224,7 +224,7 @@ class LycorisNetwork(torch.nn.Module):
         self.multiplier = multiplier
         for lora in self.text_encoder_loras + self.unet_loras:
             lora.multiplier = self.multiplier
-            
+    
     def load_weights(self, file):
         if os.path.splitext(file)[1] == '.safetensors':
             from safetensors.torch import load_file, safe_open
@@ -271,6 +271,23 @@ class LycorisNetwork(torch.nn.Module):
             # if some weights are not in state dict, it is ok because initial LoRA does nothing (lora_up is initialized by zeros)
             info = self.load_state_dict(self.weights_sd, False)
             print(f"weights are loaded: {info}")
+    
+    def apply_max_norm_regularization(self, max_norm_value, device):
+        key_scaled = 0
+        norms = []
+        for model in self.unet_loras:
+            if hasattr(model, 'apply_max_norm'):
+                scaled, norm = model.apply_max_norm(max_norm_value, device)
+                norms.append(norm)
+                key_scaled += scaled
+        
+        for model in self.text_encoder_loras:
+            if hasattr(model, 'apply_max_norm'):
+                scaled, norm = model.apply_max_norm(max_norm_value, device)
+                norms.append(norm)
+                key_scaled += scaled
+        
+        return key_scaled, sum(norms)/len(norms), max(norms)
 
     def enable_gradient_checkpointing(self):
         # not supported

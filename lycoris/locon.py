@@ -70,17 +70,34 @@ class LoConModule(nn.Module):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
 
-    def make_weight(self):
-        wa = self.lora_up.weight
-        wb = self.lora_down.weight
+    def make_weight(self, device=None):
+        wa = self.lora_up.weight.to(device)
+        wb = self.lora_down.weight.to(device)
         return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape)
 
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        norm = torch.clamp(self.make_weight(device).norm()*self.scale, max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
+        
+        scaled = ratio != 1.0
+        if scaled:
+            modules = self.cp + 2
+            self.lora_up.weight *= ratio**(1/modules)
+            self.lora_down.weight *= ratio**(1/modules)
+            if self.cp:
+                self.lora_mid.weight *= ratio**(1/modules)
+        
+        return scaled, norm*ratio
+
     def forward(self, x):
+        scale = self.scale * self.multiplier
         if self.cp:
             return self.org_forward(x)  + self.dropout(
-                self.lora_up(self.lora_mid(self.lora_down(x)))* self.multiplier * self.scale
+                self.lora_up(self.lora_mid(self.lora_down(x))) * scale
             )
         else:
             return self.org_forward(x)  + self.dropout(
-                self.lora_up(self.lora_down(x))* self.multiplier * self.scale
+                self.lora_up(self.lora_down(x)) * scale
             )

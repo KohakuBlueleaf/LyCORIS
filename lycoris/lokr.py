@@ -201,16 +201,45 @@ class LokrModule(nn.Module):
     def apply_to(self):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
-
-    def forward(self, x):
+    
+    def get_weight(self):
         weight = make_kron(
-            self.org_module[0].weight.data, 
+            0, 
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
              else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 
              else self.lokr_w2_a@self.lokr_w2_b),
-            torch.tensor(self.multiplier * self.scale)
+            torch.tensor(self.scale)
         )
+        return weight
+
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        norm = torch.clamp(self.get_weight().norm(), max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
+        
+        scaled = ratio != 1.0
+        if scaled:
+            modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
+            if self.use_w1:
+                self.lokr_w1_a *= ratio**(1/modules)
+                self.lokr_w1_b *= ratio**(1/modules)
+            else:
+                self.lokr_w1 *= ratio**(1/modules)
+            
+            if self.use_w2:
+                if self.cp:
+                    self.lokr_t2 *= ratio**(1/modules)
+                self.lokr_w2_a  *= ratio**(1/modules)
+                self.lokr_w2_b  *= ratio**(1/modules)
+            else:
+                self.lokr_w2 *= ratio**(1/modules)
+        
+        return scaled, norm*ratio
+
+    def forward(self, x):
+        weight = self.org_module[0].weight.data + self.get_weight() * self.multiplier
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x, 

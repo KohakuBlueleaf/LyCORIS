@@ -10,7 +10,10 @@ class HadaWeight(torch.autograd.Function):
     def forward(ctx, orig_weight, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(w1a, w1b, w2a, w2b, scale)
         diff_weight = ((w1a@w1b)*(w2a@w2b)) * scale
-        return orig_weight.reshape(diff_weight.shape) + diff_weight
+        
+        if isinstance(orig_weight, torch.Tensor):
+            orig_weight = orig_weight.reshape(diff_weight.shape)
+        return orig_weight + diff_weight
 
     @staticmethod
     def backward(ctx, grad_out):
@@ -168,28 +171,46 @@ class LohaModule(nn.Module):
         self.org_module[0].forward = self.forward
 
     def get_weight(self):
-        d_weight = self.hada_w1_a @ self.hada_w1_b
-        d_weight *= self.hada_w2_a @ self.hada_w2_b
-        return (d_weight).reshape(self.shape)
+        if self.cp:
+            weight = make_weight_cp(
+                0, 
+                self.hada_t1, self.hada_w1_a, self.hada_w1_b,
+                self.hada_t1, self.hada_w2_a, self.hada_w2_b,
+                scale = torch.tensor(self.scale),
+            )
+        else:
+            weight = make_weight(
+                0, 
+                self.hada_w1_a, self.hada_w1_b,
+                self.hada_w2_a, self.hada_w2_b,
+                scale = torch.tensor(self.scale),
+            )
+        return weight
+
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        norm = torch.clamp(self.get_weight().norm(), max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
+        
+        scaled = ratio != 1.0
+        if scaled:
+            modules = (self.cp + 2)*2
+            self.hada_w1_a *= ratio**(1/modules)
+            self.hada_w1_b *= ratio**(1/modules)
+            self.hada_w2_a *= ratio**(1/modules)
+            self.hada_w2_b *= ratio**(1/modules)
+            
+            if self.cp:
+                self.hada_t1 *= ratio**(1/modules)
+                self.hada_t2 *= ratio**(1/modules)
+        
+        return scaled, norm*ratio
 
     @torch.enable_grad()
     def forward(self, x):
         # print(torch.mean(torch.abs(self.orig_w1a.to(x.device) - self.hada_w1_a)), end='\r')
-        if self.cp:
-            weight = make_weight_cp(
-                self.org_module[0].weight.data, 
-                self.hada_t1, self.hada_w1_a, self.hada_w1_b,
-                self.hada_t1, self.hada_w2_a, self.hada_w2_b,
-                scale = torch.tensor(self.scale*self.multiplier),
-            )
-        else:
-            weight = make_weight(
-                self.org_module[0].weight.data, 
-                self.hada_w1_a, self.hada_w1_b,
-                self.hada_w2_a, self.hada_w2_b,
-                scale = torch.tensor(self.scale*self.multiplier),
-            )
-        
+        weight = self.org_module[0].weight.data + self.get_weight() * self.multiplier
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x, 
