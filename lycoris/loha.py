@@ -170,17 +170,17 @@ class LohaModule(nn.Module):
     def apply_to(self):
         self.org_module[0].forward = self.forward
 
-    def get_weight(self):
+    def get_weight(self, orig_weight=0):
         if self.cp:
             weight = make_weight_cp(
-                0, 
+                orig_weight, 
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
                 self.hada_t1, self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
             )
         else:
             weight = make_weight(
-                0, 
+                orig_weight, 
                 self.hada_w1_a, self.hada_w1_b,
                 self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
@@ -211,7 +211,10 @@ class LohaModule(nn.Module):
     @torch.enable_grad()
     def forward(self, x):
         # print(torch.mean(torch.abs(self.orig_w1a.to(x.device) - self.hada_w1_a)), end='\r')
-        weight = self.org_module[0].weight.data + self.get_weight() * self.multiplier
+        weight = (
+            self.org_module[0].weight.data 
+            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
+        )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x, 
