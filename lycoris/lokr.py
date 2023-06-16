@@ -215,7 +215,8 @@ class LokrModule(nn.Module):
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
-        norm = torch.clamp(self.get_weight().norm(), max_norm/2)
+        orig_norm = self.get_weight().norm()
+        norm = torch.clamp(orig_norm, max_norm/2)
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
@@ -236,7 +237,7 @@ class LokrModule(nn.Module):
             else:
                 self.lokr_w2 *= ratio**(1/modules)
         
-        return scaled, norm*ratio
+        return scaled, orig_norm*ratio
 
     def forward(self, x):
         weight = self.org_module[0].weight.data + self.get_weight() * self.multiplier

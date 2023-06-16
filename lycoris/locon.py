@@ -77,7 +77,8 @@ class LoConModule(nn.Module):
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
-        norm = torch.clamp(self.make_weight(device).norm()*self.scale, max_norm/2)
+        orig_norm = self.make_weight(device).norm()*self.scale
+        norm = torch.clamp(orig_norm, max_norm/2)
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
@@ -89,7 +90,7 @@ class LoConModule(nn.Module):
             if self.cp:
                 self.lora_mid.weight *= ratio**(1/modules)
         
-        return scaled, norm*ratio
+        return scaled, orig_norm*ratio
 
     def forward(self, x):
         scale = self.scale * self.multiplier
