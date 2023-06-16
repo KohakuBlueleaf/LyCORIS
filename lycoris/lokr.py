@@ -60,7 +60,11 @@ def make_kron(orig_weight, w1, w2, scale):
     if len(w2.shape) == 4:
         w1 = w1.unsqueeze(2).unsqueeze(2)
     w2 = w2.contiguous()
-    return orig_weight + torch.kron(w1, w2).reshape(orig_weight.shape)*scale
+    rebuild = torch.kron(w1, w2)
+    
+    if isinstance(orig_weight, torch.Tensor):
+        rebuild = rebuild.reshape(orig_weight.shape)
+    return orig_weight + rebuild*scale
 
 
 class LokrModule(nn.Module):
@@ -202,7 +206,7 @@ class LokrModule(nn.Module):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
     
-    def get_weight(self):
+    def get_weight(self, orig_weight = None):
         weight = make_kron(
             0, 
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
@@ -211,6 +215,8 @@ class LokrModule(nn.Module):
              else self.lokr_w2_a@self.lokr_w2_b),
             torch.tensor(self.scale)
         )
+        if orig_weight is not None:
+            weight = weight.reshape(orig_weight.shape)
         return weight
 
     @torch.no_grad()
@@ -240,7 +246,10 @@ class LokrModule(nn.Module):
         return scaled, orig_norm*ratio
 
     def forward(self, x):
-        weight = self.org_module[0].weight.data + self.get_weight() * self.multiplier
+        weight = (
+            self.org_module[0].weight.data 
+            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
+        )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x, 

@@ -170,21 +170,23 @@ class LohaModule(nn.Module):
     def apply_to(self):
         self.org_module[0].forward = self.forward
 
-    def get_weight(self, orig_weight=0):
+    def get_weight(self, orig_weight=None):
         if self.cp:
             weight = make_weight_cp(
-                orig_weight, 
+                0, 
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
                 self.hada_t1, self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
             )
         else:
             weight = make_weight(
-                orig_weight, 
+                0, 
                 self.hada_w1_a, self.hada_w1_b,
                 self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
             )
+        if orig_weight is not None:
+            weight = weight.reshape(orig_weight.shape)
         return weight
 
     @torch.no_grad()
