@@ -45,12 +45,10 @@ class HadaWeightCP(torch.autograd.Function):
     def backward(ctx, grad_out):
         (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
         
-        grad_out = grad_out*scale
-        
         temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
         rebuild = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
         
-        grad_w = rebuild*grad_out
+        grad_w = rebuild*grad_out*scale
         del rebuild
         
         grad_w1a = torch.einsum('r j k l, i j k l -> r i', temp, grad_w)
