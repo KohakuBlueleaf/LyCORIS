@@ -77,7 +77,7 @@ class LokrModule(nn.Module):
         lora_name, org_module: nn.Module, 
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
-        dropout=0.,
+        dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
@@ -159,10 +159,10 @@ class LokrModule(nn.Module):
             self.op = F.linear
             self.extra_args = {}
         
-        if dropout:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = nn.Identity()
+        self.dropout = dropout
+        if rank_dropout:
+            print("[WARN]LyCORIS haven't implemented rank dropout yet.")
+        self.module_dropout = module_dropout
         
         if isinstance(alpha, torch.Tensor):
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -214,6 +214,9 @@ class LokrModule(nn.Module):
         )
         if orig_weight is not None:
             weight = weight.reshape(orig_weight.shape)
+        if self.training and self.dropout:
+            drop = torch.rand(weight.size(0)) < self.dropout
+            weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
         return weight
 
     @torch.no_grad()
@@ -243,6 +246,13 @@ class LokrModule(nn.Module):
         return scaled, orig_norm*ratio
 
     def forward(self, x):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.op(
+                    x,
+                    self.org_module[0].weight.data,
+                    None if self.org_module[0].bias is None else self.org_module[0].bias.data
+                )
         weight = (
             self.org_module[0].weight.data 
             + self.get_weight(self.org_module[0].weight.data) * self.multiplier

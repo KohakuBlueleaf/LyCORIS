@@ -24,6 +24,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     conv_dim = int(kwargs.get('conv_dim', network_dim) or network_dim)
     conv_alpha = float(kwargs.get('conv_alpha', network_alpha) or network_alpha)
     dropout = float(kwargs.get('dropout', 0.) or 0.)
+    rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
+    module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
     use_cp = (not kwargs.get('disable_conv_cp', True)
               or kwargs.get('use_conv_cp', False))
@@ -66,7 +68,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             multiplier=multiplier, 
             lora_dim=network_dim, conv_lora_dim=conv_dim, 
             alpha=network_alpha, conv_alpha=conv_alpha,
-            dropout=dropout,
+            dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
             use_cp=use_cp,
             network_module=network_module,
             decompose_both=kwargs.get('decompose_both', False),
@@ -106,7 +108,8 @@ class LycorisNetwork(torch.nn.Module):
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
         use_cp = False,
-        dropout = 0, network_module = LoConModule,
+        dropout = 0, rank_dropout = 0, module_dropout = 0,
+        network_module = LoConModule,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -126,6 +129,8 @@ class LycorisNetwork(torch.nn.Module):
         if 1 >= dropout >= 0:
             print(f'Use Dropout value: {dropout}')
         self.dropout = dropout
+        self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
         
         # create module instances
         def create_modules(
@@ -145,7 +150,8 @@ class LycorisNetwork(torch.nn.Module):
                             lora = network_module(
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
-                                self.dropout, use_cp,
+                                self.dropout, self.rank_dropout, self.module_dropout, 
+                                use_cp,
                                 **kwargs
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
@@ -154,14 +160,16 @@ class LycorisNetwork(torch.nn.Module):
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, 
-                                    self.dropout, use_cp,
+                                    self.dropout, self.rank_dropout, self.module_dropout, 
+                                    use_cp,
                                     **kwargs
                                 )
                             elif conv_lora_dim>0:
                                 lora = network_module(
                                     lora_name, child_module, self.multiplier, 
                                     self.conv_lora_dim, self.conv_alpha, 
-                                    self.dropout, use_cp,
+                                    self.dropout, self.rank_dropout, self.module_dropout, 
+                                    use_cp,
                                     **kwargs
                                 )
                             else:
@@ -176,7 +184,8 @@ class LycorisNetwork(torch.nn.Module):
                         lora = network_module(
                             lora_name, module, self.multiplier, 
                             self.lora_dim, self.alpha, 
-                            self.dropout, use_cp,
+                            self.dropout, self.rank_dropout, self.module_dropout, 
+                            use_cp,
                             **kwargs
                         )
                     elif module.__class__.__name__ == 'Conv2d':
@@ -185,14 +194,16 @@ class LycorisNetwork(torch.nn.Module):
                             lora = network_module(
                                 lora_name, module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
-                                self.dropout, use_cp,
+                                self.dropout, self.rank_dropout, self.module_dropout, 
+                                use_cp,
                                 **kwargs
                             )
                         elif conv_lora_dim>0:
                             lora = network_module(
                                 lora_name, module, self.multiplier, 
                                 self.conv_lora_dim, self.conv_alpha, 
-                                self.dropout, use_cp,
+                                self.dropout, self.rank_dropout, self.module_dropout, 
+                                use_cp,
                                 **kwargs
                             )
                         else:
