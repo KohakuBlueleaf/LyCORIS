@@ -56,15 +56,13 @@ def make_weight_cp(t, wa, wb):
     return rebuild2
 
 
-def make_kron(orig_weight, w1, w2, scale):
+def make_kron(w1, w2, scale):
     if len(w2.shape) == 4:
         w1 = w1.unsqueeze(2).unsqueeze(2)
     w2 = w2.contiguous()
     rebuild = torch.kron(w1, w2)
     
-    if isinstance(orig_weight, torch.Tensor):
-        rebuild = rebuild.reshape(orig_weight.shape)
-    return orig_weight + rebuild*scale
+    return rebuild*scale
 
 
 class LokrModule(nn.Module):
@@ -208,7 +206,6 @@ class LokrModule(nn.Module):
     
     def get_weight(self, orig_weight = None):
         weight = make_kron(
-            0, 
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
              else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 

@@ -7,13 +7,10 @@ import torch.nn.functional as F
 
 class HadaWeight(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, orig_weight, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
+    def forward(ctx, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(w1a, w1b, w2a, w2b, scale)
         diff_weight = ((w1a@w1b)*(w2a@w2b)) * scale
-        
-        if isinstance(orig_weight, torch.Tensor):
-            orig_weight = orig_weight.reshape(diff_weight.shape)
-        return orig_weight + diff_weight
+        return diff_weight
 
     @staticmethod
     def backward(ctx, grad_out):
@@ -28,27 +25,28 @@ class HadaWeight(torch.autograd.Function):
         grad_w2b = w2a.T @ temp
         
         del temp
-        return grad_out, grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
+        return grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
 
 
 class HadaWeightCP(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
+    def forward(ctx, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
         
         rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a)
         rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a)
         
-        return orig_weight + rebuild1*rebuild2*scale
+        return rebuild1*rebuild2*scale
 
     @staticmethod
     def backward(ctx, grad_out):
         (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
+        grad_out = grad_out * scale
         
         temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
         rebuild = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
         
-        grad_w = rebuild*grad_out*scale
+        grad_w = rebuild*grad_out
         del rebuild
         
         grad_w1a = torch.einsum('r j k l, i j k l -> r i', temp, grad_w)
@@ -72,15 +70,15 @@ class HadaWeightCP(torch.autograd.Function):
         grad_w2b = torch.einsum('i r k l, i j k l -> r j', t2, grad_temp)
         grad_t2 = torch.einsum('i j k l, j r -> i r k l', grad_temp, w2b.T)
         del grad_temp
-        return grad_out, grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
+        return grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
 
 
-def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
-    return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale)
+def make_weight(w1a, w1b, w2a, w2b, scale):
+    return HadaWeight.apply(w1a, w1b, w2a, w2b, scale)
 
 
-def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale):
-    return HadaWeightCP.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
+def make_weight_cp(t1, w1a, w1b, t2, w2a, w2b, scale):
+    return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
 class LohaModule(nn.Module):
@@ -171,14 +169,12 @@ class LohaModule(nn.Module):
     def get_weight(self, orig_weight=None):
         if self.cp:
             weight = make_weight_cp(
-                0, 
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
                 self.hada_t1, self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
             )
         else:
             weight = make_weight(
-                0, 
                 self.hada_w1_a, self.hada_w1_b,
                 self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
