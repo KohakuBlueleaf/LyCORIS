@@ -141,8 +141,8 @@ class LohaModule(nn.Module):
             self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1]))
         
         self.dropout = dropout
-        if rank_dropout:
-            print("[WARN]LoHa/LoKr haven't implemented rank dropout yet.")
+        if dropout:
+            print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
         

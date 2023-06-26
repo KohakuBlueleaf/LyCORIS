@@ -160,8 +160,9 @@ class LokrModule(nn.Module):
             self.extra_args = {}
         
         self.dropout = dropout
-        if rank_dropout:
-            print("[WARN]LyCORIS haven't implemented rank dropout yet.")
+        if dropout:
+            print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
+        self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
         
         if isinstance(alpha, torch.Tensor):
