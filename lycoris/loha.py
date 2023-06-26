@@ -7,10 +7,10 @@ import torch.nn.functional as F
 
 class HadaWeight(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, orig_weight, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
+    def forward(ctx, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(w1a, w1b, w2a, w2b, scale)
         diff_weight = ((w1a@w1b)*(w2a@w2b)) * scale
-        return orig_weight.reshape(diff_weight.shape) + diff_weight
+        return diff_weight
 
     @staticmethod
     def backward(ctx, grad_out):
@@ -25,24 +25,23 @@ class HadaWeight(torch.autograd.Function):
         grad_w2b = w2a.T @ temp
         
         del temp
-        return grad_out, grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
+        return grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
 
 
 class HadaWeightCP(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
+    def forward(ctx, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
         ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
         
         rebuild1 = torch.einsum('i j k l, j r, i p -> p r k l', t1, w1b, w1a)
         rebuild2 = torch.einsum('i j k l, j r, i p -> p r k l', t2, w2b, w2a)
         
-        return orig_weight + rebuild1*rebuild2*scale
+        return rebuild1*rebuild2*scale
 
     @staticmethod
     def backward(ctx, grad_out):
         (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
-        
-        grad_out = grad_out*scale
+        grad_out = grad_out * scale
         
         temp = torch.einsum('i j k l, j r -> i r k l', t2, w2b)
         rebuild = torch.einsum('i j k l, i r -> r j k l', temp, w2a)
@@ -71,15 +70,15 @@ class HadaWeightCP(torch.autograd.Function):
         grad_w2b = torch.einsum('i r k l, i j k l -> r j', t2, grad_temp)
         grad_t2 = torch.einsum('i j k l, j r -> i r k l', grad_temp, w2b.T)
         del grad_temp
-        return grad_out, grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
+        return grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
 
 
-def make_weight(orig_weight, w1a, w1b, w2a, w2b, scale):
-    return HadaWeight.apply(orig_weight, w1a, w1b, w2a, w2b, scale)
+def make_weight(w1a, w1b, w2a, w2b, scale):
+    return HadaWeight.apply(w1a, w1b, w2a, w2b, scale)
 
 
-def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale):
-    return HadaWeightCP.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
+def make_weight_cp(t1, w1a, w1b, t2, w2a, w2b, scale):
+    return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
 class LohaModule(nn.Module):
@@ -91,7 +90,8 @@ class LohaModule(nn.Module):
         self, 
         lora_name, 
         org_module: nn.Module, 
-        multiplier=1.0, lora_dim=4, alpha=1, dropout=0.,
+        multiplier=1.0, lora_dim=4, alpha=1, 
+        dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
         **kwargs,
     ):
@@ -140,10 +140,11 @@ class LohaModule(nn.Module):
             self.hada_w2_a = nn.Parameter(torch.empty(shape[0], lora_dim))
             self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1]))
         
+        self.dropout = dropout
         if dropout:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = nn.Identity()
+            print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
+        self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
         
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -167,29 +168,60 @@ class LohaModule(nn.Module):
     def apply_to(self):
         self.org_module[0].forward = self.forward
 
-    def get_weight(self):
-        d_weight = self.hada_w1_a @ self.hada_w1_b
-        d_weight *= self.hada_w2_a @ self.hada_w2_b
-        return (d_weight).reshape(self.shape)
-
-    @torch.enable_grad()
-    def forward(self, x):
-        # print(torch.mean(torch.abs(self.orig_w1a.to(x.device) - self.hada_w1_a)), end='\r')
+    def get_weight(self, orig_weight=None):
         if self.cp:
             weight = make_weight_cp(
-                self.org_module[0].weight.data, 
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
                 self.hada_t1, self.hada_w2_a, self.hada_w2_b,
-                scale = torch.tensor(self.scale*self.multiplier),
+                scale = torch.tensor(self.scale),
             )
         else:
             weight = make_weight(
-                self.org_module[0].weight.data, 
                 self.hada_w1_a, self.hada_w1_b,
                 self.hada_w2_a, self.hada_w2_b,
-                scale = torch.tensor(self.scale*self.multiplier),
+                scale = torch.tensor(self.scale),
             )
+        if orig_weight is not None:
+            weight = weight.reshape(orig_weight.shape)
+        if self.training and self.rank_dropout:
+            drop = torch.rand(weight.size(0)) < self.rank_dropout
+            weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
+        return weight
+
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        orig_norm = self.get_weight().norm()
+        norm = torch.clamp(orig_norm, max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
         
+        scaled = ratio != 1.0
+        if scaled:
+            modules = (self.cp + 2)*2
+            self.hada_w1_a *= ratio**(1/modules)
+            self.hada_w1_b *= ratio**(1/modules)
+            self.hada_w2_a *= ratio**(1/modules)
+            self.hada_w2_b *= ratio**(1/modules)
+            
+            if self.cp:
+                self.hada_t1 *= ratio**(1/modules)
+                self.hada_t2 *= ratio**(1/modules)
+        
+        return scaled, orig_norm*ratio
+
+    @torch.enable_grad()
+    def forward(self, x):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.op(
+                    x,
+                    self.org_module[0].weight.data,
+                    None if self.org_module[0].bias is None else self.org_module[0].bias.data
+                )
+        weight = (
+            self.org_module[0].weight.data 
+            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
+        )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
             x, 

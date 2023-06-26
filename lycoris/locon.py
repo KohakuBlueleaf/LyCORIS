@@ -1,4 +1,5 @@
 import math
+from weakref import ref
 
 import torch
 import torch.nn as nn
@@ -15,7 +16,7 @@ class LoConModule(nn.Module):
         lora_name, org_module: nn.Module, 
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
-        dropout=0.,
+        dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
         **kwargs,
     ):
@@ -25,7 +26,7 @@ class LoConModule(nn.Module):
         self.lora_dim = lora_dim
         self.cp = False
 
-        if org_module.__class__.__name__ == 'Conv2d':
+        if isinstance(org_module, nn.Conv2d):
             # For general LoCon
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
@@ -39,17 +40,21 @@ class LoConModule(nn.Module):
             else:
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
-        else:
+        elif isinstance(org_module, nn.Linear):
             in_dim = org_module.in_features
             out_dim = org_module.out_features
             self.lora_down = nn.Linear(in_dim, lora_dim, bias=False)
             self.lora_up = nn.Linear(lora_dim, out_dim, bias=False)
+        else:
+            raise NotImplementedError
         self.shape = org_module.weight.shape
         
         if dropout:
             self.dropout = nn.Dropout(dropout)
         else:
             self.dropout = nn.Identity()
+        self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
         
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -70,17 +75,44 @@ class LoConModule(nn.Module):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
 
-    def make_weight(self):
-        wa = self.lora_up.weight
-        wb = self.lora_down.weight
+    def make_weight(self, device=None):
+        wa = self.lora_up.weight.to(device)
+        wb = self.lora_down.weight.to(device)
         return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape)
 
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        orig_norm = self.make_weight(device).norm()*self.scale
+        norm = torch.clamp(orig_norm, max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
+        
+        scaled = ratio != 1.0
+        if scaled:
+            modules = self.cp + 2
+            self.lora_up.weight *= ratio**(1/modules)
+            self.lora_down.weight *= ratio**(1/modules)
+            if self.cp:
+                self.lora_mid.weight *= ratio**(1/modules)
+        
+        return scaled, orig_norm*ratio
+
     def forward(self, x):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x)
+        scale = self.scale * self.multiplier
         if self.cp:
-            return self.org_forward(x)  + self.dropout(
-                self.lora_up(self.lora_mid(self.lora_down(x)))* self.multiplier * self.scale
-            )
+            mid = self.lora_mid(self.lora_down(x))
         else:
-            return self.org_forward(x)  + self.dropout(
-                self.lora_up(self.lora_down(x))* self.multiplier * self.scale
-            )
+            mid = self.lora_down(x)
+        
+        if self.rank_dropout and self.training:
+            drop = torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout
+            if (dims:=len(x.shape)) == 4:
+                drop = drop.view(1, -1, 1, 1)
+            else:
+                drop = drop.view(*[1]*(dims-1), -1)
+            mid = mid * drop
+        
+        return self.org_forward(x) + self.dropout(self.lora_up(mid) * scale)

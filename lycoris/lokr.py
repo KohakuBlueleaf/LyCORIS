@@ -56,11 +56,13 @@ def make_weight_cp(t, wa, wb):
     return rebuild2
 
 
-def make_kron(orig_weight, w1, w2, scale):
+def make_kron(w1, w2, scale):
     if len(w2.shape) == 4:
         w1 = w1.unsqueeze(2).unsqueeze(2)
     w2 = w2.contiguous()
-    return orig_weight + torch.kron(w1, w2).reshape(orig_weight.shape)*scale
+    rebuild = torch.kron(w1, w2)
+    
+    return rebuild*scale
 
 
 class LokrModule(nn.Module):
@@ -75,7 +77,7 @@ class LokrModule(nn.Module):
         lora_name, org_module: nn.Module, 
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
-        dropout=0.,
+        dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
@@ -157,10 +159,11 @@ class LokrModule(nn.Module):
             self.op = F.linear
             self.extra_args = {}
         
+        self.dropout = dropout
         if dropout:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = nn.Identity()
+            print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
+        self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
         
         if isinstance(alpha, torch.Tensor):
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -201,15 +204,59 @@ class LokrModule(nn.Module):
     def apply_to(self):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
-
-    def forward(self, x):
+    
+    def get_weight(self, orig_weight = None):
         weight = make_kron(
-            self.org_module[0].weight.data, 
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
              else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 
              else self.lokr_w2_a@self.lokr_w2_b),
-            torch.tensor(self.multiplier * self.scale)
+            torch.tensor(self.scale)
+        )
+        if orig_weight is not None:
+            weight = weight.reshape(orig_weight.shape)
+        if self.training and self.rank_dropout:
+            drop = torch.rand(weight.size(0)) < self.rank_dropout
+            weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
+        return weight
+
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        orig_norm = self.get_weight().norm()
+        norm = torch.clamp(orig_norm, max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired.cpu()/norm.cpu()
+        
+        scaled = ratio != 1.0
+        if scaled:
+            modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
+            if self.use_w1:
+                self.lokr_w1_a *= ratio**(1/modules)
+                self.lokr_w1_b *= ratio**(1/modules)
+            else:
+                self.lokr_w1 *= ratio**(1/modules)
+            
+            if self.use_w2:
+                if self.cp:
+                    self.lokr_t2 *= ratio**(1/modules)
+                self.lokr_w2_a  *= ratio**(1/modules)
+                self.lokr_w2_b  *= ratio**(1/modules)
+            else:
+                self.lokr_w2 *= ratio**(1/modules)
+        
+        return scaled, orig_norm*ratio
+
+    def forward(self, x):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.op(
+                    x,
+                    self.org_module[0].weight.data,
+                    None if self.org_module[0].bias is None else self.org_module[0].bias.data
+                )
+        weight = (
+            self.org_module[0].weight.data 
+            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
