@@ -214,8 +214,8 @@ class LokrModule(nn.Module):
         )
         if orig_weight is not None:
             weight = weight.reshape(orig_weight.shape)
-        if self.training and self.dropout:
-            drop = torch.rand(weight.size(0)) < self.dropout
+        if self.training and self.rank_dropout:
+            drop = torch.rand(weight.size(0)) < self.rank_dropout
             weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
         return weight
 
