@@ -213,11 +213,20 @@ class LycorisNetwork(torch.nn.Module):
                     loras.append(lora)
             return loras
 
-        self.text_encoder_loras = create_modules(
-            LycorisNetwork.LORA_PREFIX_TEXT_ENCODER,
-            text_encoder, 
-            LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
-        )
+        if isinstance(text_encoder, list):
+            text_encoders = text_encoder
+            use_index = True
+        else:
+            text_encoders = [text_encoder]
+            use_index = False
+
+        self.text_encoder_loras = []
+        for i, te in enumerate(text_encoders):
+            self.text_encoder_loras.extend(create_modules(
+                LycorisNetwork.LORA_PREFIX_TEXT_ENCODER + (f'{i+1}' if use_index else ''),
+                te, 
+                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
+            ))
         print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
         self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
