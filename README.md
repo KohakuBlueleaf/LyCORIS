@@ -138,9 +138,10 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-### 2023/04/08 Update for 0.1.5
-* Add (IA)^3 algorithm
-* Add lokr algorithm
+### 2023/06/26 Update for 0.1.7
+* Add support for rank_dropout and module_dropout on LoCon/LoHa/LoKr
+* Add support for scale_weight_norms on LoCon/LoHa/LoKr
+* Will support SDXL on 0.1.8 (you can follow the dev branch)
 
 ## Todo list
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
