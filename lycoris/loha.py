@@ -195,7 +195,7 @@ class LohaModule(nn.Module):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
-        scaled = ratio != 1.0
+        scaled = ratio.item() != 1.0
         if scaled:
             modules = (self.cp + 2)*2
             self.hada_w1_a *= ratio**(1/modules)
