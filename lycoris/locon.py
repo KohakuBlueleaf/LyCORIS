@@ -87,7 +87,7 @@ class LoConModule(nn.Module):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
-        scaled = ratio != 1.0
+        scaled = ratio.item() != 1.0
         if scaled:
             modules = self.cp + 2
             self.lora_up.weight *= ratio**(1/modules)

@@ -227,7 +227,7 @@ class LokrModule(nn.Module):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
-        scaled = ratio != 1.0
+        scaled = ratio.item() != 1.0
         if scaled:
             modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
             if self.use_w1:
