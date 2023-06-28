@@ -1,5 +1,14 @@
 # Change Log
 
+## 2023/06/28 update to 1.7.1
+* **rearrange the version format, previous 0.1.7 should be 1.7.0**
+* fix the bug in scale weight norm
+
+## 2023/06/26 Update to 0.1.7
+* Add support for rank_dropout and module_dropout on LoCon/LoHa/LoKr
+* Add support for scale_weight_norms on LoCon/LoHa/LoKr
+* Will support SDXL on 0.1.8 (you can follow the dev branch)
+
 ## 2023/06/04 update to 0.1.6
 * add dylora and IA^3 algorithm
 
