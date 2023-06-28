@@ -11,11 +11,12 @@ from typing import List
 import torch
 
 from .kohya_utils import *
-from .locon import LoConModule
-from .loha import LohaModule
-from .ia3 import IA3Module
-from .lokr import LokrModule
-from .dylora import DyLoraModule
+from ..modules.locon import LoConModule
+from ..modules.loha import LohaModule
+from ..modules.ia3 import IA3Module
+from ..modules.lokr import LokrModule
+from ..modules.dylora import DyLoraModule
+from ..modules.glora import GLoRAModule
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -37,6 +38,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'ia3':  IA3Module,
         'lokr': LokrModule,
         'dylora': DyLoraModule,
+        'glora': GLoRAModule,
     }[algo]
     
     print(f'Using rank adaptation algo: {algo}')
@@ -212,6 +214,15 @@ class LycorisNetwork(torch.nn.Module):
                         continue
                     loras.append(lora)
             return loras
+        
+        if network_module == GLoRAModule:
+            print('GLoRA enabled, only train transformer')
+            # only train transformer (for GLoRA)
+            LycorisNetwork.UNET_TARGET_REPLACE_MODULE = [
+                "Transformer2DModel", 
+                "Attention", 
+            ]
+            LycorisNetwork.UNET_TARGET_REPLACE_NAME = []
 
         if isinstance(text_encoder, list):
             text_encoders = text_encoder
