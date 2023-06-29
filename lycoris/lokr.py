@@ -191,7 +191,6 @@ class LokrModule(nn.Module):
         self.multiplier = multiplier
         self.org_module = [org_module]
         weight = make_kron(
-            self.org_module[0].weight.data, 
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
              else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 
