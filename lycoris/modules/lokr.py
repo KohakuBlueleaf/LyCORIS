@@ -231,18 +231,18 @@ class LokrModule(nn.Module):
         if scaled:
             modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
             if self.use_w1:
+                self.lokr_w1 *= ratio**(1/modules)
+            else:
                 self.lokr_w1_a *= ratio**(1/modules)
                 self.lokr_w1_b *= ratio**(1/modules)
-            else:
-                self.lokr_w1 *= ratio**(1/modules)
             
             if self.use_w2:
+                self.lokr_w2 *= ratio**(1/modules)
+            else:
                 if self.cp:
                     self.lokr_t2 *= ratio**(1/modules)
                 self.lokr_w2_a  *= ratio**(1/modules)
                 self.lokr_w2_b  *= ratio**(1/modules)
-            else:
-                self.lokr_w2 *= ratio**(1/modules)
         
         return scaled, orig_norm*ratio
 
