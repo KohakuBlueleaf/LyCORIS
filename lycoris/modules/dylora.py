@@ -57,21 +57,11 @@ class DyLoraModule(nn.Module):
             torch.empty(shape[0], 1)
             for i in range(lora_dim)
         ])
-        self.up_list.requires_grad_(False)
-        self.up_update = [
-            torch.zeros_like(self.up_list[i])
-            for i in range(lora_dim)
-        ]
         
         self.down_list = nn.ParameterList([
             torch.empty(1, shape[1])
             for i in range(lora_dim)
         ])
-        self.down_list.requires_grad_(False)
-        self.down_update = [
-            torch.zeros_like(self.down_list[i])
-            for i in range(lora_dim)
-        ]
         
         self.index = 0
         
@@ -87,16 +77,11 @@ class DyLoraModule(nn.Module):
             torch.nn.init.kaiming_uniform_(v, a=math.sqrt(5))
         for v in self.up_list:
             torch.nn.init.zeros_(v)
-        for i, v in enumerate(self.up_update):
-            v.copy_(self.up_list[i])
-        for i, v in enumerate(self.down_update):
-            v.copy_(self.down_list[i])
 
         self.multiplier = multiplier
         self.org_module = [org_module] # remove in applying
         self.grad_ckpt = False
-        
-        self.apply_train(0)
+        self.state_dict()
     
     def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
         # TODO: Remove `args` and the parsing logic when BC allows.
@@ -119,49 +104,26 @@ class DyLoraModule(nn.Module):
 
         destination[f'{prefix}alpha'] = self.alpha
         destination[f'{prefix}lora_up.weight'] = nn.Parameter(
-            torch.concat(self.up_update, dim=1)
+            torch.concat(list(self.up_list), dim=1)
         )
         destination[f'{prefix}lora_down.weight'] = nn.Parameter(
-            torch.concat(self.down_update)
+            torch.concat(list(self.down_list))
         )
         return destination
 
     def apply_to(self):
         self.org_module[0].forward = self.forward
-    
-    def apply_train(self, b:int):
-        self.up_list.requires_grad_(False)
-        self.down_list.requires_grad_(False)
-            
-        for i in range(self.index*self.block_size, (self.index+1)*self.block_size):
-            self.up_update[i].copy_(self.up_list[i])
-            self.down_update[i].copy_(self.down_list[i])
-        
-        for i in range(b*self.block_size, (b+1)*self.block_size):
-            self.up_list[i].copy_(self.up_update[i])
-            self.down_list[i].copy_(self.down_update[i])
-        
-        self.up_list.requires_grad_(True)
-        self.down_list.requires_grad_(True)
-        self.index = b
 
     @torch.enable_grad()
     def forward(self, x):
         b = random.randint(0, self.block_count-1)
-        if self.up_update[b].device != self.up_list[b].device:
-            device = self.up_list[b].device
-            for i in range(self.lora_dim):
-                self.up_update[i] = self.up_update[i].to(device)
-                self.down_update[i] = self.down_update[i].to(device)
         
-        if self.training:
-            self.apply_train(b)
         down = torch.concat(
-            list(self.down_update[:b*self.block_size]) 
+            list(i.data for i in self.down_list[:b*self.block_size]) 
             + list(self.down_list[b*self.block_size:(b+1)*self.block_size])
         )
         up = torch.concat(
-            list(self.up_update[:b*self.block_size]) 
+            list(i.data for i in self.up_list[:b*self.block_size]) 
             + list(self.up_list[b*self.block_size:(b+1)*self.block_size]),
             dim=1
         )
