@@ -1,4 +1,4 @@
 torch
 safetensors
-diffusers
+diffusers[torch]==0.10.2
 transformers
