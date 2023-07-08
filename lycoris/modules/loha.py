@@ -152,13 +152,13 @@ class LohaModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
-        # Need more experiences on init method
+        # Need more experiments on init method
         if self.cp:
             torch.nn.init.normal_(self.hada_t1, std=0.1)
             torch.nn.init.normal_(self.hada_t2, std=0.1)
         torch.nn.init.normal_(self.hada_w1_b, std=1)
-        torch.nn.init.normal_(self.hada_w2_b, std=0.01)
-        torch.nn.init.normal_(self.hada_w1_a, std=1)
+        torch.nn.init.normal_(self.hada_w1_a, std=0.1)
+        torch.nn.init.normal_(self.hada_w2_b, std=1)
         torch.nn.init.constant_(self.hada_w2_a, 0)
 
         self.multiplier = multiplier

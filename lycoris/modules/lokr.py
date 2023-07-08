@@ -178,15 +178,15 @@ class LokrModule(nn.Module):
             torch.nn.init.constant_(self.lokr_w2, 0)
         else:
             if self.cp:
-                torch.nn.init.normal_(self.lokr_t2, std=0.1)
-            torch.nn.init.normal_(self.lokr_w2_a, std=1)
+                torch.nn.init.kaiming_uniform_(self.lokr_t2, a=math.sqrt(5))
+            torch.nn.init.kaiming_uniform_(self.lokr_w2_a, a=math.sqrt(5))
             torch.nn.init.constant_(self.lokr_w2_b, 0)
         
         if self.use_w1:
-            torch.nn.init.normal_(self.lokr_w1, std=1)
+            torch.nn.init.kaiming_uniform_(self.lokr_w1, a=math.sqrt(5))
         else:
-            torch.nn.init.normal_(self.lokr_w1_a, std=1)
-            torch.nn.init.normal_(self.lokr_w1_b, std=0.1)
+            torch.nn.init.kaiming_uniform_(self.lokr_w1_a, a=math.sqrt(5))
+            torch.nn.init.kaiming_uniform_(self.lokr_w1_b, a=math.sqrt(5))
 
         self.multiplier = multiplier
         self.org_module = [org_module]
