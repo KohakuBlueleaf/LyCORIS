@@ -11,6 +11,10 @@ import torch.linalg as linalg
 from tqdm import tqdm
 
 
+def default(val, d):
+    return val if val is not None else d
+
+
 def make_sparse(t: torch.Tensor, sparsity=0.95):
     abs_t = torch.abs(t)
     np_array = abs_t.detach().cpu().numpy()
