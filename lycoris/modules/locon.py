@@ -129,7 +129,7 @@ class LoConModule(nn.Module):
         return scaled, orig_norm*ratio
 
     def update_weights(self, down, up, idx):
-        self.data = (down[:, idx, :].squeeze(1), up[:, idx, :].squeeze(1), idx)
+        self.data = (down.squeeze(1), up.squeeze(1), idx)
 
     def make_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
         down = down.view(down.size(0), self.lora_dim, -1)
