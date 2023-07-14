@@ -583,13 +583,17 @@ class HyperDreamNetwork(torch.nn.Module):
             assert lora.lora_name not in names, f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
         
-        self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
+        with torch.no_grad():
+            self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
 
     def update_reference(self, ref_img):
         # use idx for aux weight seed
-        weights = self.weight_generater(ref_img).mean(dim=0)
-        for idx, (lora, weight) in zip(self.loras, weights):
-            lora.make_lightweight(weight, *weight.split(self.split), idx)
+        weights = self.weight_generater(ref_img).split(1, dim=1)
+        for idx, (lora, weight) in enumerate(zip(self.loras, weights)):
+            # weight: [batch, 1, weight_dim]
+            if weight.dim()==3:
+                weight = weight.squeeze(1)
+            lora.update_weights(*weight.split(self.split, dim=-1), idx)
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier

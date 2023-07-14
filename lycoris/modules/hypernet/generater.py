@@ -42,9 +42,12 @@ class WeightGenerator(nn.Module):
         
         self.feature_proj = nn.Linear(test_output.shape[-1], weight_dim)
         self.decoder_model = nn.ModuleList(
-            TransformerBlock(weight_dim, 8, weight_dim // 8, context_dim=weight_dim, gated_ff=False)
+            TransformerBlock(weight_dim, 1, weight_dim, context_dim=weight_dim, gated_ff=False)
             for _ in range(decoder_blocks)
         )
+        
+        self.weight_proj = nn.Linear(weight_dim, weight_dim, bias=False)
+        nn.init.constant_(self.weight_proj.weight, 0)
     
     def forward(self, ref_img):
         features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
@@ -61,5 +64,5 @@ class WeightGenerator(nn.Module):
         for iter in range(self.sample_iters):
             for decoder in self.decoder_model:
                 weight = decoder(weight, context=features)
-        
+        weight = self.weight_proj(weight)
         return weight

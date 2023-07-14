@@ -850,6 +850,9 @@ class NetworkTrainer:
                 current_step.value = global_step
                 with accelerator.accumulate(network):
                     on_step_start(text_encoder, unet)
+                    with accelerator.autocast():
+                        network: lycoris.kohya.HyperDreamNetwork
+                        network.update_reference(batch["images"].to(dtype=weight_dtype))
 
                     with torch.no_grad():
                         if "latents" in batch and batch["latents"] is not None:
@@ -889,8 +892,6 @@ class NetworkTrainer:
 
                     # Predict the noise residual
                     with accelerator.autocast():
-                        network: lycoris.kohya.HyperDreamNetwork
-                        network.update_reference(batch["images"].to(dtype=noisy_latents.dtype))
                         noise_pred = self.call_unet(
                             args, accelerator, unet, noisy_latents, timesteps, text_encoder_conds, batch, weight_dtype
                         )
@@ -914,7 +915,7 @@ class NetworkTrainer:
 
                     loss = loss.mean()  # 平均なのでbatch_sizeで割る必要なし
 
-                    accelerator.backward(loss)
+                    accelerator.backward(loss, retain_graph=True)
                     if accelerator.sync_gradients and args.max_grad_norm != 0.0:
                         params_to_clip = network.get_trainable_params()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
