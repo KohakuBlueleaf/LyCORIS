@@ -17,6 +17,7 @@ from ..modules.ia3 import IA3Module
 from ..modules.lokr import LokrModule
 from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
+from ..modules.hypernet import WeightGenerator
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -79,6 +80,39 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         )
     
     return network
+
+
+def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
+    if network_dim is None:
+        network_dim = 4
+    dropout = float(kwargs.get('dropout', 0.) or 0.)
+    rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
+    module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
+    algo = (kwargs.get('algo', 'lora') or 'lora').lower()
+    use_cp = (not kwargs.get('disable_conv_cp', True)
+              or kwargs.get('use_conv_cp', False))
+    block_size = int(kwargs.get('block_size', 4) or 4)
+    down_dim = int(kwargs.get('down_dim', 100) or 100)
+    up_dim = int(kwargs.get('up_dim', 50) or 50)
+    network_module = {
+        'lora': LoConModule,
+        'locon': LoConModule,
+    }[algo]
+    
+    print(f'Using rank adaptation algo: {algo}')
+    
+    return HyperDreamNetwork(
+        text_encoder, unet, 
+        multiplier=multiplier, 
+        lora_dim=network_dim, alpha=network_alpha,
+        use_cp=use_cp,
+        dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
+        network_module=network_module,
+        down_dim=down_dim, up_dim=up_dim,
+        decompose_both=kwargs.get('decompose_both', False),
+        factor=kwargs.get('factor', -1),
+        block_size = block_size
+    )
 
 
 class LycorisNetwork(torch.nn.Module):
@@ -424,29 +458,26 @@ class HyperDreamNetwork(torch.nn.Module):
         self, 
         text_encoder, unet, 
         multiplier=1.0, 
-        lora_dim=4, conv_lora_dim=4, 
-        alpha=1, conv_alpha=1,
+        lora_dim=4, alpha=1,
         use_cp = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module = LoConModule,
+        down_dim = 100, up_dim = 50,
         **kwargs,
     ) -> None:
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
-        self.conv_lora_dim = int(conv_lora_dim)
-        if self.conv_lora_dim != self.lora_dim: 
-            print('Apply different lora dim for conv layer')
-            print(f'Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}')
-            
         self.alpha = alpha
-        self.conv_alpha = float(conv_alpha)
-        if self.alpha != self.conv_alpha: 
-            print('Apply different alpha value for conv layer')
-            print(f'Conv alpha: {conv_alpha}, Linear alpha: {alpha}')
         
         if 1 >= dropout >= 0:
             print(f'Use Dropout value: {dropout}')
+        if network_module != LoConModule:
+            print('HyperDreamBooth only support LoRA at this time')
+            raise NotImplementedError
+        if lora_dim*(down_dim+up_dim) > 4096:
+            print('weight elements > 4096 (dim * (down_dim + up_dim)) is not recommended!')
+        
         self.dropout = dropout
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
@@ -483,14 +514,6 @@ class HyperDreamNetwork(torch.nn.Module):
                                     use_cp,
                                     **kwargs
                                 )
-                            elif conv_lora_dim>0:
-                                lora = network_module(
-                                    lora_name, child_module, self.multiplier, 
-                                    self.conv_lora_dim, self.conv_alpha, 
-                                    self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
-                                    **kwargs
-                                )
                             else:
                                 continue
                         else:
@@ -517,29 +540,12 @@ class HyperDreamNetwork(torch.nn.Module):
                                 use_cp,
                                 **kwargs
                             )
-                        elif conv_lora_dim>0:
-                            lora = network_module(
-                                lora_name, module, self.multiplier, 
-                                self.conv_lora_dim, self.conv_alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
                         else:
                             continue
                     else:
                         continue
                     loras.append(lora)
             return loras
-        
-        if network_module == GLoRAModule:
-            print('GLoRA enabled, only train transformer')
-            # only train transformer (for GLoRA)
-            LycorisNetwork.UNET_TARGET_REPLACE_MODULE = [
-                "Transformer2DModel", 
-                "Attention", 
-            ]
-            LycorisNetwork.UNET_TARGET_REPLACE_NAME = []
 
         if isinstance(text_encoder, list):
             text_encoders = text_encoder
@@ -559,6 +565,15 @@ class HyperDreamNetwork(torch.nn.Module):
 
         self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        
+        self.loras = self.text_encoder_loras + self.unet_loras
+        self.weight_generater = WeightGenerator(
+            weight_dim=(down_dim+up_dim)*lora_dim,
+            weight_num=len(self.loras),
+            sample_iters=4
+        )
+        self.split = (down_dim* lora_dim, up_dim  * lora_dim)
+        self.lora_dim = lora_dim
 
         self.weights_sd = None
 
@@ -567,6 +582,14 @@ class HyperDreamNetwork(torch.nn.Module):
         for lora in self.text_encoder_loras + self.unet_loras:
             assert lora.lora_name not in names, f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
+        
+        self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
+
+    def update_reference(self, ref_img):
+        # use idx for aux weight seed
+        weights = self.weight_generater(ref_img).mean(dim=0)
+        for idx, (lora, weight) in zip(self.loras, weights):
+            lora.make_lightweight(weight, *weight.split(self.split), idx)
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
@@ -612,30 +635,7 @@ class HyperDreamNetwork(torch.nn.Module):
             self.unet_loras = []
 
         for lora in self.text_encoder_loras + self.unet_loras:
-            lora.apply_to()
-            self.add_module(lora.lora_name, lora)
-
-        if self.weights_sd:
-            # if some weights are not in state dict, it is ok because initial LoRA does nothing (lora_up is initialized by zeros)
-            info = self.load_state_dict(self.weights_sd, False)
-            print(f"weights are loaded: {info}")
-    
-    def apply_max_norm_regularization(self, max_norm_value, device):
-        key_scaled = 0
-        norms = []
-        for model in self.unet_loras:
-            if hasattr(model, 'apply_max_norm'):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
-        
-        for model in self.text_encoder_loras:
-            if hasattr(model, 'apply_max_norm'):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
-        
-        return key_scaled, sum(norms)/len(norms), max(norms)
+            lora.apply_to(is_hypernet=True)
 
     def enable_gradient_checkpointing(self):
         # not supported
@@ -703,24 +703,6 @@ class HyperDreamNetwork(torch.nn.Module):
             save_file(state_dict, file, metadata)
         else:
             torch.save(state_dict, file)
-    
-    def apply_max_norm_regularization(self, max_norm_value, device):
-        norms = []
-        scaled = 0
-        
-        for lora in self.unet_loras:
-            if hasattr(lora, 'apply_max_norm'):
-                scaled, norm = lora.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                scaled += int(scaled)
-        
-        for lora in self.text_encoder_loras:
-            if hasattr(lora, 'apply_max_norm'):
-                scaled, norm = lora.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                scaled += int(scaled)
-        
-        return scaled, sum(norms)/len(norms), max(norms)
 
 
 class IA3Network(torch.nn.Module):

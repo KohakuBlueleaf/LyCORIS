@@ -1,0 +1,1 @@
+from .generater import WeightGenerator

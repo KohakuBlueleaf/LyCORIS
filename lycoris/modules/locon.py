@@ -35,6 +35,8 @@ class LoConModule(nn.Module):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
+            self.down_op = F.conv2d
+            self.up_op = F.conv2d
             if use_cp and k_size != (1, 1):
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
                 self.lora_mid = nn.Conv2d(lora_dim, lora_dim, k_size, stride, padding, bias=False)
@@ -43,6 +45,8 @@ class LoConModule(nn.Module):
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
         elif isinstance(org_module, nn.Linear):
+            self.down_op = F.linear
+            self.up_op = F.linear
             in_dim = org_module.in_features
             out_dim = org_module.out_features
             self.lora_down = nn.Linear(in_dim, lora_dim, bias=False)
@@ -73,9 +77,12 @@ class LoConModule(nn.Module):
         self.multiplier = multiplier
         self.org_module = [org_module]
 
-    def apply_to(self):
+    def apply_to(self, is_hypernet=False, **kwargs):
         self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
+        if is_hypernet:
+            self.org_module[0].forward = self.hypernet_forward
+        else:
+            self.org_module[0].forward = self.forward
 
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
@@ -120,6 +127,79 @@ class LoConModule(nn.Module):
             self.scalar *= ratio
         
         return scaled, orig_norm*ratio
+
+    def make_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
+        if seed is None:
+            assert down_aux is not None and up_aux is not None
+        else:
+            rng_state = torch.get_rng_state()
+            torch.manual_seed(seed)
+            if down_aux is None or up_aux is None:
+                down_aux = torch.randn(down.size(1), self.lora_down.size(1), device=down.device)
+                up_aux = torch.randn(down.size(1), self.lora_down.size(1), device=up.device)
+            torch.set_rng_state(rng_state)
+        if down.dim() == 3 and down.size(0) == 1:
+            down = down.squeeze()
+        if up.dim() == 3 and up.size(0) == 1:
+            up = up.squeeze()
+        self.lora_down_weight = down @ down_aux
+        self.lora_up_weight = up_aux @ up
+
+    def apply_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
+        self.make_lightweight(down, up, seed, down_aux, up_aux)
+        self.lora_down.weight.data = self.lora_down_weight
+        self.lora_up.weight.data = self.lora_up_weight
+
+    def hypernet_forward(self, x):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x)
+        scale = self.scale * self.multiplier
+        isconv = x.dim() == 4
+        
+        if self.lora_down_weight.dim() == 3:
+            weights = self.lora_down_weight.split(1)
+            xs = x.split(1)
+            mids = []
+            for x, weight in zip(xs, weights):
+                if isconv:
+                    weight = weight.unsqueeze(-1).unsqueeze(-1)
+                mid = self.down_op(x, weight.to(x.device))
+                mids.append(mid)
+            mid = torch.cat(mids, dim=0)
+        else:
+            if isconv:
+                weight = self.lora_down_weight.unsqueeze(-1).unsqueeze(-1)
+            else:
+                weight = self.lora_down_weight
+            mid = self.down_op(x, weight.to(x.device))
+        
+        if self.rank_dropout and self.training:
+            drop = torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout
+            if (dims:=len(x.shape)) == 4:
+                drop = drop.view(1, -1, 1, 1)
+            else:
+                drop = drop.view(*[1]*(dims-1), -1)
+            mid = mid * drop
+        
+        if self.lora_up_weight.dim() == 3:
+            weights = self.lora_up_weight.split(1)
+            mids = mid.split(1)
+            ups = []
+            for x, weight in zip(xs, weights):
+                if isconv:
+                    weight = weight.unsqueeze(-1).unsqueeze(-1)
+                up = self.up_op(mid, weight.to(x.device) )
+                ups.append(up)
+            up = torch.cat(ups, dim=0)
+        else:
+            if isconv:
+                weight = self.lora_up_weight.unsqueeze(-1).unsqueeze(-1)
+            else:
+                weight = self.lora_up_weight
+            up = self.up_op(mid, weight.to(x.device))
+        
+        return self.org_forward(x) + self.dropout(up) * scale
 
     def forward(self, x):
         if self.module_dropout and self.training:

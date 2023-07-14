@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torchvision.transforms.functional import resize
+
 from timm import create_model
 from einops import rearrange
 
@@ -13,7 +15,7 @@ from lycoris.modules.attention import TransformerBlock
 class WeightGenerator(nn.Module):
     def __init__(
         self, 
-        encoder_model_name: str,
+        encoder_model_name: str = "vit_base_patch16_224",
         train_encoder: bool = False,
         reference_size: Tuple[int] = (224, 224), 
         weight_dim: int = 150,                      # 100+50 in paper
@@ -27,25 +29,25 @@ class WeightGenerator(nn.Module):
         self.weight_dim = weight_dim
         self.sample_iters = sample_iters
         
-        self.encoder_model = create_model(encoder_model_name, pretrained=True, features_only=True)
+        self.encoder_model = create_model(encoder_model_name, pretrained=True)
         self.encoder_model.requires_grad_(train_encoder)
         
         test_input = torch.randn(1, 3, *reference_size)
-        test_output = self.encoder_model(test_input)
+        test_output = self.encoder_model.forward_features(test_input)
         if isinstance(test_output, list):
             test_output = test_output[-1]
         if len(test_output.shape) == 4:
             # B, C, H, W -> B, L, C
             test_output = test_output.view(1, test_output.size(1), -1).transpose(1, 2)
         
-        self.feature_proj = nn.Linear(test_output.shape[2], weight_dim)
+        self.feature_proj = nn.Linear(test_output.shape[-1], weight_dim)
         self.decoder_model = nn.ModuleList(
             TransformerBlock(weight_dim, 8, weight_dim // 8, context_dim=weight_dim, gated_ff=False)
             for _ in range(decoder_blocks)
         )
     
     def forward(self, ref_img):
-        features = self.encoder_model(ref_img)
+        features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
         if isinstance(features, list):
             features = features[-1]
         if len(features.shape) == 4:
