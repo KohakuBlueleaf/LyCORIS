@@ -37,6 +37,7 @@ class FeedForward(nn.Module):
             project_in,
             nn.Linear(inner_dim, dim_out)
         )
+        nn.init.constant_(self.net[-1].weight, 0)
     
     def forward(self, x):
         return self.net(x)
@@ -140,6 +141,7 @@ class Attention(nn.Module):
             self.v = nn.Linear(context_ch, v_ch, bias=False)
         
         self.out = nn.Linear(inner_ch, in_ch)
+        torch.nn.init.constant_(self.out.weight, 0)
     
     def forward(self, x:torch.Tensor, context=None, mask=None):
         # Input Projection

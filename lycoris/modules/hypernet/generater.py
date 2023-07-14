@@ -43,14 +43,16 @@ class WeightGenerator(nn.Module):
         self.weight_num = weight_num
         self.weight_dim = weight_dim
         self.sample_iters = sample_iters
+        self.train_encoder = train_encoder
         
         self.register_buffer(
             'block_pos_emb', 
             _get_sinusoid_encoding_table(weight_num*2, weight_dim)
         )
         
-        self.encoder_model = create_model(encoder_model_name, pretrained=True)
-        self.encoder_model.requires_grad_(train_encoder)
+        self.encoder_model: nn.Module = create_model(encoder_model_name, pretrained=True)
+        for p in self.encoder_model.parameters():
+            p.requires_grad_(train_encoder)
         
         test_input = torch.randn(1, 3, *reference_size)
         test_output = self.encoder_model.forward_features(test_input)
@@ -61,16 +63,19 @@ class WeightGenerator(nn.Module):
             test_output = test_output.view(1, test_output.size(1), -1).transpose(1, 2)
         
         self.feature_proj = nn.Linear(test_output.shape[-1], weight_dim)
+        self.pos_emb_proj = nn.Linear(weight_dim, weight_dim)
+        nn.init.constant_(self.pos_emb_proj.weight, 0)
         self.decoder_model = nn.ModuleList(
             TransformerBlock(weight_dim, 1, weight_dim, context_dim=weight_dim, gated_ff=False)
             for _ in range(decoder_blocks)
         )
-        
-        self.weight_proj = nn.Linear(weight_dim, weight_dim, bias=False)
-        nn.init.constant_(self.weight_proj.weight, 0)
     
     def forward(self, ref_img, weight=None):
-        features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+        if self.train_encoder:
+            with torch.no_grad():
+                features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+        else:
+            features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
         if isinstance(features, list):
             features = features[-1]
         if len(features.shape) == 4:
@@ -82,11 +87,12 @@ class WeightGenerator(nn.Module):
             weight = torch.zeros(
                 ref_img.size(0), self.weight_num, self.weight_dim, device=ref_img.device
             )
-        weight = weight 
-        h = weight + self.block_pos_emb[:, :self.weight_num].clone().detach()
+        weight = weight
+        
+        pos_emb = self.pos_emb_proj(self.block_pos_emb[:, :self.weight_num].clone().detach())
         for iter in range(self.sample_iters):
+            h = weight + pos_emb
             for decoder in self.decoder_model:
                 h = decoder(h, context=features)
             weight = weight + h
-        weight = self.weight_proj(weight)
         return weight

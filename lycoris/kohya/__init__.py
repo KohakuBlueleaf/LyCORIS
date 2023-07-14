@@ -647,7 +647,21 @@ class HyperDreamNetwork(torch.nn.Module):
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
         self.requires_grad_(True)
         all_params = []
-        all_params.append({'params': self.weight_generater.parameters(), 'lr': unet_lr})
+        all_params.append({
+            'params': (
+                [p for p in self.weight_generater.decoder_model.parameters()]
+                + ([p for p in self.weight_generater.encoder_model.parameters()] 
+                   if self.weight_generater.train_encoder else [])
+            ), 
+            'lr': text_encoder_lr
+        })
+        all_params.append({
+            'params': (
+                [p for p in self.weight_generater.weight_proj.parameters()]
+                + [p for p in self.weight_generater.feature_proj.parameters()]
+            ), 
+            'lr': unet_lr
+        })
         return all_params
 
     def prepare_grad_etc(self, text_encoder, unet):
