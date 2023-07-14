@@ -128,8 +128,8 @@ class LoConModule(nn.Module):
         
         return scaled, orig_norm*ratio
 
-    def update_weights(self, down, up, seed):
-        self.data = (down, up, seed)
+    def update_weights(self, down, up, idx):
+        self.data = (down[:, idx, :].squeeze(1), up[:, idx, :].squeeze(1), idx)
 
     def make_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
         down = down.view(down.size(0), self.lora_dim, -1)
@@ -155,6 +155,7 @@ class LoConModule(nn.Module):
         down_weight, up_weight = self.make_lightweight(down, up, seed, down_aux, up_aux)
         self.lora_down.weight.data = down_weight
         self.lora_up.weight.data = up_weight
+        return down_weight, up_weight
 
     def hypernet_forward(self, x):
         if self.module_dropout and self.training:
@@ -163,7 +164,7 @@ class LoConModule(nn.Module):
         scale = self.scale * self.multiplier
         isconv = x.dim() == 4
         
-        down_weight, up_weight = self.make_lightweight(*self.data)
+        down_weight, up_weight = self.apply_lightweight(*self.data)
         
         if down_weight.dim() == 3:
             weights = down_weight.split(1)

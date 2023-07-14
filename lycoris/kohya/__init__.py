@@ -588,12 +588,12 @@ class HyperDreamNetwork(torch.nn.Module):
 
     def update_reference(self, ref_img):
         # use idx for aux weight seed
-        weights = self.weight_generater(ref_img).split(1, dim=1)
-        for idx, (lora, weight) in enumerate(zip(self.loras, weights)):
+        weights = self.weight_generater(ref_img)
+        for idx, (lora, weight) in enumerate(zip(self.loras, weights.split(1, dim=1))):
             # weight: [batch, 1, weight_dim]
-            if weight.dim()==3:
-                weight = weight.squeeze(1)
-            lora.update_weights(*weight.split(self.split, dim=-1), idx)
+            # if weight.dim()==3:
+            #     weight = weight.squeeze(1)
+            lora.update_weights(*weights.split(self.split, dim=-1), idx)
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
@@ -643,10 +643,6 @@ class HyperDreamNetwork(torch.nn.Module):
 
     def enable_gradient_checkpointing(self):
         # not supported
-        def make_ckpt(module):
-            if isinstance(module, torch.nn.Module):
-                module.grad_ckpt = True
-        self.apply(make_ckpt)
         pass
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
