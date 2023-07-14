@@ -443,10 +443,9 @@ class LycorisNetwork(torch.nn.Module):
 class HyperDreamNetwork(torch.nn.Module):
     '''
     HyperDreamBooth hypernetwork part
+    only train Attention right now
     '''
-    # Ignore proj_in or proj_out, their channels is only a few.
     UNET_TARGET_REPLACE_MODULE = [
-        "Transformer2DModel", 
         "Attention", 
     ]
     UNET_TARGET_REPLACE_NAME = []

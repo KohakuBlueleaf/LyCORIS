@@ -164,7 +164,7 @@ class LoConModule(nn.Module):
         scale = self.scale * self.multiplier
         isconv = x.dim() == 4
         
-        down_weight, up_weight = self.apply_lightweight(*self.data)
+        down_weight, up_weight = self.make_lightweight(*self.data)
         
         if down_weight.dim() == 3:
             weights = down_weight.split(1)

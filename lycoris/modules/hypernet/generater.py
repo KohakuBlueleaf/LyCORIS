@@ -1,5 +1,5 @@
 from typing import *
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,6 +11,21 @@ from einops import rearrange
 
 from lycoris.modules.attention import TransformerBlock
 
+
+def _get_sinusoid_encoding_table(n_position, d_hid):
+    ''' Sinusoid position encoding table '''
+    # TODO: make it with torch instead of numpy
+
+    def get_position_angle_vec(position):
+        # this part calculate the position In brackets
+        return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
+
+    sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
+    # [:, 0::2] are all even subscripts, is dim_2i
+    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
+    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+
+    return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
 class WeightGenerator(nn.Module):
     def __init__(
@@ -28,6 +43,11 @@ class WeightGenerator(nn.Module):
         self.weight_num = weight_num
         self.weight_dim = weight_dim
         self.sample_iters = sample_iters
+        
+        self.register_buffer(
+            'block_pos_emb', 
+            _get_sinusoid_encoding_table(weight_num*2, weight_dim)
+        )
         
         self.encoder_model = create_model(encoder_model_name, pretrained=True)
         self.encoder_model.requires_grad_(train_encoder)
@@ -49,7 +69,7 @@ class WeightGenerator(nn.Module):
         self.weight_proj = nn.Linear(weight_dim, weight_dim, bias=False)
         nn.init.constant_(self.weight_proj.weight, 0)
     
-    def forward(self, ref_img):
+    def forward(self, ref_img, weight=None):
         features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
         if isinstance(features, list):
             features = features[-1]
@@ -58,11 +78,15 @@ class WeightGenerator(nn.Module):
             features = features.view(features.size(0), features.size(1), -1).transpose(1, 2)
         features = self.feature_proj(features)
         
-        weight = torch.zeros(
-            ref_img.size(0), self.weight_num, self.weight_dim, device=ref_img.device
-        )
+        if weight is None:
+            weight = torch.zeros(
+                ref_img.size(0), self.weight_num, self.weight_dim, device=ref_img.device
+            )
+        weight = weight 
+        h = weight + self.block_pos_emb[:, :self.weight_num].clone().detach()
         for iter in range(self.sample_iters):
             for decoder in self.decoder_model:
-                weight = decoder(weight, context=features)
+                h = decoder(h, context=features)
+            weight = weight + h
         weight = self.weight_proj(weight)
         return weight
