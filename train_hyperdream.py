@@ -1,3 +1,8 @@
+'''
+Modified from kohya-ss/sd-scripts/train_network.py
+'''
+
+
 import importlib
 import argparse
 import gc
