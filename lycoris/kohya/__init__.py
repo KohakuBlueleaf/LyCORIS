@@ -590,8 +590,8 @@ class HyperDreamNetwork(torch.nn.Module):
         with torch.no_grad():
             self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
         
-        for lora in self.loras:
-            assert torch.all(lora.data[0]==0)
+        # for lora in self.loras:
+        #     assert torch.all(lora.data[0]==0)
 
     def update_reference(self, ref_img, iter=None):
         # use idx for aux weight seed
@@ -691,6 +691,7 @@ class HyperDreamNetwork(torch.nn.Module):
         if not self.weight_generater.train_encoder:
             for k in self.weight_generater.encoder_model.state_dict().keys():
                 state_dict.pop(f'encoder_model.{k}')
+        state_dict = {f'weight_generater.{i}': v for i, v in state_dict.items()}
 
         if dtype is not None:
             for key in list(state_dict.keys()):

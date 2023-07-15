@@ -49,8 +49,24 @@ class WeightDecoder(nn.Module):
             TransformerBlock(weight_dim, heads, weight_dim//heads, context_dim=weight_dim, gated_ff=False)
             for _ in range(decoder_blocks)
         )
-        self.delta_proj = nn.Linear(weight_dim, weight_dim, bias=False)
-        torch.nn.init.constant_(self.delta_proj.weight, 0)
+        # self.delta_proj = nn.Linear(weight_dim, weight_dim, bias=False)
+        self.delta_proj = nn.Sequential(
+            nn.LayerNorm(weight_dim),
+            nn.Linear(weight_dim, weight_dim, bias=False)
+        )
+        self.init_weights()
+    
+    def init_weights(self):
+        def basic_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        
+        self.apply(basic_init)
+        # torch.nn.init.constant_(self.delta_proj.weight, 0)
+        # advice from Nataniel Ruiz, looks like 1e-3 is small enough
+        torch.nn.init.normal_(self.delta_proj[1].weight, std=1e-3)
     
     def forward(self, weight, features):
         pos_emb = self.pos_emb_proj(self.block_pos_emb[:, :weight.size(1)].clone().detach())

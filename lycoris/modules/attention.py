@@ -142,8 +142,6 @@ class Attention(nn.Module):
             self.v = nn.Linear(context_ch, v_ch, bias=False)
         
         self.out = nn.Linear(inner_ch, in_ch)
-        # torch.nn.init.constant_(self.out.weight, 0)
-        # torch.nn.init.constant_(self.out.bias, 0)
     
     def forward(self, x:torch.Tensor, context=None, mask=None):
         # Input Projection

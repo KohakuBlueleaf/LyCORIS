@@ -155,7 +155,7 @@ class LoConModule(nn.Module):
             down = down.squeeze(0)
         if up.dim() == 3 and up.size(0) == 1:
             up = up.squeeze(0)
-        down = down + 1 # avoid zero grad, give it a constant
+        # down = down + 1 # avoid zero grad, give it a constant
         return down @ down_aux, up_aux @ up
 
     def apply_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):

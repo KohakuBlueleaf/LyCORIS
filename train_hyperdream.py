@@ -490,6 +490,12 @@ class NetworkTrainer:
             ), "full_fp16 requires mixed precision='fp16' / full_fp16を使う場合はmixed_precision='fp16'を指定してください。"
             accelerator.print("enable full fp16 training.")
             network.to(weight_dtype)
+        if args.mixed_precision == "bf16":
+            assert (
+                args.mixed_precision == "bf16"
+            ), "full_fp16 requires mixed precision='fp16' / full_fp16を使う場合はmixed_precision='fp16'を指定してください。"
+            accelerator.print("enable full bf16 training.")
+            network.to(weight_dtype)
 
         # acceleratorがなんかよろしくやってくれるらしい
         # TODO めちゃくちゃ冗長なのでコードを整理する
@@ -919,8 +925,6 @@ class NetworkTrainer:
                     if accelerator.sync_gradients and args.max_grad_norm != 0.0:
                         params_to_clip = network.get_trainable_params()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                    
-                    assert torch.sum(network.checkpoint.grad==0) != 1, "checkpoint.grad is zero"
                     
                     optimizer.step()
                     lr_scheduler.step()

@@ -77,14 +77,19 @@ def main():
         raise ValueError(f'Cannot Find the dtype "{ARGS.dtype}"')
     
     hyperdream = create_hypernetwork(
-        1.0, 2, 1, vae, te, unet, down_dim=128, up_dim=64, delta_iters = 5,
+        1.0, 2, 1, vae, te, unet, down_dim=128, up_dim=64, delta_iters = 4, decoder_blocks=4,
     ).to(dtype).to(ARGS.device)
-    (missing_keys, unexpected_keys) = hyperdream.load_state_dict(lyco, strict=False)
-    for k in missing_keys:
-        assert 'encoder_model' in k, f'Cannot find {k}, only keys in encoder_model can be missing'
+    (missing_keys, unexpected_keys) = hyperdream.weight_generater.load_state_dict(lyco, strict=False)
     
     if unexpected_keys:
         print(f'Unexpected keys: {unexpected_keys}')
+    
+    for k in missing_keys:
+        if (k=='checkpoint'
+            or 'block_pos_emb' in k
+            or 'encoder_model' in k):
+            continue
+        assert False, f'Cannot find {k}, only keys in encoder_model can be missing'
     
     ref_img = Image.open(
         ARGS.image_path
@@ -93,7 +98,7 @@ def main():
     ref_img = to_tensor(ref_img).unsqueeze(0).to(dtype).to(ARGS.device) * 2 - 1
     
     with torch.autocast(ARGS.device, dtype=dtype):
-        hyperdream.update_reference(ref_img, 9)
+        hyperdream.update_reference(ref_img, 6)
     
     state_dict = {}
     for lora in hyperdream.loras:
