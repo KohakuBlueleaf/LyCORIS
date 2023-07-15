@@ -62,15 +62,16 @@ class WeightGenerator(nn.Module):
             # B, C, H, W -> B, L, C
             test_output = test_output.view(1, test_output.size(1), -1).transpose(1, 2)
         
-        self.feature_proj = nn.Linear(test_output.shape[-1], weight_dim)
-        self.pos_emb_proj = nn.Linear(weight_dim, weight_dim)
-        nn.init.constant_(self.pos_emb_proj.weight, 0)
+        self.feature_proj = nn.Linear(test_output.shape[-1], weight_dim, bias=False)
+        self.pos_emb_proj = nn.Linear(weight_dim, weight_dim, bias=False)
         self.decoder_model = nn.ModuleList(
             TransformerBlock(weight_dim, 1, weight_dim, context_dim=weight_dim, gated_ff=False)
             for _ in range(decoder_blocks)
         )
+        self.delta_proj = nn.Linear(weight_dim, weight_dim, bias=False)
+        torch.nn.init.constant_(self.delta_proj.weight, 0)
     
-    def forward(self, ref_img, weight=None):
+    def forward(self, ref_img, iters=None, weight=None):
         if self.train_encoder:
             with torch.no_grad():
                 features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
@@ -87,12 +88,11 @@ class WeightGenerator(nn.Module):
             weight = torch.zeros(
                 ref_img.size(0), self.weight_num, self.weight_dim, device=ref_img.device
             )
-        weight = weight
         
         pos_emb = self.pos_emb_proj(self.block_pos_emb[:, :self.weight_num].clone().detach())
-        for iter in range(self.sample_iters):
+        for iter in range(iters or self.sample_iters):
             h = weight + pos_emb
             for decoder in self.decoder_model:
                 h = decoder(h, context=features)
-            weight = weight + h
+            weight = weight + self.delta_proj(h)
         return weight

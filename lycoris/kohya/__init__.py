@@ -92,8 +92,9 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
     use_cp = (not kwargs.get('disable_conv_cp', True)
               or kwargs.get('use_conv_cp', False))
     block_size = int(kwargs.get('block_size', 4) or 4)
-    down_dim = int(kwargs.get('down_dim', 100) or 100)
-    up_dim = int(kwargs.get('up_dim', 50) or 50)
+    down_dim = int(kwargs.get('down_dim', 128) or 128)
+    up_dim = int(kwargs.get('up_dim', 64) or 64)
+    delta_iters = int(kwargs.get('delta_iters', 5) or 5)
     network_module = {
         'lora': LoConModule,
         'locon': LoConModule,
@@ -108,7 +109,7 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
         use_cp=use_cp,
         dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
         network_module=network_module,
-        down_dim=down_dim, up_dim=up_dim,
+        down_dim=down_dim, up_dim=up_dim, delta_iters=delta_iters,
         decompose_both=kwargs.get('decompose_both', False),
         factor=kwargs.get('factor', -1),
         block_size = block_size
@@ -461,7 +462,7 @@ class HyperDreamNetwork(torch.nn.Module):
         use_cp = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module = LoConModule,
-        down_dim = 100, up_dim = 50,
+        down_dim = 100, up_dim = 50, delta_iters = 5,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -565,11 +566,11 @@ class HyperDreamNetwork(torch.nn.Module):
         self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
         
-        self.loras = self.text_encoder_loras + self.unet_loras
+        self.loras: list[LoConModule] = self.text_encoder_loras + self.unet_loras
         self.weight_generater = WeightGenerator(
             weight_dim=(down_dim+up_dim)*lora_dim,
             weight_num=len(self.loras),
-            sample_iters=4
+            sample_iters=delta_iters
         )
         self.split = (down_dim* lora_dim, up_dim  * lora_dim)
         self.lora_dim = lora_dim
@@ -582,13 +583,20 @@ class HyperDreamNetwork(torch.nn.Module):
             assert lora.lora_name not in names, f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
         
+        self.checkpoint = torch.nn.Parameter(torch.tensor(0.0))
+        
         with torch.no_grad():
             self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
+        
+        for lora in self.loras:
+            assert torch.all(lora.data[0]==0)
 
-    def update_reference(self, ref_img):
+    def update_reference(self, ref_img, iter=None):
         # use idx for aux weight seed
-        weights = self.weight_generater(ref_img)
+        weights = self.weight_generater(ref_img, iter)
+        weights = weights + self.checkpoint
         for idx, (lora, weight) in enumerate(zip(self.loras, weights.split(1, dim=1))):
+            assert lora.multiplier > 0, f"multiplier must be positive: {lora.multiplier}"
             # weight: [batch, 1, weight_dim]
             # if weight.dim()==3:
             #     weight = weight.squeeze(1)
@@ -657,8 +665,9 @@ class HyperDreamNetwork(torch.nn.Module):
         })
         all_params.append({
             'params': (
-                [p for p in self.weight_generater.weight_proj.parameters()]
+                [p for p in self.weight_generater.pos_emb_proj.parameters()]
                 + [p for p in self.weight_generater.feature_proj.parameters()]
+                + [p for p in self.weight_generater.delta_proj.parameters()]
             ), 
             'lr': unet_lr
         })

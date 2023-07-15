@@ -132,8 +132,12 @@ class LoConModule(nn.Module):
         self.data = (down.squeeze(1), up.squeeze(1), idx)
 
     def make_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
-        down = down.view(down.size(0), self.lora_dim, -1)
-        up = up.view(up.size(0), -1, self.lora_dim)
+        if down.dim() == 3:
+            down = down.reshape(down.size(0), self.lora_dim, -1)
+            up = up.reshape(up.size(0), -1, self.lora_dim)
+        else:
+            down = down.reshape(self.lora_dim, -1)
+            up = up.reshape(-1, self.lora_dim)
         # print(up.shape)
         if seed is None:
             assert down_aux is not None and up_aux is not None
@@ -141,14 +145,17 @@ class LoConModule(nn.Module):
             rng_state = torch.get_rng_state()
             torch.manual_seed(seed)
             if down_aux is None or up_aux is None:
-                down_aux = torch.randn(down.size(2), self.lora_down.weight.size(1), device=down.device)
-                up_aux = torch.randn(self.lora_up.weight.size(0), up.size(1), device=up.device)
+                down_aux = torch.empty(down.size(down.dim()-1), self.lora_down.weight.size(1), device=down.device)
+                up_aux = torch.empty(self.lora_up.weight.size(0), up.size(up.dim()-2), device=up.device)
+                nn.init.orthogonal_(down_aux)
+                nn.init.orthogonal_(up_aux)
                 # print(up_aux.shape)
             torch.set_rng_state(rng_state)
         if down.dim() == 3 and down.size(0) == 1:
             down = down.squeeze(0)
         if up.dim() == 3 and up.size(0) == 1:
             up = up.squeeze(0)
+        down = down + 1 # avoid zero grad, give it a constant
         return down @ down_aux, up_aux @ up
 
     def apply_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):

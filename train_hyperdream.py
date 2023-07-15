@@ -915,11 +915,13 @@ class NetworkTrainer:
 
                     loss = loss.mean()  # 平均なのでbatch_sizeで割る必要なし
 
-                    accelerator.backward(loss, retain_graph=True)
+                    accelerator.backward(loss)
                     if accelerator.sync_gradients and args.max_grad_norm != 0.0:
                         params_to_clip = network.get_trainable_params()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-
+                    
+                    assert torch.sum(network.checkpoint.grad==0) != 1, "checkpoint.grad is zero"
+                    
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
