@@ -14,6 +14,10 @@ def get_args():
         default='', type=str
     )
     parser.add_argument(
+        "image_path", help="the image for generate weight",
+        default='', type=str
+    )
+    parser.add_argument(
         "output_name", help="the output model",
         default='./out.pt', type=str
     )
@@ -73,12 +77,12 @@ def main():
         raise ValueError(f'Cannot Find the dtype "{ARGS.dtype}"')
     
     hyperdream = create_hypernetwork(
-        1.0, 1, 1, vae, te, unet, 
+        1.0, 2, 1, vae, te, unet, down_dim=128, up_dim=64, delta_iters = 5,
     ).to(dtype).to(ARGS.device)
     hyperdream.load_state_dict(lyco)
     
     ref_img = Image.open(
-        r'C:\Users\apoll\Desktop\AI\training_data\multi_artist\10_author_1554775\89828461_p0000.jpg'
+        ARGS.image_path
     ).convert('RGB')
     ref_img = resize(ref_img, hyperdream.weight_generater.ref_size)
     ref_img = to_tensor(ref_img).unsqueeze(0).to(dtype).to(ARGS.device) *2 -1

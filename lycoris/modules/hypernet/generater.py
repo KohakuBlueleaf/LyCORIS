@@ -27,6 +27,7 @@ def _get_sinusoid_encoding_table(n_position, d_hid):
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
+
 class WeightGenerator(nn.Module):
     def __init__(
         self, 
