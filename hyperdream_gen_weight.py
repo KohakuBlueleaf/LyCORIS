@@ -79,16 +79,21 @@ def main():
     hyperdream = create_hypernetwork(
         1.0, 2, 1, vae, te, unet, down_dim=128, up_dim=64, delta_iters = 5,
     ).to(dtype).to(ARGS.device)
-    hyperdream.load_state_dict(lyco)
+    (missing_keys, unexpected_keys) = hyperdream.load_state_dict(lyco, strict=False)
+    for k in missing_keys:
+        assert 'encoder_model' in k, f'Cannot find {k}, only keys in encoder_model can be missing'
+    
+    if unexpected_keys:
+        print(f'Unexpected keys: {unexpected_keys}')
     
     ref_img = Image.open(
         ARGS.image_path
     ).convert('RGB')
     ref_img = resize(ref_img, hyperdream.weight_generater.ref_size)
-    ref_img = to_tensor(ref_img).unsqueeze(0).to(dtype).to(ARGS.device) *2 -1
+    ref_img = to_tensor(ref_img).unsqueeze(0).to(dtype).to(ARGS.device) * 2 - 1
     
     with torch.autocast(ARGS.device, dtype=dtype):
-        hyperdream.update_reference(ref_img, 10)
+        hyperdream.update_reference(ref_img, 9)
     
     state_dict = {}
     for lora in hyperdream.loras:
