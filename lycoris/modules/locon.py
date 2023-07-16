@@ -29,6 +29,7 @@ class LoConModule(nn.Module):
 
         self.scalar = nn.Parameter(torch.tensor(0.0))
         if isinstance(org_module, nn.Conv2d):
+            self.isconv = True
             # For general LoCon
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
@@ -45,6 +46,7 @@ class LoConModule(nn.Module):
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
         elif isinstance(org_module, nn.Linear):
+            self.isconv = False
             self.down_op = F.linear
             self.up_op = F.linear
             in_dim = org_module.in_features
@@ -169,23 +171,22 @@ class LoConModule(nn.Module):
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
         scale = self.scale * self.multiplier
-        isconv = x.dim() == 4
         
         down_weight, up_weight = self.make_lightweight(*self.data)
         
+        x_batch = None
         if down_weight.dim() == 3:
-            weights = down_weight.split(1)
-            xs = x.split([x.size(0)//len(weights)] * len(weights))
-            mids = []
-            for x_part, weight in zip(xs, weights):
-                weight = weight.squeeze(0)
-                if isconv:
-                    weight = weight.unsqueeze(-1).unsqueeze(-1)
-                mid = self.down_op(x_part, weight)
-                mids.append(mid)
-            mid = torch.cat(mids, dim=0)
+            if x.size(0) != down_weight.size(0):
+                assert self.isconv == False, "Convolutional hypernet with batch size mismatch is not supported"
+                x_batch = x.size(0)
+                x = x.view(down_weight.size(0), -1, *x.shape[1:])
+            
+            if self.isconv:
+                mid = torch.einsum('ijk, ik... -> ij...', down_weight, x)
+            else:
+                mid = torch.einsum('ijk, i...k -> i...j', down_weight, x)
         else:
-            if isconv:
+            if self.isconv:
                 weight = down_weight.unsqueeze(-1).unsqueeze(-1)
             else:
                 weight = down_weight
@@ -200,23 +201,29 @@ class LoConModule(nn.Module):
             mid = mid * drop
         
         if up_weight.dim() == 3:
-            weights = up_weight.split(1)
-            mids = mid.split([mid.size(0)//len(weights)] * len(weights))
-            ups = []
-            for mid, weight in zip(mids, weights):
-                # print(mid.shape, weight.shape)
-                weight = weight.squeeze(0)
-                if isconv:
-                    weight = weight.unsqueeze(-1).unsqueeze(-1)
-                up = self.up_op(mid, weight)
-                ups.append(up)
-            up = torch.cat(ups, dim=0)
+            mid_batch = None
+            if mid.size(0) != up_weight.size(0):
+                assert self.isconv == False, "Convolutional hypernet with batch size mismatch is not supported"
+                mid_batch = mid.size(0)
+                mid = mid.view(up_weight.size(0), -1, *mid.shape[1:])
+            
+            if self.isconv:
+                up = torch.einsum('ijk, ik... -> ij...', up_weight, mid)
+            else:
+                up = torch.einsum('ijk, i...k -> i...j', up_weight, mid)
+            
+            if mid_batch is not None:
+                up = up.view(mid_batch, *up.shape[2:])
         else:
-            if isconv:
+            if self.isconv:
                 weight = up_weight.unsqueeze(-1).unsqueeze(-1)
             else:
                 weight = up_weight
             up = self.up_op(mid, weight)
+        
+        if x_batch is not None:
+            up = up.view(x_batch, *up.shape[2:])
+        
         org_out = self.org_forward(x)
         # print(x.shape, org_out.shape, up.shape)
         return org_out + self.dropout(up) * scale
