@@ -654,23 +654,18 @@ class HyperDreamNetwork(torch.nn.Module):
         # not supported
         pass
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         self.requires_grad_(True)
         all_params = []
         all_params.append({
             'params': (
                 [p for p in self.weight_generater.decoder_model.parameters()]
+                + [p for p in self.weight_generater.pos_emb_proj.parameters()]
+                + [p for p in self.weight_generater.feature_proj.parameters()]
                 + ([p for p in self.weight_generater.encoder_model.parameters()] 
                    if self.weight_generater.train_encoder else [])
             ), 
-            'lr': text_encoder_lr
-        })
-        all_params.append({
-            'params': (
-                [p for p in self.weight_generater.pos_emb_proj.parameters()]
-                + [p for p in self.weight_generater.feature_proj.parameters()]
-            ), 
-            'lr': unet_lr
+            'lr': learning_rate
         })
         return all_params
 

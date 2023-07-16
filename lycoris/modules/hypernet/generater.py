@@ -64,9 +64,9 @@ class WeightDecoder(nn.Module):
                     nn.init.constant_(module.bias, 0)
         
         self.apply(basic_init)
-        # torch.nn.init.constant_(self.delta_proj.weight, 0)
+        torch.nn.init.constant_(self.delta_proj.weight, 0)
         # advice from Nataniel Ruiz, looks like 1e-3 is small enough
-        torch.nn.init.normal_(self.delta_proj[1].weight, std=1e-3)
+        # torch.nn.init.normal_(self.delta_proj[1].weight, std=1e-3)
     
     def forward(self, weight, features):
         pos_emb = self.pos_emb_proj(self.block_pos_emb[:, :weight.size(1)].clone().detach())
