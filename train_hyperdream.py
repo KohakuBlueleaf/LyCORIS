@@ -2,7 +2,6 @@
 Modified from kohya-ss/sd-scripts/train_network.py
 '''
 
-
 import importlib
 import argparse
 import gc
@@ -42,6 +41,12 @@ from library.custom_train_functions import (
 
 import lycoris
 
+# from functools import partial
+# import torch.utils.checkpoint
+# torch.utils.checkpoint.checkpoint = partial(
+#     torch.utils.checkpoint.checkpoint, 
+#     use_reentrant=False
+# )
 
 def patch_getitem(self, index):
     bucket = self.bucket_manager.buckets[self.buckets_indices[index].bucket_index]

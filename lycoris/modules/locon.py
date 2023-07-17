@@ -158,7 +158,7 @@ class LoConModule(nn.Module):
         if up.dim() == 3 and up.size(0) == 1:
             up = up.squeeze(0)
         down = down + 1 # avoid zero grad or slow training, give it a constant
-        return down @ down_aux, up_aux @ up
+        return (down @ down_aux).requires_grad_(self.training), (up_aux @ up).requires_grad_(self.training)
 
     def apply_lightweight(self, down, up, seed=None, down_aux=None, up_aux=None):
         down_weight, up_weight = self.make_lightweight(down, up, seed, down_aux, up_aux)

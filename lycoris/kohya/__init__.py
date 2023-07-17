@@ -9,6 +9,7 @@ from warnings import warn
 import os
 from typing import List
 import torch
+import torch.utils.checkpoint as checkpoint
 
 from .kohya_utils import *
 from ..modules.locon import LoConModule
@@ -467,6 +468,7 @@ class HyperDreamNetwork(torch.nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
+        self.gradient_ckpt = False
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.alpha = alpha
@@ -593,16 +595,23 @@ class HyperDreamNetwork(torch.nn.Module):
         # for lora in self.loras:
         #     assert torch.all(lora.data[0]==0)
 
-    def update_reference(self, ref_img, iter=None):
-        # use idx for aux weight seed
+    def gen_weight(self, ref_img, iter=None):
         weights = self.weight_generater(ref_img, iter)
         weights = weights + self.checkpoint
-        for idx, (lora, weight) in enumerate(zip(self.loras, weights.split(1, dim=1))):
+        return [i.split(self.split, dim=-1) for i in weights.split(1, dim=1)]
+
+    def update_reference(self, ref_img, iter=None):
+        # use idx for aux weight seed
+        if self.gradient_ckpt and self.training:
+            weights_list = checkpoint.checkpoint(self.gen_weight, ref_img, iter)
+        else:
+            weights_list = self.gen_weight(ref_img, iter)
+        for idx, (lora, weight) in enumerate(zip(self.loras, weights_list)):
             assert lora.multiplier > 0, f"multiplier must be positive: {lora.multiplier}"
             # weight: [batch, 1, weight_dim]
             # if weight.dim()==3:
             #     weight = weight.squeeze(1)
-            lora.update_weights(*weight.split(self.split, dim=-1), idx)
+            lora.update_weights(*weight, idx)
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
@@ -651,8 +660,7 @@ class HyperDreamNetwork(torch.nn.Module):
             lora.apply_to(is_hypernet=True)
 
     def enable_gradient_checkpointing(self):
-        # not supported
-        pass
+        self.gradient_ckpt = True
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         self.requires_grad_(True)
