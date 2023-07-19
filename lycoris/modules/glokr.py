@@ -4,9 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# 4, build custom backward function
-#  - 
-
 
 def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     '''
@@ -23,7 +20,7 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
         -1               2                4               8               16               ...
     127 -> 127, 1   127 -> 127, 1    127 -> 127, 1   127 -> 127, 1   127 -> 127, 1
     128 -> 16, 8    128 -> 64, 2     128 -> 32, 4    128 -> 16, 8    128 -> 16, 8
-    250 -> 125, 2   250 -> 125, 2    250 -> 125, 2   250 -> 125, 2   250 -> 125, 2
+    250 -> 25, 10   250 -> 125, 2    250 -> 125, 2   250 -> 50, 5   250 -> 25, 10
     360 -> 45, 8    360 -> 180, 2    360 -> 90, 4    360 -> 45, 8    360 -> 45, 8
     512 -> 32, 16   512 -> 256, 2    512 -> 128, 4   512 -> 64, 8    512 -> 32, 16
     1024 -> 32, 32  1024 -> 512, 2   1024 -> 256, 4  1024 -> 128, 8  1024 -> 64, 16
@@ -230,18 +227,18 @@ class LokrModule(nn.Module):
         if scaled:
             modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
             if self.use_w1:
+                self.lokr_w1 *= ratio**(1/modules)
+            else:
                 self.lokr_w1_a *= ratio**(1/modules)
                 self.lokr_w1_b *= ratio**(1/modules)
-            else:
-                self.lokr_w1 *= ratio**(1/modules)
             
             if self.use_w2:
+                self.lokr_w2 *= ratio**(1/modules)
+            else:
                 if self.cp:
                     self.lokr_t2 *= ratio**(1/modules)
                 self.lokr_w2_a  *= ratio**(1/modules)
                 self.lokr_w2_b  *= ratio**(1/modules)
-            else:
-                self.lokr_w2 *= ratio**(1/modules)
         
         return scaled, orig_norm*ratio
 

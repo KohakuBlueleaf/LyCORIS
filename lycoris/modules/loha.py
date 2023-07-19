@@ -1,4 +1,5 @@
 import math
+from collections import OrderedDict, abc as container_abcs
 
 import torch
 import torch.nn as nn
@@ -102,6 +103,7 @@ class LohaModule(nn.Module):
         self.cp=False
         
         self.shape = org_module.weight.shape
+        self.scalar = nn.Parameter(torch.tensor(0.0))
         if org_module.__class__.__name__ == 'Conv2d':
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
@@ -152,14 +154,14 @@ class LohaModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
-        # Need more experiences on init method
+        # Need more experiments on init method
         if self.cp:
             torch.nn.init.normal_(self.hada_t1, std=0.1)
             torch.nn.init.normal_(self.hada_t2, std=0.1)
         torch.nn.init.normal_(self.hada_w1_b, std=1)
-        torch.nn.init.normal_(self.hada_w2_b, std=0.01)
-        torch.nn.init.normal_(self.hada_w1_a, std=1)
-        torch.nn.init.constant_(self.hada_w2_a, 0)
+        torch.nn.init.normal_(self.hada_w1_a, std=0.1)
+        torch.nn.init.normal_(self.hada_w2_b, std=1)
+        torch.nn.init.normal_(self.hada_w2_a, std=0.1)
 
         self.multiplier = multiplier
         self.org_module = [org_module] # remove in applying
@@ -187,25 +189,46 @@ class LohaModule(nn.Module):
             drop = torch.rand(weight.size(0)) < self.rank_dropout
             weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
         return weight
+    
+    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
+        # TODO: Remove `args` and the parsing logic when BC allows.
+        if len(args) > 0:
+            if destination is None:
+                destination = args[0]
+            if len(args) > 1 and prefix == '':
+                prefix = args[1]
+            if len(args) > 2 and keep_vars is False:
+                keep_vars = args[2]
+            # DeprecationWarning is ignored by default
+
+        if destination is None:
+            destination = OrderedDict()
+            destination._metadata = OrderedDict()
+
+        local_metadata = dict(version=self._version)
+        if hasattr(destination, "_metadata"):
+            destination._metadata[prefix[:-1]] = local_metadata
+
+        destination[f'{prefix}alpha'] = self.alpha
+        destination[f'{prefix}hada_w1_a'] = self.hada_w1_a * self.scalar
+        destination[f'{prefix}hada_w1_b'] = self.hada_w1_b
+        destination[f'{prefix}hada_w2_a'] = self.hada_w2_a
+        destination[f'{prefix}hada_w2_b'] = self.hada_w2_b
+        if self.cp:
+            destination[f'{prefix}hada_t1'] = self.hada_t1
+            destination[f'{prefix}hada_t2'] = self.hada_t2
+        return destination
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
-        orig_norm = self.get_weight().norm()
+        orig_norm = (self.get_weight()*self.scalar).norm()
         norm = torch.clamp(orig_norm, max_norm/2)
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu()/norm.cpu()
         
         scaled = ratio.item() != 1.0
         if scaled:
-            modules = (self.cp + 2)*2
-            self.hada_w1_a *= ratio**(1/modules)
-            self.hada_w1_b *= ratio**(1/modules)
-            self.hada_w2_a *= ratio**(1/modules)
-            self.hada_w2_b *= ratio**(1/modules)
-            
-            if self.cp:
-                self.hada_t1 *= ratio**(1/modules)
-                self.hada_t2 *= ratio**(1/modules)
+            self.scalar *= ratio
         
         return scaled, orig_norm*ratio
 
@@ -220,7 +243,7 @@ class LohaModule(nn.Module):
                 )
         weight = (
             self.org_module[0].weight.data 
-            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
+            + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(

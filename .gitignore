@@ -1,5 +1,11 @@
 # test
 test_model/
+huggingface/
+*.safetensors
+*.pt
+*.ckpt
+logs/
+output/
 
 # Editors
 .vscode/

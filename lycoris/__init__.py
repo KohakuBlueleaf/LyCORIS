@@ -1,8 +1,5 @@
-from lycoris import (
+from . import (
     kohya,
-    kohya_model_utils,
-    kohya_utils,
-    locon,
-    loha,
-    utils,
+    modules,
+    utils
 )
