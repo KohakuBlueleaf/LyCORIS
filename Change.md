@@ -1,5 +1,10 @@
 # Change Log
 
+## 2023/07/19 update to 1.8.0
+* reimplement weight init method
+* implement HyperDreamBooth into LyCORIS
+* better file structure
+
 ## 2023/06/28 update to 1.7.1
 * **rearrange the version format, previous 0.1.7 should be 1.7.0**
 * fix the bug in scale weight norm

@@ -138,14 +138,11 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-### 2023/06/28 update to 1.7.1
-* **rearrange the version format, previous 0.1.7 should be 1.7.0**
-* fix the bug in scale weight norm
+## 2023/07/19 update to 1.8.0
+* reimplement weight init method
+* implement HyperDreamBooth into LyCORIS
+* better file structure
 
-### 2023/06/26 Update for 0.1.7
-* Add support for rank_dropout and module_dropout on LoCon/LoHa/LoKr
-* Add support for scale_weight_norms on LoCon/LoHa/LoKr
-* Will support SDXL on 0.1.8 (you can follow the dev branch)
 
 ## Todo list
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
