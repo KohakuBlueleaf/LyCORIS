@@ -4,6 +4,7 @@ huggingface/
 *.safetensors
 *.pt
 *.ckpt
+logs/
 
 # Editors
 .vscode/
