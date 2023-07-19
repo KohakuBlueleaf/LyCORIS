@@ -5,6 +5,7 @@ huggingface/
 *.pt
 *.ckpt
 logs/
+output/
 
 # Editors
 .vscode/

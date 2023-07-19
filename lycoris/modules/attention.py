@@ -37,6 +37,8 @@ class FeedForward(nn.Module):
             project_in,
             nn.Linear(inner_dim, dim_out)
         )
+        # nn.init.constant_(self.net[-1].weight, 0)
+        # nn.init.constant_(self.net[-1].bias, 0)
     
     def forward(self, x):
         return self.net(x)
