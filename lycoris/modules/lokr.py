@@ -1,4 +1,5 @@
 import math
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -21,12 +22,12 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     examples)
     factor
         -1               2                4               8               16               ...
-    127 -> 127, 1   127 -> 127, 1    127 -> 127, 1   127 -> 127, 1   127 -> 127, 1
-    128 -> 16, 8    128 -> 64, 2     128 -> 32, 4    128 -> 16, 8    128 -> 16, 8
-    250 -> 125, 2   250 -> 125, 2    250 -> 125, 2   250 -> 125, 2   250 -> 125, 2
-    360 -> 45, 8    360 -> 180, 2    360 -> 90, 4    360 -> 45, 8    360 -> 45, 8
-    512 -> 32, 16   512 -> 256, 2    512 -> 128, 4   512 -> 64, 8    512 -> 32, 16
-    1024 -> 32, 32  1024 -> 512, 2   1024 -> 256, 4  1024 -> 128, 8  1024 -> 64, 16
+    127 -> 1, 127   127 -> 1, 127    127 -> 1, 127   127 -> 1, 127   127 -> 1, 127
+    128 -> 8, 16    128 -> 2, 64     128 -> 4, 32    128 -> 8, 16    128 -> 8, 16
+    250 -> 10, 25   250 -> 2, 125    250 -> 2, 125   250 -> 5, 50    250 -> 10, 25
+    360 -> 8, 45    360 -> 2, 180    360 -> 4, 90    360 -> 8, 45    360 -> 12, 30
+    512 -> 16, 32   512 -> 2, 256    512 -> 4, 128   512 -> 8, 64    512 -> 16, 32
+    1024 -> 32, 32  1024 -> 2, 512   1024 -> 4, 256  1024 -> 8, 128  1024 -> 16, 64
     '''
     
     if factor > 0 and (dimension % factor) == 0:
@@ -174,13 +175,14 @@ class LokrModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
+        self.scalar = nn.Parameter(torch.tensor(0.0))
         if self.use_w2:
             torch.nn.init.constant_(self.lokr_w2, 0)
         else:
             if self.cp:
                 torch.nn.init.kaiming_uniform_(self.lokr_t2, a=math.sqrt(5))
             torch.nn.init.kaiming_uniform_(self.lokr_w2_a, a=math.sqrt(5))
-            torch.nn.init.constant_(self.lokr_w2_b, 0)
+            torch.nn.init.kaiming_uniform_(self.lokr_w2_b, a=math.sqrt(5))
         
         if self.use_w1:
             torch.nn.init.kaiming_uniform_(self.lokr_w1, a=math.sqrt(5))
@@ -198,6 +200,10 @@ class LokrModule(nn.Module):
             torch.tensor(self.multiplier * self.scale)
         )
         assert torch.sum(torch.isnan(weight)) == 0, "weight is nan"
+        self.register_load_state_dict_post_hook(self.load_weight_hook)
+    
+    def load_weight_hook(self):
+        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     # Same as locon.py
     def apply_to(self):
@@ -218,6 +224,41 @@ class LokrModule(nn.Module):
             drop = torch.rand(weight.size(0)) < self.rank_dropout
             weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
         return weight
+    
+    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
+        # TODO: Remove `args` and the parsing logic when BC allows.
+        if len(args) > 0:
+            if destination is None:
+                destination = args[0]
+            if len(args) > 1 and prefix == '':
+                prefix = args[1]
+            if len(args) > 2 and keep_vars is False:
+                keep_vars = args[2]
+            # DeprecationWarning is ignored by default
+
+        if destination is None:
+            destination = OrderedDict()
+            destination._metadata = OrderedDict()
+
+        local_metadata = dict(version=self._version)
+        if hasattr(destination, "_metadata"):
+            destination._metadata[prefix[:-1]] = local_metadata
+
+        destination[f'{prefix}alpha'] = self.alpha
+        if self.use_w1:
+            destination[f'{prefix}lokr_w1'] = self.lokr_w1 * self.scalar
+        else:
+            destination[f'{prefix}lokr_w1_a'] = self.lokr_w1_a * self.scalar
+            destination[f'{prefix}lokr_w1_b'] = self.lokr_w1_b
+        
+        if self.use_2:
+            destination[f'{prefix}lokr_w2'] = self.lokr_w2
+        else:
+            destination[f'{prefix}lokr_w2_a'] = self.lokr_w2_a
+            destination[f'{prefix}lokr_w2_b'] = self.lokr_w2_b
+            if self.cp:
+                destination[f'{prefix}lokr_t2'] = self.lokr_t2
+        return destination
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
@@ -255,7 +296,7 @@ class LokrModule(nn.Module):
                 )
         weight = (
             self.org_module[0].weight.data 
-            + self.get_weight(self.org_module[0].weight.data) * self.multiplier
+            + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(
