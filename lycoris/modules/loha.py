@@ -166,6 +166,10 @@ class LohaModule(nn.Module):
         self.multiplier = multiplier
         self.org_module = [org_module] # remove in applying
         self.grad_ckpt = False
+        self.register_load_state_dict_post_hook(self.load_weight_hook)
+    
+    def load_weight_hook(self):
+        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self):
         self.org_module[0].forward = self.forward
