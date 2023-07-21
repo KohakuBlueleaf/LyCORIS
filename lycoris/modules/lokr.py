@@ -251,7 +251,7 @@ class LokrModule(nn.Module):
             destination[f'{prefix}lokr_w1_a'] = self.lokr_w1_a * self.scalar
             destination[f'{prefix}lokr_w1_b'] = self.lokr_w1_b
         
-        if self.use_2:
+        if self.use_w2:
             destination[f'{prefix}lokr_w2'] = self.lokr_w2
         else:
             destination[f'{prefix}lokr_w2_a'] = self.lokr_w2_a
