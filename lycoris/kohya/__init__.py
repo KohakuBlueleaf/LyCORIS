@@ -20,6 +20,9 @@ from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
 from ..modules.hypernet import ImgWeightGenerator
 
+from ..config import PRESET
+from ..utils.preset import read_preset
+
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
     if network_dim is None:
@@ -43,15 +46,22 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'glora': GLoRAModule,
     }[algo]
     
+    preset = kwargs.get('preset', {})
+    if preset not in PRESET:
+        preset = read_preset(preset)
+    else:
+        preset = PRESET[preset]
+    assert preset is not None
+    LycorisNetwork.apply_preset(preset)
+    
     print(f'Using rank adaptation algo: {algo}')
     
-    if ((algo == 'loha' or algo == 'lokr')
+    if ((algo == 'loha')
         and not kwargs.get('no_dim_warn', False) 
         and (network_dim>64 or conv_dim>64)):
         print('='*20 + 'WARNING' + '='*20)
         warning_type ={
-            'loha': "Hadamard Product representation",
-            'lokr': "Kronecker Product representation"
+            'loha': "Hadamard Product representation"
         }
         warning_msg = f"""You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n
             in {warning_type[algo]}!\n
@@ -127,9 +137,9 @@ class LycorisNetwork(torch.nn.Module):
     LoRA + LoCon
     '''
     # Ignore proj_in or proj_out, their channels is only a few.
+    ENABLE_CONV = True
     UNET_TARGET_REPLACE_MODULE = [
         "Transformer2DModel", 
-        "Attention", 
         "ResnetBlock2D", 
         "Downsample2D", 
         "Upsample2D"
@@ -143,6 +153,26 @@ class LycorisNetwork(torch.nn.Module):
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = 'lora_unet'
     LORA_PREFIX_TEXT_ENCODER = 'lora_te'
+    MODULE_ALGO_MAP = {}
+    NAME_ALGO_MAP = {}
+
+    @classmethod
+    def apply_preset(cls, preset):
+        if 'enable_conv' in preset:
+            cls.ENABLE_CONV = preset['enable_conv']
+        if 'unet_target_module' in preset:
+            cls.UNET_TARGET_REPLACE_MODULE = preset['unet_target_module']
+        if 'unet_target_name' in preset:
+            cls.UNET_TARGET_REPLACE_NAME = preset['unet_target_name']
+        if 'text_encoder_target_module' in preset:
+            cls.TEXT_ENCODER_TARGET_REPLACE_MODULE = preset['text_encoder_target_module']
+        if 'text_encoder_target_name' in preset:
+            cls.TEXT_ENCODER_TARGET_REPLACE_NAME = preset['text_encoder_target_name']
+        if 'module_algo_map' in preset:
+            cls.MODULE_ALGO_MAP = preset['module_algo_map']
+        if 'name_algo_map' in preset:
+            cls.NAME_ALGO_MAP = preset['name_algo_map']
+        return cls
 
     def __init__(
         self, 
@@ -158,14 +188,20 @@ class LycorisNetwork(torch.nn.Module):
         super().__init__()
         self.multiplier = multiplier
         self.lora_dim = lora_dim
+        
+        if not self.ENABLE_CONV:
+            conv_lora_dim = 0
+        
         self.conv_lora_dim = int(conv_lora_dim)
-        if self.conv_lora_dim != self.lora_dim: 
+        if self.conv_lora_dim and self.conv_lora_dim != self.lora_dim: 
             print('Apply different lora dim for conv layer')
             print(f'Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}')
-            
+        elif self.conv_lora_dim == 0:
+            print('Disable conv layer')
+        
         self.alpha = alpha
         self.conv_alpha = float(conv_alpha)
-        if self.alpha != self.conv_alpha: 
+        if self.conv_lora_dim and self.alpha != self.conv_alpha: 
             print('Apply different alpha value for conv layer')
             print(f'Conv alpha: {conv_alpha}, Linear alpha: {alpha}')
         
@@ -185,12 +221,17 @@ class LycorisNetwork(torch.nn.Module):
             print('Create LyCORIS Module')
             loras = []
             for name, module in root_module.named_modules():
-                if module.__class__.__name__ in target_replace_modules:
+                module_name = module.__class__.__name__
+                if module_name in target_replace_modules:
+                    if module_name in self.MODULE_ALGO_MAP:
+                        algo = self.MODULE_ALGO_MAP[module_name]
+                    else:
+                        algo = network_module
                     for child_name, child_module in module.named_modules():
                         lora_name = prefix + '.' + name + '.' + child_name
                         lora_name = lora_name.replace('.', '_')
                         if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
-                            lora = network_module(
+                            lora = algo(
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
@@ -200,7 +241,7 @@ class LycorisNetwork(torch.nn.Module):
                         elif child_module.__class__.__name__ == 'Conv2d':
                             k_size, *_ = child_module.kernel_size
                             if k_size==1 and lora_dim>0:
-                                lora = network_module(
+                                lora = algo(
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, 
                                     self.dropout, self.rank_dropout, self.module_dropout, 
@@ -208,7 +249,7 @@ class LycorisNetwork(torch.nn.Module):
                                     **kwargs
                                 )
                             elif conv_lora_dim>0:
-                                lora = network_module(
+                                lora = algo(
                                     lora_name, child_module, self.multiplier, 
                                     self.conv_lora_dim, self.conv_alpha, 
                                     self.dropout, self.rank_dropout, self.module_dropout, 
@@ -221,10 +262,14 @@ class LycorisNetwork(torch.nn.Module):
                             continue
                         loras.append(lora)
                 elif name in target_replace_names:
+                    if name in self.NAME_ALGO_MAP:
+                        algo = self.NAME_ALGO_MAP[name]
+                    else:
+                        algo = network_module
                     lora_name = prefix + '.' + name
                     lora_name = lora_name.replace('.', '_')
                     if module.__class__.__name__ == 'Linear' and lora_dim>0:
-                        lora = network_module(
+                        lora = algo(
                             lora_name, module, self.multiplier, 
                             self.lora_dim, self.alpha, 
                             self.dropout, self.rank_dropout, self.module_dropout, 
@@ -234,7 +279,7 @@ class LycorisNetwork(torch.nn.Module):
                     elif module.__class__.__name__ == 'Conv2d':
                         k_size, *_ = module.kernel_size
                         if k_size==1 and lora_dim>0:
-                            lora = network_module(
+                            lora = algo(
                                 lora_name, module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
@@ -242,7 +287,7 @@ class LycorisNetwork(torch.nn.Module):
                                 **kwargs
                             )
                         elif conv_lora_dim>0:
-                            lora = network_module(
+                            lora = algo(
                                 lora_name, module, self.multiplier, 
                                 self.conv_lora_dim, self.conv_alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 

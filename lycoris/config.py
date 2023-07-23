@@ -3,7 +3,6 @@ PRESET = {
         'enable_conv': True,
         'unet_target_module':[
             "Transformer2DModel", 
-            "Attention", 
             "ResnetBlock2D", 
             "Downsample2D", 
             "Upsample2D"
@@ -23,7 +22,6 @@ PRESET = {
         'enable_conv': False,
         'unet_target_module':[
             "Transformer2DModel", 
-            "Attention", 
             "ResnetBlock2D",
         ],
         'unet_target_name':[
@@ -35,15 +33,25 @@ PRESET = {
         ],
         'text_encoder_target_name': [],
     },
-    'lora':{
+    'attn-mlp':{
         'enable_conv': False,
         'unet_target_module':[
             "Transformer2DModel", 
-            "Attention", 
         ],
         'unet_target_name':[],
         'text_encoder_target_module': [
             "CLIPAttention", "CLIPMLP"
+        ],
+        'text_encoder_target_name': [],
+    },
+    'attn-only':{
+        'enable_conv': False,
+        'unet_target_module':[
+            "CrossAttention", 
+        ],
+        'unet_target_name':[],
+        'text_encoder_target_module': [
+            "CLIPAttention"
         ],
         'text_encoder_target_name': [],
     },
@@ -69,7 +77,6 @@ PRESET = {
         'enable_conv': False,
         'unet_target_module':[
             "Transformer2DModel", 
-            "Attention", 
         ],
         'unet_target_name':[],
         'text_encoder_target_module': [],
