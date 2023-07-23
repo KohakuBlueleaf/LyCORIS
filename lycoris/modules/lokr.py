@@ -177,7 +177,7 @@ class LokrModule(nn.Module):
 
         self.scalar = nn.Parameter(torch.tensor(0.0))
         if self.use_w2:
-            torch.nn.init.constant_(self.lokr_w2, 0)
+            torch.nn.init.kaiming_uniform_(self.lokr_w2, 0)
         else:
             if self.cp:
                 torch.nn.init.kaiming_uniform_(self.lokr_t2, a=math.sqrt(5))
