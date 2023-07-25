@@ -156,7 +156,6 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         self, 
         arch="ViT-L-14", 
         version="datacomp_xl_s13b_b90k", 
-        device="cuda", 
         max_length=77,
         freeze=True, 
         layer="last"
@@ -164,12 +163,11 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         super().__init__()
         assert layer in self.LAYERS
         model, _, _ = open_clip.create_model_and_transforms(
-            arch, device=torch.device(device), pretrained=version
+            arch, pretrained=version
         )
         del model.visual
         self.model = model
         
-        self.device = device
         self.max_length = max_length
         if freeze:
             self.freeze()
@@ -188,7 +186,7 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
 
     def forward(self, text):
         tokens = open_clip.tokenize(text)
-        z = self.encode_with_transformer(tokens.to(self.device))
+        z = self.encode_with_transformer(tokens.to(self.model.token_embedding.weight.device))
         return z
 
     def encode_with_transformer(self, text):

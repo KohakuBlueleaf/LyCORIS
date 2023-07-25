@@ -118,11 +118,12 @@ class ImgWeightGenerator(nn.Module):
         self.decoder_model = WeightDecoder(weight_dim, weight_num, decoder_blocks)
     
     def forward(self, ref_img, iters=None, weight=None, ensure_grad=0):
+        ref_img = resize(ref_img, self.ref_size, antialias=True)
         if not self.train_encoder:
             with torch.no_grad():
-                features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+                features = self.encoder_model.forward_features(ref_img)
         else:
-            features = self.encoder_model.forward_features(resize(ref_img, self.ref_size) + ensure_grad)
+            features = self.encoder_model.forward_features(ref_img + ensure_grad)
         if isinstance(features, list):
             features = features[-1]
         if len(features.shape) == 4:
@@ -166,8 +167,8 @@ class TextWeightGenerator(nn.Module):
         for p in self.encoder_model.parameters():
             p.requires_grad_(train_encoder)
         
-        test_input = torch.randn(1, 3, *reference_size)
-        test_output = self.encoder_model.forward_features(test_input)
+        test_input = ["test"]
+        test_output = self.encoder_model(test_input)
         if isinstance(test_output, list):
             test_output = test_output[-1]
         if len(test_output.shape) == 4:

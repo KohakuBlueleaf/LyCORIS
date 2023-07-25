@@ -646,16 +646,19 @@ class HyperDreamNetwork(torch.nn.Module):
         self.checkpoint = torch.nn.Parameter(torch.tensor(0.0))
         
         with torch.no_grad():
-            self.update_reference(torch.randn(1, 3, *self.weight_generater.ref_size))
+            self.update_reference(
+                torch.randn(1, 3, *self.img_weight_generater.ref_size),
+                ["test"]
+            )
         
         # for lora in self.loras:
         #     assert torch.all(lora.data[0]==0)
 
     def gen_weight(self, ref_img, caption, iter=None, ensure_grad=0):
-        unet_weights = self.img_weight_generater(ref_img, iter, ensure_grad)
+        unet_weights = self.img_weight_generater(ref_img, iter, ensure_grad=ensure_grad)
         unet_weights = unet_weights + self.checkpoint
         unet_weights =  [i.split(self.split, dim=-1) for i in unet_weights.split(1, dim=1)]
-        text_weights = self.text_weight_generater(caption, iter, ensure_grad)
+        text_weights = self.text_weight_generater(caption, iter, ensure_grad=ensure_grad)
         text_weights = text_weights + self.checkpoint
         text_weights =  [i.split(self.split, dim=-1) for i in text_weights.split(1, dim=1)]
         return unet_weights, text_weights
