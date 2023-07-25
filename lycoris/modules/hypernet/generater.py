@@ -10,6 +10,7 @@ from timm import create_model
 from einops import rearrange
 
 from lycoris.modules.attention import TransformerBlock
+from .text_encoder import FrozenOpenCLIPEmbedder
 
 
 def _get_sinusoid_encoding_table(n_position, d_hid):
@@ -116,18 +117,18 @@ class ImgWeightGenerator(nn.Module):
         self.pos_emb_proj = nn.Linear(weight_dim, weight_dim, bias=False)
         self.decoder_model = WeightDecoder(weight_dim, weight_num, decoder_blocks)
     
-    def forward(self, ref_img, iters=None, weight=None):
-        if self.train_encoder:
+    def forward(self, ref_img, iters=None, weight=None, ensure_grad=0):
+        if not self.train_encoder:
             with torch.no_grad():
                 features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
         else:
-            features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+            features = self.encoder_model.forward_features(resize(ref_img, self.ref_size) + ensure_grad)
         if isinstance(features, list):
             features = features[-1]
         if len(features.shape) == 4:
             # B, C, H, W -> B, L, C
             features = features.view(features.size(0), features.size(1), -1).transpose(1, 2)
-        features = self.feature_proj(features)
+        features = self.feature_proj(features+ensure_grad)
         
         if weight is None:
             weight = torch.zeros(
@@ -142,11 +143,10 @@ class ImgWeightGenerator(nn.Module):
 class TextWeightGenerator(nn.Module):
     def __init__(
         self, 
-        encoder_model_name: str = "vit_base_patch16_224",
         train_encoder: bool = False,
         reference_size: Tuple[int] = (224, 224), 
         weight_dim: int = 150,                      # 100+50 in paper
-        weight_num: int = 54,
+        weight_num: int = 54,                       # 21*2 in SD UNet + 12 in CLIP-L TE
         decoder_blocks: int = 4,
         sample_iters: int = 1,
     ):
@@ -162,7 +162,7 @@ class TextWeightGenerator(nn.Module):
             _get_sinusoid_encoding_table(weight_num*2, weight_dim)
         )
         
-        self.encoder_model: nn.Module = create_model(encoder_model_name, pretrained=True)
+        self.encoder_model: nn.Module = FrozenOpenCLIPEmbedder()
         for p in self.encoder_model.parameters():
             p.requires_grad_(train_encoder)
         
@@ -178,22 +178,22 @@ class TextWeightGenerator(nn.Module):
         self.pos_emb_proj = nn.Linear(weight_dim, weight_dim, bias=False)
         self.decoder_model = WeightDecoder(weight_dim, weight_num, decoder_blocks)
     
-    def forward(self, ref_img, iters=None, weight=None):
-        if self.train_encoder:
+    def forward(self, caption, iters=None, weight=None, ensure_grad=0):
+        if not self.train_encoder:
             with torch.no_grad():
-                features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+                features = self.encoder_model(caption)
         else:
-            features = self.encoder_model.forward_features(resize(ref_img, self.ref_size))
+            features = self.encoder_model(caption)
         if isinstance(features, list):
             features = features[-1]
         if len(features.shape) == 4:
             # B, C, H, W -> B, L, C
             features = features.view(features.size(0), features.size(1), -1).transpose(1, 2)
-        features = self.feature_proj(features)
+        features = self.feature_proj(features+ensure_grad)
         
         if weight is None:
             weight = torch.zeros(
-                ref_img.size(0), self.weight_num, self.weight_dim, device=ref_img.device
+                features.size(0), self.weight_num, self.weight_dim, device=features.device
             )
         
         for iter in range(iters or self.sample_iters):

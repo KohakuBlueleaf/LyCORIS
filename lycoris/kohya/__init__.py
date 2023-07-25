@@ -18,7 +18,7 @@ from ..modules.ia3 import IA3Module
 from ..modules.lokr import LokrModule
 from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
-from ..modules.hypernet import ImgWeightGenerator
+from ..modules.hypernet import ImgWeightGenerator, TextWeightGenerator
 
 from ..config import PRESET
 from ..utils.preset import read_preset
@@ -97,7 +97,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     return network
 
 
-def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
+def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encoder, unet, vocab_size, **kwargs):
     if network_dim is None:
         network_dim = 4
     dropout = float(kwargs.get('dropout', 0.) or 0.)
@@ -125,7 +125,8 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
         use_cp=use_cp,
         dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
         network_module=network_module,
-        down_dim=down_dim, up_dim=up_dim, delta_iters=delta_iters, decoder_blocks=decoder_blocks,
+        down_dim=down_dim, up_dim=up_dim, delta_iters=delta_iters, 
+        decoder_blocks=decoder_blocks, vocab_size=vocab_size,
         decompose_both=kwargs.get('decompose_both', False),
         factor=kwargs.get('factor', -1),
         block_size = block_size
@@ -513,7 +514,7 @@ class HyperDreamNetwork(torch.nn.Module):
         use_cp = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module = LoConModule,
-        down_dim = 100, up_dim = 50, delta_iters = 5, decoder_blocks = 4,
+        down_dim = 100, up_dim = 50, delta_iters = 5, decoder_blocks = 4, vocab_size = 49408,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -619,9 +620,15 @@ class HyperDreamNetwork(torch.nn.Module):
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
         
         self.loras: list[LoConModule] = self.text_encoder_loras + self.unet_loras
-        self.weight_generater = ImgWeightGenerator(
+        self.img_weight_generater = ImgWeightGenerator(
             weight_dim=(down_dim+up_dim)*lora_dim,
-            weight_num=len(self.loras),
+            weight_num=len(self.unet_loras),
+            sample_iters=delta_iters,
+            decoder_blocks=decoder_blocks,
+        )
+        self.text_weight_generater = TextWeightGenerator(
+            weight_dim=(down_dim+up_dim)*lora_dim,
+            weight_num=len(self.text_encoder_loras),
             sample_iters=delta_iters,
             decoder_blocks=decoder_blocks,
         )
@@ -644,18 +651,33 @@ class HyperDreamNetwork(torch.nn.Module):
         # for lora in self.loras:
         #     assert torch.all(lora.data[0]==0)
 
-    def gen_weight(self, ref_img, iter=None):
-        weights = self.weight_generater(ref_img, iter)
-        weights = weights + self.checkpoint
-        return [i.split(self.split, dim=-1) for i in weights.split(1, dim=1)]
+    def gen_weight(self, ref_img, caption, iter=None, ensure_grad=0):
+        unet_weights = self.img_weight_generater(ref_img, iter, ensure_grad)
+        unet_weights = unet_weights + self.checkpoint
+        unet_weights =  [i.split(self.split, dim=-1) for i in unet_weights.split(1, dim=1)]
+        text_weights = self.text_weight_generater(caption, iter, ensure_grad)
+        text_weights = text_weights + self.checkpoint
+        text_weights =  [i.split(self.split, dim=-1) for i in text_weights.split(1, dim=1)]
+        return unet_weights, text_weights
 
-    def update_reference(self, ref_img, iter=None):
+    def update_reference(self, ref_img, caption, iter=None):
         # use idx for aux weight seed
         if self.gradient_ckpt and self.training:
-            weights_list = checkpoint.checkpoint(self.gen_weight, ref_img, iter)
+            ensure_grad = torch.zeros(1, device=ref_img.device, requires_grad=True)
+            unet_weights_list, text_weights_list = checkpoint.checkpoint(
+                self.gen_weight, ref_img, caption, iter, ensure_grad
+            )
         else:
-            weights_list = self.gen_weight(ref_img, iter)
-        for idx, (lora, weight) in enumerate(zip(self.loras, weights_list)):
+            unet_weights_list, text_weights_list = self.gen_weight(ref_img, caption, iter)
+            
+        for idx, (lora, weight) in enumerate(zip(self.unet_loras, unet_weights_list)):
+            assert lora.multiplier > 0, f"multiplier must be positive: {lora.multiplier}"
+            # weight: [batch, 1, weight_dim]
+            # if weight.dim()==3:
+            #     weight = weight.squeeze(1)
+            lora.update_weights(*weight, idx)
+            
+        for idx, (lora, weight) in enumerate(zip(self.text_encoder_loras, text_weights_list)):
             assert lora.multiplier > 0, f"multiplier must be positive: {lora.multiplier}"
             # weight: [batch, 1, weight_dim]
             # if weight.dim()==3:
@@ -714,16 +736,29 @@ class HyperDreamNetwork(torch.nn.Module):
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         self.requires_grad_(True)
         all_params = []
-        all_params.append({
-            'params': (
-                [p for p in self.weight_generater.decoder_model.parameters()]
-                + [p for p in self.weight_generater.pos_emb_proj.parameters()]
-                + [p for p in self.weight_generater.feature_proj.parameters()]
-                + ([p for p in self.weight_generater.encoder_model.parameters()] 
-                   if self.weight_generater.train_encoder else [])
-            ), 
-            'lr': learning_rate
-        })
+        
+        if self.text_encoder_loras:
+            all_params.append({
+                'params': (
+                    [p for p in self.text_weight_generater.decoder_model.parameters()]
+                    + [p for p in self.text_weight_generater.pos_emb_proj.parameters()]
+                    + [p for p in self.text_weight_generater.feature_proj.parameters()]
+                    + ([p for p in self.text_weight_generater.encoder_model.parameters()] 
+                    if self.text_weight_generater.train_encoder else [])
+                ), 
+                'lr': text_encoder_lr
+            })
+        if self.unet_loras:
+            all_params.append({
+                'params': (
+                    [p for p in self.img_weight_generater.decoder_model.parameters()]
+                    + [p for p in self.img_weight_generater.pos_emb_proj.parameters()]
+                    + [p for p in self.img_weight_generater.feature_proj.parameters()]
+                    + ([p for p in self.img_weight_generater.encoder_model.parameters()] 
+                    if self.img_weight_generater.train_encoder else [])
+                ), 
+                'lr': unet_lr
+            })
         return all_params
 
     def prepare_grad_etc(self, text_encoder, unet):
