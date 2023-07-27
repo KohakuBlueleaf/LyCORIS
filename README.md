@@ -111,9 +111,8 @@ to train lycoris module for SD model
 
 
 ### For a1111's sd-webui
+**After sd-webui 1.5.0, you can directly use any LyCORIS model with built-in lora system**
 download [Extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris) into sd-webui, and then use LyCORIS model in the extra netowrks tabs.
-
-**Not For Kohya-ss' Additional Network**
 
 
 ### Extract LoCon
@@ -138,10 +137,12 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-## 2023/07/19 update to 1.8.0
-* reimplement weight init method
-* implement HyperDreamBooth into LyCORIS
-* better file structure
+## 2023/07/27 update to 1.8.2
+* Update utils in kohya-ss/sd-scripts
+
+## 2023/07/27 update to 1.8.1
+* Add config/preset system
+* Improve the project structure
 
 
 ## Todo list
