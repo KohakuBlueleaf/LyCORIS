@@ -78,6 +78,10 @@ class LoConModule(nn.Module):
 
         self.multiplier = multiplier
         self.org_module = [org_module]
+        self.register_load_state_dict_post_hook(self.load_weight_hook)
+    
+    def load_weight_hook(self):
+        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self, is_hypernet=False, **kwargs):
         self.org_forward = self.org_module[0].forward

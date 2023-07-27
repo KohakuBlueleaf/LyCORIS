@@ -419,6 +419,7 @@ class NetworkTrainer:
             vae,
             text_encoder,
             unet,
+            vocab_size=tokenizer.vocab_size,
             neuron_dropout=args.network_dropout,
             **net_kwargs,
         )
@@ -863,7 +864,10 @@ class NetworkTrainer:
                     on_step_start(text_encoder, unet)
                     with accelerator.autocast():
                         network: lycoris.kohya.HyperDreamNetwork
-                        network.update_reference(batch["images"].to(dtype=weight_dtype))
+                        network.update_reference(
+                            batch["images"].to(dtype=weight_dtype),
+                            batch["captions"],
+                        )
 
                     with torch.no_grad():
                         if "latents" in batch and batch["latents"] is not None:
