@@ -11,7 +11,7 @@ from typing import List
 import torch
 import torch.utils.checkpoint as checkpoint
 
-from .kohya_utils import *
+from .utils import *
 from ..modules.locon import LoConModule
 from ..modules.loha import LohaModule
 from ..modules.ia3 import IA3Module
@@ -777,11 +777,17 @@ class HyperDreamNetwork(torch.nn.Module):
         if metadata is not None and len(metadata) == 0:
             metadata = None
 
-        state_dict = self.weight_generater.state_dict()
-        if not self.weight_generater.train_encoder:
-            for k in self.weight_generater.encoder_model.state_dict().keys():
+        state_dict = self.img_weight_generater.state_dict()
+        if not self.img_weight_generater.train_encoder:
+            for k in self.img_weight_generater.encoder_model.state_dict().keys():
                 state_dict.pop(f'encoder_model.{k}')
-        state_dict = {f'weight_generater.{i}': v for i, v in state_dict.items()}
+        state_dict = {f'img_weight_generater.{i}': v for i, v in state_dict.items()}
+
+        state_dict = self.text_weight_generater.state_dict()
+        if not self.text_weight_generater.train_encoder:
+            for k in self.text_weight_generater.encoder_model.state_dict().keys():
+                state_dict.pop(f'encoder_model.{k}')
+        state_dict = {f'text_weight_generater.{i}': v for i, v in state_dict.items()}
 
         if dtype is not None:
             for key in list(state_dict.keys()):

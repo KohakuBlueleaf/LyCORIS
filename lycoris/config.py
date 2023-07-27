@@ -59,7 +59,6 @@ PRESET = {
         'enable_conv': True,
         'unet_target_module':[
             "Transformer2DModel", 
-            "Attention", 
             "ResnetBlock2D", 
             "Downsample2D", 
             "Upsample2D"

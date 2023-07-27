@@ -41,7 +41,7 @@ def get_args():
 ARGS = get_args()
 
 
-from lycoris.kohya.kohya_model_utils import (
+from lycoris.kohya.model_utils import (
     load_file
 )
 from library.model_util import load_models_from_stable_diffusion_checkpoint
