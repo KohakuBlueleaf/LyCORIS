@@ -1,5 +1,12 @@
 # Change Log
 
+## 2023/07/27 update to 1.8.2
+* Update utils in kohya-ss/sd-scripts
+
+## 2023/07/27 update to 1.8.1
+* Add config/preset system
+* Improve the project structure
+
 ## 2023/07/19 update to 1.8.0
 * reimplement weight init method
 * implement HyperDreamBooth into LyCORIS
