@@ -487,9 +487,11 @@ def merge(
                     module.requires_grad_(False)
                     module.weight.copy_(result)
     
-    if device == 'cpu':
-        for k, v in tqdm(list(lyco_state_dict.items()), desc='Converting Dtype'):
-            lyco_state_dict[k] = v.float()
+    for k, v in tqdm(list(lyco_state_dict.items()), desc='Converting Dtype and Device'):
+        if device=='cpu':
+            lyco_state_dict[k] = v.float().cpu()
+        else:
+            lyco_state_dict[k] = v.to(device)
     
     merge_state_dict(
         LORA_PREFIX_TEXT_ENCODER,
