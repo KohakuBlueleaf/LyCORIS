@@ -46,7 +46,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'glora': GLoRAModule,
     }[algo]
     
-    preset = kwargs.get('preset', {})
+    preset = kwargs.get('preset', 'full')
     if preset not in PRESET:
         preset = read_preset(preset)
     else:
