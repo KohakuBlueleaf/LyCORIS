@@ -418,6 +418,9 @@ def rebuild_weight(module_type, params, orig_weight, scale=1):
                 w2 = cp_weight(w2a, w2b, t2)
             else:
                 w2 = w2a @ w2b
+        if len(w2.shape) == 4:
+            w1 = w1.unsqueeze(2).unsqueeze(2)
+        w2 = w2.contiguous()
         rebuild = torch.kron(w1, w2).reshape(orig_weight.shape) 
         merged = orig_weight + rebuild* scale
         del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
@@ -491,18 +494,18 @@ def merge(
         if device=='cpu':
             lyco_state_dict[k] = v.float().cpu()
         else:
-            lyco_state_dict[k] = v.to(device)
+            lyco_state_dict[k] = v.to(device, dtype=base_model[0].parameters().__next__().dtype)
     
     merge_state_dict(
         LORA_PREFIX_TEXT_ENCODER,
-        base_model[0],
+        base_model[0].to(device),
         lyco_state_dict,
         TEXT_ENCODER_TARGET_REPLACE_MODULE,
         UNET_TARGET_REPLACE_NAME
     )
     merge_state_dict(
         LORA_PREFIX_UNET,
-        base_model[2],
+        base_model[2].to(device),
         lyco_state_dict,
         UNET_TARGET_REPLACE_MODULE,
         UNET_TARGET_REPLACE_NAME
