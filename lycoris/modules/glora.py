@@ -100,4 +100,4 @@ class GLoRAModule(nn.Module):
             ax_mid = ax_mid * drop_a
             bx_mid = bx_mid * drop_b
         
-        return self.org_forward(x + self.dropout(self.a2(ax_mid))) + self.dropout(self.b2(bx_mid))
+        return self.org_forward(x + self.dropout(self.a2(ax_mid))*self.scale) + self.dropout(self.b2(bx_mid))*self.scale
