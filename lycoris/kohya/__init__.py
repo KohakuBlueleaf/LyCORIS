@@ -868,7 +868,7 @@ class IA3Network(torch.nn.Module):
 
         self.text_encoder_loras = create_modules(
             IA3Network.LORA_PREFIX_TEXT_ENCODER,
-            text_encoder, 
+            text_encoder[0] if isinstance(text_encoder, list) else text_encoder,
             IA3Network.TEXT_ENCODER_TARGET_REPLACE_MODULE,
             IA3Network.TEXT_ENCODER_TARGET_REPLACE_NAME,
             IA3Network.TRAIN_INPUT
