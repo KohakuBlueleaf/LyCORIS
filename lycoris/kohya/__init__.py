@@ -46,6 +46,10 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'glora': GLoRAModule,
     }[algo]
     
+    if algo == 'glora' and conv_dim>0:
+        conv_dim = 0
+        print('Disable conv layer for GLoRA')
+    
     preset = kwargs.get('preset', 'full')
     if preset not in PRESET:
         preset = read_preset(preset)
