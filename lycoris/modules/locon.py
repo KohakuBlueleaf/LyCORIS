@@ -18,7 +18,7 @@ class LoConModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_cp=False,
+        use_cp=False, use_scalar=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -27,7 +27,6 @@ class LoConModule(nn.Module):
         self.lora_dim = lora_dim
         self.cp = False
 
-        self.scalar = nn.Parameter(torch.tensor(0.0))
         if isinstance(org_module, nn.Conv2d):
             self.isconv = True
             # For general LoCon
@@ -70,6 +69,10 @@ class LoConModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = 1.0
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         torch.nn.init.kaiming_uniform_(self.lora_up.weight)

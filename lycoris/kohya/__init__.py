@@ -18,7 +18,6 @@ from ..modules.ia3 import IA3Module
 from ..modules.lokr import LokrModule
 from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
-from ..modules.hypernet import ImgWeightGenerator, TextWeightGenerator
 
 from ..config import PRESET
 from ..utils.preset import read_preset
@@ -35,6 +34,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
     use_cp = (not kwargs.get('disable_conv_cp', True)
               or kwargs.get('use_conv_cp', False))
+    use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
     network_module = {
         'lora': LoConModule,
@@ -87,7 +87,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             lora_dim=network_dim, conv_lora_dim=conv_dim, 
             alpha=network_alpha, conv_alpha=conv_alpha,
             dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
-            use_cp=use_cp,
+            use_cp=use_cp, use_scalar=use_scalar,
             network_module=network_module,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
@@ -521,6 +521,7 @@ class HyperDreamNetwork(torch.nn.Module):
         down_dim = 100, up_dim = 50, delta_iters = 5, decoder_blocks = 4, vocab_size = 49408,
         **kwargs,
     ) -> None:
+        from ..modules.hypernet import ImgWeightGenerator, TextWeightGenerator
         super().__init__()
         self.gradient_ckpt = False
         self.multiplier = multiplier

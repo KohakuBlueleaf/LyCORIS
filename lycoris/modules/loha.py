@@ -94,6 +94,7 @@ class LohaModule(nn.Module):
         multiplier=1.0, lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
+        use_scalar=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -103,7 +104,6 @@ class LohaModule(nn.Module):
         self.cp=False
         
         self.shape = org_module.weight.shape
-        self.scalar = nn.Parameter(torch.tensor(0.0))
         if org_module.__class__.__name__ == 'Conv2d':
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
@@ -154,6 +154,10 @@ class LohaModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = 1.0
         # Need more experiments on init method
         if self.cp:
             torch.nn.init.normal_(self.hada_t1, std=0.1)

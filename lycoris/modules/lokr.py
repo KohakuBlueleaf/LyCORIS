@@ -80,6 +80,7 @@ class LokrModule(nn.Module):
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
+        use_scalar=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
         **kwargs,
@@ -175,7 +176,11 @@ class LokrModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
-        self.scalar = nn.Parameter(torch.tensor(0.0))
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = 1.0
+        
         if self.use_w2:
             torch.nn.init.kaiming_uniform_(self.lokr_w2, 0)
         else:
@@ -296,7 +301,7 @@ class LokrModule(nn.Module):
                 )
         weight = (
             self.org_module[0].weight.data 
-            + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
+            + self.get_weight(self.org_module[0].weight.data) * self.vector * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(

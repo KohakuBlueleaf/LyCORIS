@@ -10,7 +10,6 @@ from timm import create_model
 from einops import rearrange
 
 from lycoris.modules.attention import TransformerBlock
-from .text_encoder import FrozenOpenCLIPEmbedder
 
 
 def _get_sinusoid_encoding_table(n_position, d_hid):
@@ -151,6 +150,7 @@ class TextWeightGenerator(nn.Module):
         decoder_blocks: int = 4,
         sample_iters: int = 1,
     ):
+        from .text_encoder import FrozenOpenCLIPEmbedder
         super(TextWeightGenerator, self).__init__()
         self.ref_size = reference_size
         self.weight_num = weight_num
