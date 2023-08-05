@@ -182,12 +182,18 @@ class LokrModule(nn.Module):
             self.scalar = 1.0
         
         if self.use_w2:
-            torch.nn.init.kaiming_uniform_(self.lokr_w2, 0)
+            if use_scalar:
+                torch.nn.init.kaiming_uniform_(self.lokr_w2, a=math.sqrt(5))
+            else:
+                torch.nn.init.constant_(self.lokr_w2, 0)
         else:
             if self.cp:
                 torch.nn.init.kaiming_uniform_(self.lokr_t2, a=math.sqrt(5))
             torch.nn.init.kaiming_uniform_(self.lokr_w2_a, a=math.sqrt(5))
-            torch.nn.init.kaiming_uniform_(self.lokr_w2_b, a=math.sqrt(5))
+            if use_scalar:
+                torch.nn.init.kaiming_uniform_(self.lokr_w2_b, a=math.sqrt(5))
+            else:
+                torch.nn.init.constant_(self.lokr_w2_b, 0)
         
         if self.use_w1:
             torch.nn.init.kaiming_uniform_(self.lokr_w1, a=math.sqrt(5))

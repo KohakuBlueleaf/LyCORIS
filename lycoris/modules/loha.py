@@ -165,7 +165,10 @@ class LohaModule(nn.Module):
         torch.nn.init.normal_(self.hada_w1_b, std=1)
         torch.nn.init.normal_(self.hada_w1_a, std=0.1)
         torch.nn.init.normal_(self.hada_w2_b, std=1)
-        torch.nn.init.normal_(self.hada_w2_a, std=0.1)
+        if use_scalar:
+            torch.nn.init.normal_(self.hada_w2_a, std=0.1)
+        else:
+            torch.nn.init.constant_(self.hada_w2_a, 0)
 
         self.multiplier = multiplier
         self.org_module = [org_module] # remove in applying

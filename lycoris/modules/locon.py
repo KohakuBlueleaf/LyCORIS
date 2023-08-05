@@ -75,7 +75,10 @@ class LoConModule(nn.Module):
             self.scalar = 1.0
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
-        torch.nn.init.kaiming_uniform_(self.lora_up.weight)
+        if use_scalar:
+            torch.nn.init.kaiming_uniform_(self.lora_up.weight, a=math.sqrt(5))
+        else:
+            torch.nn.init.constant_(self.lora_up.weight, 0)
         if self.cp:
             torch.nn.init.kaiming_uniform_(self.lora_mid.weight, a=math.sqrt(5))
 
