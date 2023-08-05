@@ -866,13 +866,22 @@ class IA3Network(torch.nn.Module):
                         loras.append(lora)
             return loras
 
-        self.text_encoder_loras = create_modules(
-            IA3Network.LORA_PREFIX_TEXT_ENCODER,
-            text_encoder[0] if isinstance(text_encoder, list) else text_encoder,
-            IA3Network.TEXT_ENCODER_TARGET_REPLACE_MODULE,
-            IA3Network.TEXT_ENCODER_TARGET_REPLACE_NAME,
-            IA3Network.TRAIN_INPUT
-        )
+        if isinstance(text_encoder, list):
+            text_encoders = text_encoder
+            use_index = True
+        else:
+            text_encoders = [text_encoder]
+            use_index = False
+
+        self.text_encoder_loras = []
+        for i, te in enumerate(text_encoders):
+            self.text_encoder_loras.extend(create_modules(
+                IA3Network.LORA_PREFIX_TEXT_ENCODER + (f'{i+1}' if use_index else ''),
+                te, 
+                IA3Network.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                IA3Network.TEXT_ENCODER_TARGET_REPLACE_NAME,
+                IA3Network.TRAIN_INPUT
+            ))
         print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
         self.unet_loras = create_modules(
