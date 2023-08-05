@@ -301,7 +301,7 @@ class LokrModule(nn.Module):
                 )
         weight = (
             self.org_module[0].weight.data 
-            + self.get_weight(self.org_module[0].weight.data) * self.vector * self.scalar * self.multiplier
+            + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
         return self.op(

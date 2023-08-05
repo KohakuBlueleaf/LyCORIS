@@ -62,7 +62,7 @@ MEMORY_LAYOUTS = {
     )
 }
 ATTN_FUNCTION = {
-    'torch': getattr(F, 'scaled_dot_product_attention'),
+    'torch': getattr(F, 'scaled_dot_product_attention', None),
     'xformers': memory_efficient_attention
 }
 
