@@ -157,7 +157,7 @@ class LohaModule(nn.Module):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = 1.0
+            self.scalar = torch.tensor(1.0)
         # Need more experiments on init method
         if self.cp:
             torch.nn.init.normal_(self.hada_t1, std=0.1)

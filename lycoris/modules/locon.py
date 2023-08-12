@@ -72,7 +72,7 @@ class LoConModule(nn.Module):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = 1.0
+            self.scalar = torch.tensor(1.0)
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         if use_scalar:

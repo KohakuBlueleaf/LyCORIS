@@ -179,7 +179,7 @@ class LokrModule(nn.Module):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = 1.0
+            self.scalar = torch.tensor(1.0)
         
         if self.use_w2:
             if use_scalar:
