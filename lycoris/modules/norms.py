@@ -33,8 +33,8 @@ class NormModule(nn.Module):
             self.kw_dict = {"num_groups": org_module.num_groups, "eps": org_module.eps}
         else:
             raise NotImplementedError
-        self.weight = nn.Parameter(torch.ones(self.dim))
-        self.bias = nn.Parameter(torch.zeros(self.dim))
+        self.w_norm = nn.Parameter(torch.zeros(self.dim))
+        self.b_norm = nn.Parameter(torch.zeros(self.dim))
         
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
@@ -54,8 +54,8 @@ class NormModule(nn.Module):
             if self.rank_dropout and self.training 
             else 1
         )
-        weight = self.weight.to(device) * drop * scale
-        bias = self.bias.to(device) * drop * scale
+        weight = self.w_norm.to(device) * drop * scale
+        bias = self.b_norm.to(device) * drop * scale
         return org_weight + weight, org_bias + bias
 
     def forward(self, x):
