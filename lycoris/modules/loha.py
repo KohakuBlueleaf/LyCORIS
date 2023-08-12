@@ -175,7 +175,7 @@ class LohaModule(nn.Module):
         self.grad_ckpt = False
         self.register_load_state_dict_post_hook(self.load_weight_hook)
     
-    def load_weight_hook(self):
+    def load_weight_hook(self, *args, **kwargs):
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self):
