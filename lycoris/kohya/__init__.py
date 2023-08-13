@@ -434,7 +434,7 @@ class LycorisNetwork(torch.nn.Module):
         self.apply(make_ckpt)
         pass
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
             params = []
             for lora in loras:
@@ -981,7 +981,7 @@ class IA3Network(torch.nn.Module):
         self.apply(make_ckpt)
         pass
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
             params = []
             for lora in loras:
