@@ -19,6 +19,7 @@ from ..modules.lokr import LokrModule
 from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
 from ..modules.norms import NormModule
+from ..modules.full import FullModule
 
 from ..config import PRESET
 from ..utils.preset import read_preset
@@ -46,6 +47,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
         'lokr': LokrModule,
         'dylora': DyLoraModule,
         'glora': GLoRAModule,
+        'full': FullModule,
     }[algo]
     
     if algo == 'glora' and conv_dim>0:
