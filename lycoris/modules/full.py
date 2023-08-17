@@ -74,6 +74,19 @@ class FullModule(nn.Module):
             bias = None
         return weight, bias
 
+    @torch.no_grad()
+    def apply_max_norm(self, max_norm, device=None):
+        orig_norm = self.diff.to(device).norm()
+        norm = torch.clamp(orig_norm, max_norm/2)
+        desired = torch.clamp(norm, max=max_norm)
+        ratio = desired/norm
+        
+        scaled = ratio.item() != 1.0
+        if scaled:
+            self.scalar *= ratio
+        
+        return scaled, orig_norm*ratio
+
     def forward(self, x):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
