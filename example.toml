@@ -20,9 +20,9 @@ text_encoder_target_name = [
 ]
 
 [module_algo_map]
-  [module_algo_map.CrossAttention] #Attention Layer in UNet
+  [module_algo_map.CrossAttention]  #Attention Layer in UNet
     algo = "lora"
-  [module_algo_map.FeedForward] #Attention Layer in UNet
+  [module_algo_map.FeedForward]     #MLP Layer in UNet
     algo = "lokr"
   [module_algo_map.ResnetBlock2D]
     algo = "lora"
