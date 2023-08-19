@@ -7,6 +7,8 @@
 import math
 from warnings import warn
 import os
+import sys
+sys.setrecursionlimit(10000)
 from typing import List
 import torch
 import torch.utils.checkpoint as checkpoint
@@ -25,6 +27,18 @@ from ..config import PRESET
 from ..utils.preset import read_preset
 
 
+network_module_dict = {
+    'lora': LoConModule,
+    'locon': LoConModule,
+    'loha': LohaModule,
+    'ia3':  IA3Module,
+    'lokr': LokrModule,
+    'dylora': DyLoraModule,
+    'glora': GLoRAModule,
+    'full': FullModule,
+}
+
+
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
     if network_dim is None:
         network_dim = 4                     # default
@@ -39,16 +53,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
     train_norm = kwargs.get('train_norm', False)
-    network_module = {
-        'lora': LoConModule,
-        'locon': LoConModule,
-        'loha': LohaModule,
-        'ia3':  IA3Module,
-        'lokr': LokrModule,
-        'dylora': DyLoraModule,
-        'glora': GLoRAModule,
-        'full': FullModule,
-    }[algo]
+    network_module = network_module_dict[algo]
     
     if algo == 'glora' and conv_dim>0:
         conv_dim = 0
@@ -221,106 +226,108 @@ class LycorisNetwork(torch.nn.Module):
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
         
+        def create_single_module(
+            lora_name: str, 
+            module: torch.nn.Module, 
+            algo,
+        ):
+            lora = None
+            if module.__class__.__name__ == 'Linear' and lora_dim>0:
+                lora = algo(
+                    lora_name, module, self.multiplier, 
+                    self.lora_dim, self.alpha, 
+                    self.dropout, self.rank_dropout, self.module_dropout, 
+                    use_cp,
+                    **kwargs
+                )
+            elif module.__class__.__name__ == 'Conv2d':
+                k_size, *_ = module.kernel_size
+                if k_size==1 and lora_dim>0:
+                    lora = algo(
+                        lora_name, module, self.multiplier, 
+                        self.lora_dim, self.alpha, 
+                        self.dropout, self.rank_dropout, self.module_dropout, 
+                        use_cp,
+                        **kwargs
+                    )
+                elif conv_lora_dim>0:
+                    lora = algo(
+                        lora_name, module, self.multiplier, 
+                        self.conv_lora_dim, self.conv_alpha, 
+                        self.dropout, self.rank_dropout, self.module_dropout, 
+                        use_cp,
+                        **kwargs
+                    )
+            elif train_norm and 'Norm' in module.__class__.__name__:
+                lora = norm_modules(
+                    lora_name, module, self.multiplier, 
+                    self.rank_dropout, self.module_dropout, 
+                    **kwargs
+                )
+            return lora
+        
+        def create_modules_(
+            prefix: str,
+            root_module: torch.nn.Module,
+            algo,
+        ):
+            loras = {}
+            lora_names = []
+            for name, module in root_module.named_modules():
+                if module is root_module: continue
+                module_name = module.__class__.__name__
+                if module_name in self.MODULE_ALGO_MAP:
+                    next_algo = self.MODULE_ALGO_MAP[module_name]['algo']
+                    network_module = network_module_dict[next_algo]
+                    new_loras, new_lora_names = create_modules_(f'{prefix}_{name}', module, network_module)
+                    for lora_name, lora in zip(new_lora_names, new_loras):
+                        if lora_name not in loras:
+                            loras[lora_name] = lora
+                            lora_names.append(lora_name)
+                    continue
+                lora_name = prefix + '.' + name
+                lora_name = lora_name.replace('.', '_')
+                if lora_name in loras: continue
+                lora = create_single_module(
+                    lora_name, module, algo, 
+                )
+                if lora is not None:
+                    loras[lora_name] = lora
+                    lora_names.append(lora_name)
+            return [loras[lora_name] for lora_name in lora_names], lora_names
+        
         # create module instances
         def create_modules(
             prefix, 
             root_module: torch.nn.Module, 
             target_replace_modules,
             target_replace_names = []
-        ) -> List[network_module]:
+        ) -> List:
             print('Create LyCORIS Module')
             loras = []
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules:
                     if module_name in self.MODULE_ALGO_MAP:
-                        algo = self.MODULE_ALGO_MAP[module_name]
+                        algo = self.MODULE_ALGO_MAP[module_name]['algo']
+                        algo = network_module_dict[algo]
                     else:
                         algo = network_module
-                    for child_name, child_module in module.named_modules():
-                        lora_name = prefix + '.' + name + '.' + child_name
-                        lora_name = lora_name.replace('.', '_')
-                        if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
-                            lora = algo(
-                                lora_name, child_module, self.multiplier, 
-                                self.lora_dim, self.alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        elif child_module.__class__.__name__ == 'Conv2d':
-                            k_size, *_ = child_module.kernel_size
-                            if k_size==1 and lora_dim>0:
-                                lora = algo(
-                                    lora_name, child_module, self.multiplier, 
-                                    self.lora_dim, self.alpha, 
-                                    self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
-                                    **kwargs
-                                )
-                            elif conv_lora_dim>0:
-                                lora = algo(
-                                    lora_name, child_module, self.multiplier, 
-                                    self.conv_lora_dim, self.conv_alpha, 
-                                    self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
-                                    **kwargs
-                                )
-                            else:
-                                continue
-                        elif train_norm and 'Norm' in child_module.__class__.__name__:
-                            lora = norm_modules(
-                                lora_name, child_module, self.multiplier, 
-                                self.rank_dropout, self.module_dropout, 
-                                **kwargs
-                            )
-                        else:
-                            continue
-                        loras.append(lora)
+                    loras.extend(create_modules_(f'{prefix}_{name}', module, algo)[0])
                 elif name in target_replace_names:
                     if name in self.NAME_ALGO_MAP:
-                        algo = self.NAME_ALGO_MAP[name]
+                        algo = self.NAME_ALGO_MAP[name]['algo']
+                        algo = network_module_dict[algo]
+                    elif module_name in self.MODULE_ALGO_MAP:
+                        algo = self.MODULE_ALGO_MAP[module_name]['algo']
+                        algo = network_module_dict[algo]
                     else:
                         algo = network_module
                     lora_name = prefix + '.' + name
                     lora_name = lora_name.replace('.', '_')
-                    if module.__class__.__name__ == 'Linear' and lora_dim>0:
-                        lora = algo(
-                            lora_name, module, self.multiplier, 
-                            self.lora_dim, self.alpha, 
-                            self.dropout, self.rank_dropout, self.module_dropout, 
-                            use_cp,
-                            **kwargs
-                        )
-                    elif module.__class__.__name__ == 'Conv2d':
-                        k_size, *_ = module.kernel_size
-                        if k_size==1 and lora_dim>0:
-                            lora = algo(
-                                lora_name, module, self.multiplier, 
-                                self.lora_dim, self.alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        elif conv_lora_dim>0:
-                            lora = algo(
-                                lora_name, module, self.multiplier, 
-                                self.conv_lora_dim, self.conv_alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        else:
-                            continue
-                    elif train_norm and 'Norm' in child_module.__class__.__name__:
-                        lora = norm_modules(
-                            lora_name, child_module, self.multiplier, 
-                            self.rank_dropout, self.module_dropout, 
-                            **kwargs
-                        )
-                    else:
-                        continue
-                    loras.append(lora)
+                    lora = create_single_module(lora_name, module, algo)
+                    if lora is not None:
+                        loras.append(lora)
             return loras
         
         if network_module == GLoRAModule:
