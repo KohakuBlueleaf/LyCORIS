@@ -62,12 +62,12 @@ class FullModule(nn.Module):
             if self.rank_dropout and self.training 
             else 1
         )
-        org_weight = self.org_module[0].weight.to(device)
+        org_weight = self.org_module[0].weight.to(device, dtype=self.diff.dtype)
         weight = self.diff.to(device) * drop * scale
         weight = weight + org_weight
         
         if self.diff_b is not None:
-            org_bias = self.org_module[0].bias.to(device)
+            org_bias = self.org_module[0].bias.to(device, dtype=self.diff_b.dtype)
             bias = self.diff_b.to(device) * drop * scale
             bias = bias + org_bias
         else:

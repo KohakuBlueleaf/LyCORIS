@@ -253,7 +253,7 @@ class LohaModule(nn.Module):
                     None if self.org_module[0].bias is None else self.org_module[0].bias.data
                 )
         weight = (
-            self.org_module[0].weight.data 
+            self.org_module[0].weight.data.to(x.device, dtype=self.hada_w1_a.dtype)
             + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data

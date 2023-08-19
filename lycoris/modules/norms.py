@@ -47,8 +47,8 @@ class NormModule(nn.Module):
         self.org_module[0].forward = self.forward
 
     def make_weight(self, scale = 1, device=None):
-        org_weight = self.org_module[0].weight.to(device)
-        org_bias = self.org_module[0].bias.to(device)
+        org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
+        org_bias = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
         drop = (
             torch.rand(self.dim, device=device) < self.rank_dropout 
             if self.rank_dropout and self.training 
