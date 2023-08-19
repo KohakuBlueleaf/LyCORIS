@@ -349,7 +349,13 @@ def get_module(
         alpha = lyco_state_dict.get(f'{lora_name}.alpha', None)
         return 'kron', (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha)
     elif f'{lora_name}.diff' in lyco_state_dict:
-        return 'full', lyco_state_dict[f'{lora_name}.diff']
+        diff = lyco_state_dict[f'{lora_name}.diff']
+        diff_b = lyco_state_dict.get(f'{lora_name}.diff_b', None)
+        return 'full', (diff, diff_b)
+    elif f'{lora_name}.w_norm' in lyco_state_dict:
+        w_norm = lyco_state_dict[f'{lora_name}.w_norm']
+        b_norm = lyco_state_dict.get(f'{lora_name}.b_norm')
+        return 'norm', (w_norm, b_norm)
     else:
         return 'None', ()
 
@@ -369,10 +375,11 @@ def cp_weight(
 
 
 @torch.no_grad()
-def rebuild_weight(module_type, params, orig_weight, scale=1):
+def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
     if orig_weight is None:
-        return orig_weight
+        return orig_weight, orig_bias
     merged = orig_weight
+    merged_bias = orig_bias
     if module_type == 'locon':
         up, down, mid, alpha = params
         if alpha is not None:
@@ -425,13 +432,24 @@ def rebuild_weight(module_type, params, orig_weight, scale=1):
         merged = orig_weight + rebuild* scale
         del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
     elif module_type == 'full':
-        rebuild = params.reshape(orig_weight.shape) 
+        rebuild = params[0].reshape(orig_weight.shape) 
+        rebuild_b = params[1].reshape(orig_bias.shape) if orig_bias is not None else None
         merged = orig_weight + rebuild * scale
-        del params, rebuild
+        if rebuild_b is not None:
+            merged_bias = orig_bias + rebuild_b * scale
+        del params, rebuild, rebuild_b
+    elif module_type == 'norm':
+        rebuild = params[0].reshape(orig_weight.shape)
+        rebuild_b = params[1].reshape(orig_bias.shape)
+        merged = orig_weight + rebuild * scale
+        merged_bias = orig_bias + rebuild_b * scale
+    else:
+        raise NotImplementedError
     
-    return merged
+    return merged, merged_bias
 
 
+@torch.no_grad()
 def merge(
     base_model,
     lyco_state_dict,
@@ -471,24 +489,28 @@ def merge(
                     lora_name = prefix + '.' + name + '.' + child_name
                     lora_name = lora_name.replace('.', '_')
                     
-                    result = rebuild_weight(*get_module(
+                    result, result_b = rebuild_weight(*get_module(
                         lyco_state_dict, lora_name
-                    ), getattr(child_module, 'weight'), scale)
+                    ), getattr(child_module, 'weight'), getattr(child_module, 'bias', None), scale)
                     if result is not None:
                         merged += 1
                         child_module.requires_grad_(False)
                         child_module.weight.copy_(result)
+                    if result_b is not None:
+                        child_module.bias.copy_(result_b)
             elif name in target_replace_names:
                 lora_name = prefix + '.' + name
                 lora_name = lora_name.replace('.', '_')
                     
-                result = rebuild_weight(*get_module(
+                result, result_b = rebuild_weight(*get_module(
                     lyco_state_dict, lora_name
-                ), getattr(module, 'weight'), scale)
+                ), getattr(module, 'weight'), getattr(module, 'bias', None), scale)
                 if result is not None:
                     merged += 1
                     module.requires_grad_(False)
                     module.weight.copy_(result)
+                if result_b is not None:
+                    module.bias.copy_(result_b)
     
     for k, v in tqdm(list(lyco_state_dict.items()), desc='Converting Dtype and Device'):
         if device=='cpu':
