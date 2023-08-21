@@ -192,7 +192,7 @@ class Attention(nn.Module):
         out = rearrange(out, self.memory_layout[1], h=heads)
         if self.double_attn:
             out2 = self.attn(
-                out.contiguous(), k.contiguous(), v.contiguous(), mask
+                q.contiguous(), ck.contiguous(), cv.contiguous(), mask
             )
             out2 = rearrange(out2, self.memory_layout[1], h=heads)
             out = torch.cat([out, out2], dim=-1)
