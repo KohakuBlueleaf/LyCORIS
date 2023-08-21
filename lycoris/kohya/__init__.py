@@ -231,39 +231,33 @@ class LycorisNetwork(torch.nn.Module):
             module: torch.nn.Module, 
             algo,
         ):
-            lora = None
-            if module.__class__.__name__ == 'Linear' and lora_dim>0:
-                lora = algo(
-                    lora_name, module, self.multiplier, 
-                    self.lora_dim, self.alpha, 
-                    self.dropout, self.rank_dropout, self.module_dropout, 
-                    use_cp,
-                    **kwargs
-                )
-            elif module.__class__.__name__ == 'Conv2d':
-                k_size, *_ = module.kernel_size
-                if k_size==1 and lora_dim>0:
-                    lora = algo(
-                        lora_name, module, self.multiplier, 
-                        self.lora_dim, self.alpha, 
-                        self.dropout, self.rank_dropout, self.module_dropout, 
-                        use_cp,
-                        **kwargs
-                    )
-                elif conv_lora_dim>0:
-                    lora = algo(
-                        lora_name, module, self.multiplier, 
-                        self.conv_lora_dim, self.conv_alpha, 
-                        self.dropout, self.rank_dropout, self.module_dropout, 
-                        use_cp,
-                        **kwargs
-                    )
-            elif train_norm and 'Norm' in module.__class__.__name__:
-                lora = norm_modules(
+            if train_norm and 'Norm' in module.__class__.__name__:
+                return norm_modules(
                     lora_name, module, self.multiplier, 
                     self.rank_dropout, self.module_dropout, 
                     **kwargs
                 )
+            lora = None
+            if module.__class__.__name__ == 'Linear' and lora_dim>0:
+                dim = lora_dim
+                alpha = self.alpha
+            elif module.__class__.__name__ == 'Conv2d':
+                k_size, *_ = module.kernel_size
+                if k_size==1 and lora_dim>0:
+                    dim = lora_dim
+                    alpha = self.alpha
+                elif conv_lora_dim>0:
+                    dim = conv_lora_dim
+                    alpha = self.conv_alpha
+                else:
+                    return None
+            lora = algo(
+                lora_name, module, self.multiplier, 
+                dim, alpha, 
+                self.dropout, self.rank_dropout, self.module_dropout, 
+                use_cp,
+                **kwargs
+            )
             return lora
         
         def create_modules_(
