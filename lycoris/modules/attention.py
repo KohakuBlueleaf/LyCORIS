@@ -154,6 +154,7 @@ class Attention(nn.Module):
         # Input Projection
         heads = self.heads
         q = self.q(x)
+        ck = cv = None
         if self.self_cross:
             k = self.k(x)
             v = self.v(x)
@@ -184,6 +185,8 @@ class Attention(nn.Module):
         if self.cosine_attn:
             q = (F.normalize(q, dim=-1) * math.sqrt(q.size(-1))).to(v.dtype)
             k = (F.normalize(k, dim=-1) * self.scale).to(v.dtype)
+            if ck is not None and self.double_attn:
+                ck = (F.normalize(ck, dim=-1) * self.scale).to(v.dtype)
         
         # Attention
         out = self.attn(
