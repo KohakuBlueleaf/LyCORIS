@@ -196,7 +196,7 @@ class LycorisNetwork(torch.nn.Module):
         alpha=1, conv_alpha=1,
         use_cp = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
-        network_module = LoConModule, 
+        network_module:str = 'locon', 
         norm_modules = NormModule, train_norm = False,
         **kwargs,
     ) -> None:
@@ -230,6 +230,9 @@ class LycorisNetwork(torch.nn.Module):
             lora_name: str, 
             module: torch.nn.Module, 
             algo,
+            dim_ = None,
+            alpha_ = None,
+            **kwargs,
         ):
             if train_norm and 'Norm' in module.__class__.__name__:
                 return norm_modules(
@@ -238,22 +241,22 @@ class LycorisNetwork(torch.nn.Module):
                     **kwargs
                 )
             lora = None
-            if module.__class__.__name__ == 'Linear' and lora_dim>0:
+            if module.__class__.__name__ == 'Linear' and (lora_dim>0 or dim_):
                 dim = lora_dim
                 alpha = self.alpha
             elif module.__class__.__name__ == 'Conv2d':
                 k_size, *_ = module.kernel_size
-                if k_size==1 and lora_dim>0:
+                if k_size==1 and (lora_dim>0 or dim_):
                     dim = lora_dim
                     alpha = self.alpha
-                elif conv_lora_dim>0:
+                elif conv_lora_dim>0 or dim_:
                     dim = conv_lora_dim
                     alpha = self.conv_alpha
                 else:
                     return None
-            lora = algo(
+            lora = network_module_dict[algo](
                 lora_name, module, self.multiplier, 
-                dim, alpha, 
+                dim_ or dim, alpha_ or alpha, 
                 self.dropout, self.rank_dropout, self.module_dropout, 
                 use_cp,
                 **kwargs
@@ -264,6 +267,7 @@ class LycorisNetwork(torch.nn.Module):
             prefix: str,
             root_module: torch.nn.Module,
             algo,
+            configs = {},
         ):
             loras = {}
             lora_names = []
@@ -271,9 +275,11 @@ class LycorisNetwork(torch.nn.Module):
                 if module is root_module: continue
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP:
-                    next_algo = self.MODULE_ALGO_MAP[module_name]['algo']
-                    network_module = network_module_dict[next_algo]
-                    new_loras, new_lora_names = create_modules_(f'{prefix}_{name}', module, network_module)
+                    next_config = self.MODULE_ALGO_MAP[module_name]
+                    next_algo = next_config.get('algo', algo)
+                    new_loras, new_lora_names = create_modules_(
+                        f'{prefix}_{name}', module, next_algo, next_config
+                    )
                     for lora_name, lora in zip(new_lora_names, new_loras):
                         if lora_name not in loras:
                             loras[lora_name] = lora
@@ -283,7 +289,7 @@ class LycorisNetwork(torch.nn.Module):
                 lora_name = lora_name.replace('.', '_')
                 if lora_name in loras: continue
                 lora = create_single_module(
-                    lora_name, module, algo, 
+                    lora_name, module, algo, **configs
                 )
                 if lora is not None:
                     loras[lora_name] = lora
@@ -299,27 +305,30 @@ class LycorisNetwork(torch.nn.Module):
         ) -> List:
             print('Create LyCORIS Module')
             loras = []
+            next_config = {}
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules:
                     if module_name in self.MODULE_ALGO_MAP:
-                        algo = self.MODULE_ALGO_MAP[module_name]['algo']
-                        algo = network_module_dict[algo]
+                        next_config = self.MODULE_ALGO_MAP[module_name]
+                        algo = next_config.get('algo', network_module)
                     else:
                         algo = network_module
-                    loras.extend(create_modules_(f'{prefix}_{name}', module, algo)[0])
+                    loras.extend(create_modules_(f'{prefix}_{name}', module, algo, next_config)[0])
+                    next_config = {}
                 elif name in target_replace_names:
                     if name in self.NAME_ALGO_MAP:
-                        algo = self.NAME_ALGO_MAP[name]['algo']
-                        algo = network_module_dict[algo]
+                        next_config = self.NAME_ALGO_MAP[name]
+                        algo = next_config.get('algo', network_module)
                     elif module_name in self.MODULE_ALGO_MAP:
-                        algo = self.MODULE_ALGO_MAP[module_name]['algo']
-                        algo = network_module_dict[algo]
+                        next_config = self.MODULE_ALGO_MAP[module_name]
+                        algo = next_config.get('algo', network_module)
                     else:
                         algo = network_module
                     lora_name = prefix + '.' + name
                     lora_name = lora_name.replace('.', '_')
-                    lora = create_single_module(lora_name, module, algo)
+                    lora = create_single_module(lora_name, module, algo, next_config)
+                    next_config = {}
                     if lora is not None:
                         loras.append(lora)
             return loras
