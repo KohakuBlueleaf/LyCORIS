@@ -22,9 +22,11 @@ from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
 from ..modules.norms import NormModule
 from ..modules.full import FullModule
+from ..modules import make_module
 
 from ..config import PRESET
 from ..utils.preset import read_preset
+from ..utils import get_module
 
 
 network_module_dict = {
@@ -53,7 +55,6 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
     train_norm = kwargs.get('train_norm', False)
-    network_module = network_module_dict[algo]
     
     if algo == 'glora' and conv_dim>0:
         conv_dim = 0
@@ -97,7 +98,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             alpha=network_alpha, conv_alpha=conv_alpha,
             dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
             use_cp=use_cp, use_scalar=use_scalar,
-            network_module=network_module, train_norm=train_norm,
+            network_module=algo, train_norm=train_norm,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
             block_size = block_size
@@ -106,6 +107,63 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     if algo=='dylora':
         #dylora didn't support scale weight norm yet
         delattr(network, 'apply_max_norm_regularization')
+    
+    return network
+
+
+def create_network_from_weights(multiplier, file, vae, text_encoder, unet, weights_sd=None, for_inference=False, **kwargs):
+    if weights_sd is None:
+        if os.path.splitext(file)[1] == ".safetensors":
+            from safetensors.torch import load_file, safe_open
+            weights_sd = load_file(file)
+        else:
+            weights_sd = torch.load(file, map_location="cpu")
+
+    # get dim/alpha mapping
+    unet_loras = {}
+    te_loras = {}
+    for key, value in weights_sd.items():
+        if "." not in key:
+            continue
+
+        lora_name = key.split(".")[0]
+        if lora_name.startswith(LycorisNetwork.LORA_PREFIX_UNET):
+            unet_loras[lora_name] = None
+        elif lora_name.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
+            te_loras[lora_name] = None
+    
+    for name, modules in unet.named_modules():
+        lora_name = f'{LycorisNetwork.LORA_PREFIX_UNET}_{name}'.replace('.','_')
+        if lora_name in unet_loras:
+            unet_loras[lora_name] = modules
+    
+    for name, modules in text_encoder.named_modules():
+        lora_name = f'{LycorisNetwork.LORA_PREFIX_TEXT_ENCODER}_{name}'.replace('.','_')
+        if lora_name in te_loras:
+            te_loras[lora_name] = modules
+    
+    network = LycorisNetwork(text_encoder, unet)
+    network.unet_loras = []
+    network.text_encoder_loras = []
+    
+    for lora_name, orig_modules in unet_loras.items():
+        if orig_modules is None:
+            continue
+        lyco_type, params = get_module(weights_sd, lora_name)
+        module = make_module(lyco_type, params, lora_name, orig_modules)
+        if module is not None:
+            network.unet_loras.append(module)
+    
+    for lora_name, orig_modules in te_loras.items():
+        if orig_modules is None:
+            continue
+        lyco_type, params = get_module(weights_sd, lora_name)
+        module = make_module(lyco_type, params, lora_name, orig_modules)
+        if module is not None:
+            network.text_encoder_loras.append(module)
+    
+    for lora in network.unet_loras + network.text_encoder_loras:
+        lora.multiplier = multiplier
     
     return network
 
@@ -229,9 +287,9 @@ class LycorisNetwork(torch.nn.Module):
         def create_single_module(
             lora_name: str, 
             module: torch.nn.Module, 
-            algo,
-            dim_ = None,
-            alpha_ = None,
+            algo_name,
+            dim = None,
+            alpha = None,
             **kwargs,
         ):
             if train_norm and 'Norm' in module.__class__.__name__:
@@ -241,22 +299,24 @@ class LycorisNetwork(torch.nn.Module):
                     **kwargs
                 )
             lora = None
-            if module.__class__.__name__ == 'Linear' and (lora_dim>0 or dim_):
-                dim = lora_dim
-                alpha = self.alpha
+            if module.__class__.__name__ == 'Linear' and lora_dim>0:
+                dim = dim or lora_dim
+                alpha = alpha or self.alpha
             elif module.__class__.__name__ == 'Conv2d':
                 k_size, *_ = module.kernel_size
-                if k_size==1 and (lora_dim>0 or dim_):
-                    dim = lora_dim
-                    alpha = self.alpha
-                elif conv_lora_dim>0 or dim_:
-                    dim = conv_lora_dim
-                    alpha = self.conv_alpha
+                if k_size==1 and lora_dim>0:
+                    dim = dim or lora_dim
+                    alpha = alpha or self.alpha
+                elif conv_lora_dim>0 or dim:
+                    dim = dim or conv_lora_dim
+                    alpha = alpha or self.conv_alpha
                 else:
                     return None
-            lora = network_module_dict[algo](
+            else:
+                return None
+            lora = network_module_dict[algo_name](
                 lora_name, module, self.multiplier, 
-                dim_ or dim, alpha_ or alpha, 
+                dim, alpha, 
                 self.dropout, self.rank_dropout, self.module_dropout, 
                 use_cp,
                 **kwargs
@@ -327,7 +387,7 @@ class LycorisNetwork(torch.nn.Module):
                         algo = network_module
                     lora_name = prefix + '.' + name
                     lora_name = lora_name.replace('.', '_')
-                    lora = create_single_module(lora_name, module, algo, next_config)
+                    lora = create_single_module(lora_name, module, algo, **next_config)
                     next_config = {}
                     if lora is not None:
                         loras.append(lora)
@@ -360,6 +420,11 @@ class LycorisNetwork(torch.nn.Module):
 
         self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        
+        algo_table = {}
+        for lora in self.text_encoder_loras + self.unet_loras:
+            algo_table[lora.__class__.__name__] = algo_table.get(lora.__class__.__name__, 0) + 1
+        print(f"module type table: {algo_table}")
 
         self.weights_sd = None
 
