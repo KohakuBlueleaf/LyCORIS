@@ -92,7 +92,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     
     if algo=='dylora':
         #dylora didn't support scale weight norm yet
-        delattr(network, 'apply_max_norm_regularization')
+        delattr(type(network), 'apply_max_norm_regularization')
     
     return network
 
