@@ -83,7 +83,8 @@ class FullModule(nn.Module):
         
         scaled = ratio.item() != 1.0
         if scaled:
-            self.scalar *= ratio
+            self.diff *= ratio
+            self.diff_b *= ratio
         
         return scaled, orig_norm*ratio
 
