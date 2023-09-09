@@ -26,7 +26,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
         w1a, w1b, w2a, w2b, t1, t2, alpha = params
         module = LohaModule(
             lora_name, orig_module, 1,
-            w1a.size(0), torch.tensor(alpha).item(),
+            w1b.size(0), alpha.item(),
             use_cp = t1 is not None
         )
         module.hada_w1_a.copy_(w1a)

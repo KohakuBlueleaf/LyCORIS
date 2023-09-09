@@ -165,7 +165,7 @@ def create_network_from_weights(multiplier, file, vae, text_encoder, unet, weigh
     for lora in network.unet_loras + network.text_encoder_loras:
         lora.multiplier = multiplier
     
-    return network
+    return network, weights_sd
 
 
 def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encoder, unet, vocab_size, **kwargs):
