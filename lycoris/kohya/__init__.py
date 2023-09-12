@@ -259,6 +259,7 @@ class LycorisNetwork(torch.nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
+        root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         
@@ -292,6 +293,10 @@ class LycorisNetwork(torch.nn.Module):
             alpha = None,
             **kwargs,
         ):
+            for k, v in root_kwargs.items():
+                if k in kwargs: continue
+                kwargs[k] = v
+            
             if train_norm and 'Norm' in module.__class__.__name__:
                 return norm_modules(
                     lora_name, module, self.multiplier, 
@@ -348,6 +353,7 @@ class LycorisNetwork(torch.nn.Module):
                 lora_name = prefix + '.' + name
                 lora_name = lora_name.replace('.', '_')
                 if lora_name in loras: continue
+                
                 lora = create_single_module(
                     lora_name, module, algo, **configs
                 )
