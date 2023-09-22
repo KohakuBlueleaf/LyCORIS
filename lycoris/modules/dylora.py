@@ -20,7 +20,7 @@ class DyLoraModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_cp=False, 
+        use_tucker=False, 
         block_size=1,
         **kwargs,
     ):

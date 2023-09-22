@@ -50,8 +50,12 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_cp = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False))
+    use_tucker = (not kwargs.get('disable_conv_cp', True)
+              or kwargs.get('use_conv_cp', False)
+              or kwargs.get('use_cp', False)
+              or kwargs.get('use_tucker', False))
+    if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
+        warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
     use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
     train_norm = kwargs.get('train_norm', False)
@@ -97,7 +101,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             lora_dim=network_dim, conv_lora_dim=conv_dim, 
             alpha=network_alpha, conv_alpha=conv_alpha,
             dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
-            use_cp=use_cp, use_scalar=use_scalar,
+            use_tucker=use_tucker, use_scalar=use_scalar,
             network_module=algo, train_norm=train_norm,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
@@ -175,8 +179,12 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_cp = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False))
+    use_tucker = (not kwargs.get('disable_conv_cp', True)
+              or kwargs.get('use_conv_cp', False)
+              or kwargs.get('use_cp', False)
+              or kwargs.get('use_tucker', False))
+    if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
+        warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
     block_size = int(kwargs.get('block_size', 4) or 4)
     down_dim = int(kwargs.get('down_dim', 128) or 128)
     up_dim = int(kwargs.get('up_dim', 64) or 64)
@@ -193,7 +201,7 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
         text_encoder, unet, 
         multiplier=multiplier, 
         lora_dim=network_dim, alpha=network_alpha,
-        use_cp=use_cp,
+        use_tucker=use_tucker,
         dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
         network_module=network_module,
         down_dim=down_dim, up_dim=up_dim, delta_iters=delta_iters, 
@@ -252,7 +260,7 @@ class LycorisNetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        use_cp = False,
+        use_tucker = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module:str = 'locon', 
         norm_modules = NormModule, train_norm = False,
@@ -323,7 +331,7 @@ class LycorisNetwork(torch.nn.Module):
                 lora_name, module, self.multiplier, 
                 dim, alpha, 
                 self.dropout, self.rank_dropout, self.module_dropout, 
-                use_cp,
+                use_tucker,
                 **kwargs
             )
             return lora
@@ -616,7 +624,7 @@ class HyperDreamNetwork(torch.nn.Module):
         text_encoder, unet, 
         multiplier=1.0, 
         lora_dim=4, alpha=1,
-        use_cp = False,
+        use_tucker = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module = LoConModule,
         down_dim = 100, up_dim = 50, delta_iters = 5, decoder_blocks = 4, vocab_size = 49408,
@@ -660,7 +668,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
+                                use_tucker,
                                 **kwargs
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
@@ -670,7 +678,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, 
                                     self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
+                                    use_tucker,
                                     **kwargs
                                 )
                             else:
@@ -686,7 +694,7 @@ class HyperDreamNetwork(torch.nn.Module):
                             lora_name, module, self.multiplier, 
                             self.lora_dim, self.alpha, 
                             self.dropout, self.rank_dropout, self.module_dropout, 
-                            use_cp,
+                            use_tucker,
                             **kwargs
                         )
                     elif module.__class__.__name__ == 'Conv2d':
@@ -696,7 +704,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                 lora_name, module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
+                                use_tucker,
                                 **kwargs
                             )
                         else:
