@@ -4,7 +4,7 @@ from .full import FullModule
 from .norms import NormModule
 from .locon import LoConModule
 from .loha import LohaModule
-from .lokr import LokrModule
+from .lokr import LokrModule, factorization
 from .ia3 import IA3Module
 
 
@@ -44,12 +44,34 @@ def make_module(lyco_type, params, lora_name, orig_module):
             lora_dim = w2a.size(1)
         else:
             lora_dim = 10000000000000
+        
+        if w1 is None:
+            out_dim = w1a.size(0)
+            in_dim = w1b.size(1)
+        else:
+            out_dim, in_dim = w1.shape
+        
+        shape_s = [out_dim, in_dim]
+        
+        if w2 is None:
+            out_dim *= w2a.size(0)
+            in_dim *= w2b.size(1)
+        else:
+            out_dim *= w2.size(0)
+            in_dim *= w2.size(1)
+        
+        if (shape_s[0] == factorization(out_dim, -1)[0] 
+            and shape_s[1] == factorization(in_dim, -1)[0]):
+            factor = -1
+        else:
+            factor = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
+        
         module = LokrModule(
             lora_name, orig_module, 1,
             lora_dim, torch.tensor(alpha).item(), 
             use_cp = t2 is not None,
             decompose_both = w1 is None and w2 is None,
-            factor = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
+            factor = factor
         )
         if w1 is not None:
             module.lokr_w1.copy_(w1)

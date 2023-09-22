@@ -33,8 +33,10 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     if factor > 0 and (dimension % factor) == 0:
         m = factor
         n = dimension // factor
+        if m > n:
+            n, m = m, n
         return m, n
-    if factor == -1:
+    if factor < 0:
         factor = dimension
     m, n = 1, dimension
     length = m + n
@@ -103,7 +105,6 @@ class LokrModule(nn.Module):
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n), *k_size) # ((a, b), (c, d), *k_size)
-            
             self.cp = use_cp and k_size!=(1, 1)
             if decompose_both and lora_dim < max(shape[0][0], shape[1][0])/2:
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
@@ -140,7 +141,6 @@ class LokrModule(nn.Module):
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n)) # ((a, b), (c, d)), out_dim = a*c, in_dim = b*d
-            
             # smaller part. weight scale
             if decompose_both and lora_dim < max(shape[0][0], shape[1][0])/2:
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
@@ -148,7 +148,6 @@ class LokrModule(nn.Module):
             else:
                 self.use_w1 = True
                 self.lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0]))  # a*c, 1-mode
-
             if lora_dim < max(shape[0][1], shape[1][1])/2:
                 # bigger part. weight and LoRA. [b, dim] x [dim, d]
                 self.lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], lora_dim))
