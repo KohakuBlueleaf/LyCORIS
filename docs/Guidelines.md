@@ -6,24 +6,24 @@ The following guidelines are subject to discussion and based on our limited expe
 
 For further details you can refer to our paper: [Navigating Text-To-Image Customization: From LyCORIS Fine-Tuning to Model Evaluation](https://arxiv.org/abs/2309.14859)
 
-### Summary Table
+### Summary table
 
 To be taken with a grain of salt
-|                           | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
-| ------------------------- | ---- | ---- | ---- | --------------- | ---------------- |
-| Fidelity                  | ★    | ●    | ▲    | ◉               | ▲                |
-| Flexibility*              | ★    | ●    | ◉    | ▲               | ●$^†$            |
-| Diversity                 | ▲    | ◉    | ★    | ●               | ★                |
-| Size$^§$                  | ▲    | ●    | ●    | ●               | ★                |
-| Training Speed Linear$^§$ | ★    | ●    | ●    | ★               | ★                |
-| Training Speed Conv$^§$   | ●    | ★    | ▲    | ●               | ●                |
+|                            | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
+| -------------------------- | ---- | ---- | ---- | --------------- | ---------------- |
+| Fidelity                   | ★    | ●    | ▲    | ◉               | ▲                |
+| Flexibility $^*$           | ★    | ●    | ◉    | ▲               | ● $^†$           |
+| Diversity                  | ▲    | ◉    | ★    | ●               | ★                |
+| Size $^§$                  | ▲    | ●    | ●    | ●               | ★                |
+| Training Speed Linear $^§$ | ★    | ●    | ●    | ★               | ★                |
+| Training Speed Conv $^§$   | ●    | ★    | ▲    | ●               | ●                |
 
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
-*Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not
-$^†$It may become more difficult to switch base model or combine multiple concepts in this situation
-$^§$For more details please refer to the tables at the end of the guideline
+$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not  
+$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation  
+$^§$ For more details please refer to the tables at the end of the guideline
 
 ### Short version
 
@@ -50,45 +50,32 @@ See appendix B.1 of the paper for a relation between alpha and learning rate and
 
 ### Training time, Vram usage, File size
 
-On RTX 4090, batch 8, 49622 steps, Adamw8bit 
+On RTX 4090, batch 8, 49622 steps, Adamw8bit.  
 The time is the estimated time after running for about 500 steps
 
-| Algorithm    | Preset    | Dim | Time     | Vram (MiB) | Size  |
-| ------------ | --------- | --- | -------- | ---------- | ----- |
+| Algorithm    | Preset    | Dim [Factor] | Time     | Vram (MiB) | Size                 |
+| ------------ | --------- | ------------ | -------- | ---------- | -------------------- |
 | LoRA         | attn-mlp  | 1            | 4hr      | 16410      | 1.7 M                |
-| LoRA         | attn-mlp  | 8   | 4hr      | 16358      | 9.5 M |
-| LoRA         | attn-only | 32  | 3hr25min | 15222      | 18 M  |
-| LoRA         | attn-mlp  | 32  | 4hr5min  | 15420      | 37 M  |
-| LoRA         | full      | 32  | 4hr30min | 17350      | 75 M  |
-| LoRA         | attn-mlp  | 64  | 4hr5min  | 16168      | 73 M  |
-| LoRA (kohya) |           | 64  | 4hr5min  | 16348      | 73 M  |
-
-
-| Algorithm | Preset    | Dim | Time     | Vram (MiB) | Size  |
-| --------- | --------- | --- |-------- | ---------- | ----- |
-| LoHa      | full      | 4   | 4hr10min | 15960      | 9.6 M |
-| LoHa      | attn-only | 16  | 3hr30min | 15244      | 18 M  |
-| LoHa      | attn-mlp  | 16  | 4hr10min | 16876      | 37 M  |
-| LoHa      | full      | 16  | 5hr40min | 16750      | 75 M  |
-| LoHa      | attn-mlp  | 32  | 4hr10min | 16294      | 73 M  |
-
-
-| Algorithm | Preset    | Dim [Factor] | Time     | Vram (MiB) | Size  |
-| --------- | --------- | ------------ | -------- | ---------- | ----- |
-| LoKr      | attn-mlp  | 1 [-1]       | 3hr50min | 16812      | 940 K |
-| LoKr      | attn-mlp  | full [-1]    | 3hr45min | 16806      | 1.6 M |
-| LoKr      | attn-mlp  | 8 [4]        | 3hr55min | 16010      | 2.8 M |
-| LoKr      | attn-mlp  | full [8]     | 3hr40min | 16034      | 12 M  |
-| LoKr      | attn-only | full [4]     | 3hr17min | 15374      | 15 M  |
-| LoKr      | attn-mlp  | full [4]     | 3hr45min | 16116      | 43 M  |
-| LoKr      | full      | full [4]     | 5hr10min | 17916      | 113 M |
-
-
-
-| Algorithm | Preset    | Time     | Vram (MiB) | Size                 |
-| --------- | --------- | -------- | ---------- | -------------------- |
-| IA3       |           | 3hr7min  | 14954      | 596 K                |
-| Full      | attn-only | 3hr15min | 15912      | 233 M                |
-| Full      | attn-mlp  | 3hr50min | 18668      | 673 M                |
-| Full      | full      | 5h20min  | 23008      | 1.8 G                |
-| Full (db) |           | 4hr47min | 22118      | 2 G (with 200mb VAE) |
+| LoRA         | attn-mlp  | 8            | 4hr      | 16358      | 9.5 M                |
+| LoRA         | attn-only | 32           | 3hr25min | 15222      | 18 M                 |
+| LoRA         | attn-mlp  | 32           | 4hr5min  | 15420      | 37 M                 |
+| LoRA         | full      | 32           | 4hr30min | 17350      | 75 M                 |
+| LoRA         | attn-mlp  | 64           | 4hr5min  | 16168      | 73 M                 |
+| LoRA (kohya) |           | 64           | 4hr5min  | 16348      | 73 M                 |
+| LoHa         | full      | 4            | 4hr10min | 15960      | 9.6 M                |
+| LoHa         | attn-only | 16           | 3hr30min | 15244      | 18 M                 |
+| LoHa         | attn-mlp  | 16           | 4hr10min | 16876      | 37 M                 |
+| LoHa         | full      | 16           | 5hr40min | 16750      | 75 M                 |
+| LoHa         | attn-mlp  | 32           | 4hr10min | 16294      | 73 M                 |
+| LoKr         | attn-mlp  | 1 [-1]       | 3hr50min | 16812      | 940 K                |
+| LoKr         | attn-mlp  | full [-1]    | 3hr45min | 16806      | 1.6 M                |
+| LoKr         | attn-mlp  | 8 [4]        | 3hr55min | 16010      | 2.8 M                |
+| LoKr         | attn-mlp  | full [8]     | 3hr40min | 16034      | 12 M                 |
+| LoKr         | attn-only | full [4]     | 3hr17min | 15374      | 15 M                 |
+| LoKr         | attn-mlp  | full [4]     | 3hr45min | 16116      | 43 M                 |
+| LoKr         | full      | full [4]     | 5hr10min | 17916      | 113 M                |
+| IA3          |           |              | 3hr7min  | 14954      | 596 K                |
+| Full         | attn-only |              | 3hr15min | 15912      | 233 M                |
+| Full         | attn-mlp  |              | 3hr50min | 18668      | 673 M                |
+| Full         | full      |              | 5h20min  | 23008      | 1.8 G                |
+| Full (db)    |           |              | 4hr47min | 22118      | 2 G (with 200mb VAE) |
