@@ -1,13 +1,14 @@
 # Change Log
 
-## 2023/09/xx update to 1.9.0
+## 2023/09/27 update to 1.9.0
 * Add norm modules (for training LayerNorm and GroupNorm, which should be good for style)
 * Add full modules (So you can "native finetune" with lycoris now, should be convinient to try different weight)
-* Add custom preset system
+* Add preset config system
+* Add custom config system
 * Merge script support norm and full modules
+* Fix errors with optional requirements
 * Fix errors with not necessary import
 * Fix wrong factorization behaviours
-
 
 ## 2023/07/27 update to 1.8.2
 * Update utils in kohya-ss/sd-scripts
