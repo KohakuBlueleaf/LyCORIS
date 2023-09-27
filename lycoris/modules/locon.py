@@ -18,16 +18,15 @@ class LoConModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_cp=False,
+        use_tucker=False, use_scalar=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
-        self.cp = False
+        self.tucker = False
 
-        self.scalar = nn.Parameter(torch.tensor(0.0))
         if isinstance(org_module, nn.Conv2d):
             self.isconv = True
             # For general LoCon
@@ -38,10 +37,10 @@ class LoConModule(nn.Module):
             out_dim = org_module.out_channels
             self.down_op = F.conv2d
             self.up_op = F.conv2d
-            if use_cp and k_size != (1, 1):
+            if use_tucker and k_size != (1, 1):
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
                 self.lora_mid = nn.Conv2d(lora_dim, lora_dim, k_size, stride, padding, bias=False)
-                self.cp = True
+                self.tucker = True
             else:
                 self.lora_down = nn.Conv2d(in_dim, lora_dim, k_size, stride, padding, bias=False)
             self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
@@ -70,17 +69,24 @@ class LoConModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = torch.tensor(1.0)
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
-        torch.nn.init.kaiming_uniform_(self.lora_up.weight)
-        if self.cp:
+        if use_scalar:
+            torch.nn.init.kaiming_uniform_(self.lora_up.weight, a=math.sqrt(5))
+        else:
+            torch.nn.init.constant_(self.lora_up.weight, 0)
+        if self.tucker:
             torch.nn.init.kaiming_uniform_(self.lora_mid.weight, a=math.sqrt(5))
 
         self.multiplier = multiplier
         self.org_module = [org_module]
         self.register_load_state_dict_post_hook(self.load_weight_hook)
     
-    def load_weight_hook(self):
+    def load_weight_hook(self, *args, **kwargs):
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self, is_hypernet=False, **kwargs):
@@ -117,7 +123,7 @@ class LoConModule(nn.Module):
         destination[f'{prefix}alpha'] = self.alpha
         destination[f'{prefix}lora_up.weight'] = self.lora_up.weight * self.scalar
         destination[f'{prefix}lora_down.weight'] = self.lora_down.weight
-        if self.cp:
+        if self.tucker:
             destination[f'{prefix}lora_mid.weight'] = self.lora_mid.weight
         return destination
 
@@ -238,7 +244,7 @@ class LoConModule(nn.Module):
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
         scale = self.scale * self.multiplier
-        if self.cp:
+        if self.tucker:
             mid = self.lora_mid(self.lora_down(x))
         else:
             mid = self.lora_down(x)

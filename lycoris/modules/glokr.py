@@ -75,7 +75,7 @@ class LokrModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_cp=False,
+        use_tucker=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
         **kwargs,
@@ -85,7 +85,7 @@ class LokrModule(nn.Module):
         factor = int(factor)
         self.lora_name = lora_name
         self.lora_dim = lora_dim
-        self.cp = False
+        self.tucker = False
         self.use_w1 = False
         self.use_w2 = False
 
@@ -99,7 +99,7 @@ class LokrModule(nn.Module):
             out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n), *k_size) # ((a, b), (c, d), *k_size)
             
-            self.cp = use_cp and k_size!=(1, 1)
+            self.tucker = use_tucker and k_size!=(1, 1)
             if decompose_both and lora_dim < max(shape[0][0], shape[1][0])/2:
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
                 self.lokr_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1][0]))
@@ -110,7 +110,7 @@ class LokrModule(nn.Module):
             if lora_dim >= max(shape[0][1], shape[1][1])/2:
                 self.use_w2 = True
                 self.lokr_w2 = nn.Parameter(torch.empty(shape[0][1], shape[1][1], *k_size))
-            elif self.cp:
+            elif self.tucker:
                 self.lokr_t2 = nn.Parameter(torch.empty(lora_dim, lora_dim, shape[2], shape[3]))
                 self.lokr_w2_a = nn.Parameter(torch.empty(lora_dim, shape[0][1])) # b, 1-mode
                 self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1])) # d, 2-mode
@@ -174,7 +174,7 @@ class LokrModule(nn.Module):
         if self.use_w2:
             torch.nn.init.constant_(self.lokr_w2, 0)
         else:
-            if self.cp:
+            if self.tucker:
                 torch.nn.init.normal_(self.lokr_t2, std=0.1)
             torch.nn.init.normal_(self.lokr_w2_a, std=1)
             torch.nn.init.constant_(self.lokr_w2_b, 0)
@@ -190,7 +190,7 @@ class LokrModule(nn.Module):
         weight = make_kron(
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
-             else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 
+             else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.tucker 
              else self.lokr_w2_a@self.lokr_w2_b),
             torch.tensor(self.multiplier * self.scale)
         )
@@ -205,7 +205,7 @@ class LokrModule(nn.Module):
         weight = make_kron(
             self.lokr_w1 if self.use_w1 else self.lokr_w1_a@self.lokr_w1_b,
             (self.lokr_w2 if self.use_w2 
-             else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.cp 
+             else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b) if self.tucker 
              else self.lokr_w2_a@self.lokr_w2_b),
             torch.tensor(self.scale)
         )
@@ -225,7 +225,7 @@ class LokrModule(nn.Module):
         
         scaled = ratio.item() != 1.0
         if scaled:
-            modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.cp))
+            modules = (4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.tucker))
             if self.use_w1:
                 self.lokr_w1 *= ratio**(1/modules)
             else:
@@ -235,7 +235,7 @@ class LokrModule(nn.Module):
             if self.use_w2:
                 self.lokr_w2 *= ratio**(1/modules)
             else:
-                if self.cp:
+                if self.tucker:
                     self.lokr_t2 *= ratio**(1/modules)
                 self.lokr_w2_a  *= ratio**(1/modules)
                 self.lokr_w2_b  *= ratio**(1/modules)

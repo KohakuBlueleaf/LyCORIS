@@ -33,8 +33,10 @@ def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     if factor > 0 and (dimension % factor) == 0:
         m = factor
         n = dimension // factor
+        if m > n:
+            n, m = m, n
         return m, n
-    if factor == -1:
+    if factor < 0:
         factor = dimension
     m, n = 1, dimension
     length = m + n
@@ -80,6 +82,7 @@ class LokrModule(nn.Module):
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
         use_cp=False,
+        use_scalar=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
         **kwargs,
@@ -102,7 +105,6 @@ class LokrModule(nn.Module):
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n), *k_size) # ((a, b), (c, d), *k_size)
-            
             self.cp = use_cp and k_size!=(1, 1)
             if decompose_both and lora_dim < max(shape[0][0], shape[1][0])/2:
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
@@ -139,7 +141,6 @@ class LokrModule(nn.Module):
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
             shape = ((out_l, out_k), (in_m, in_n)) # ((a, b), (c, d)), out_dim = a*c, in_dim = b*d
-            
             # smaller part. weight scale
             if decompose_both and lora_dim < max(shape[0][0], shape[1][0])/2:
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
@@ -147,7 +148,6 @@ class LokrModule(nn.Module):
             else:
                 self.use_w1 = True
                 self.lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0]))  # a*c, 1-mode
-
             if lora_dim < max(shape[0][1], shape[1][1])/2:
                 # bigger part. weight and LoRA. [b, dim] x [dim, d]
                 self.lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], lora_dim))
@@ -175,14 +175,24 @@ class LokrModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
-        self.scalar = nn.Parameter(torch.tensor(0.0))
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = torch.tensor(1.0)
+        
         if self.use_w2:
-            torch.nn.init.kaiming_uniform_(self.lokr_w2, 0)
+            if use_scalar:
+                torch.nn.init.kaiming_uniform_(self.lokr_w2, a=math.sqrt(5))
+            else:
+                torch.nn.init.constant_(self.lokr_w2, 0)
         else:
             if self.cp:
                 torch.nn.init.kaiming_uniform_(self.lokr_t2, a=math.sqrt(5))
             torch.nn.init.kaiming_uniform_(self.lokr_w2_a, a=math.sqrt(5))
-            torch.nn.init.kaiming_uniform_(self.lokr_w2_b, a=math.sqrt(5))
+            if use_scalar:
+                torch.nn.init.kaiming_uniform_(self.lokr_w2_b, a=math.sqrt(5))
+            else:
+                torch.nn.init.constant_(self.lokr_w2_b, 0)
         
         if self.use_w1:
             torch.nn.init.kaiming_uniform_(self.lokr_w1, a=math.sqrt(5))
@@ -202,7 +212,7 @@ class LokrModule(nn.Module):
         assert torch.sum(torch.isnan(weight)) == 0, "weight is nan"
         self.register_load_state_dict_post_hook(self.load_weight_hook)
     
-    def load_weight_hook(self):
+    def load_weight_hook(self, *args, **kwargs):
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     # Same as locon.py
@@ -295,7 +305,7 @@ class LokrModule(nn.Module):
                     None if self.org_module[0].bias is None else self.org_module[0].bias.data
                 )
         weight = (
-            self.org_module[0].weight.data 
+            self.org_module[0].weight.data.to(x.device, dtype=self.lokr_w1.dtype)
             + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data

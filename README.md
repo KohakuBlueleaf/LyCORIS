@@ -141,12 +141,15 @@ see [Demo.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Demo.md) and [
 ## Change Log
 For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/blob/main/Change.md)
 
-## 2023/07/27 update to 1.8.2
-* Update utils in kohya-ss/sd-scripts
-
-## 2023/07/27 update to 1.8.1
-* Add config/preset system
-* Improve the project structure
+## 2023/09/27 update to 1.9.0
+* Add norm modules (for training LayerNorm and GroupNorm, which should be good for style)
+* Add full modules (So you can "native finetune" with lycoris now, should be convinient to try different weight)
+* Add preset config system
+* Add custom config system
+* Merge script support norm and full modules
+* Fix errors with optional requirements
+* Fix errors with not necessary import
+* Fix wrong factorization behaviours
 
 
 ## Todo list
@@ -157,7 +160,7 @@ For full log, please see [Change.md](https://github.com/KohakuBlueleaf/LyCORIS/b
   - [x] For extraction
   - [ ] For training
 - [ ] Support more operation, not only linear and conv2d.
-- [ ] Configure varying ranks or dimensions for specific modules as needed.
+- [x] Configure varying ranks or dimensions for specific modules as needed.
 - [ ] Automatically selecting an algorithm based on the specific rank requirement.
 - [ ] Explore other low-rank representations or parameter-efficient methods to fine-tune either the entire model or specific parts of it.
 - [ ] More experiments for different task, not only diffusion models.

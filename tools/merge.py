@@ -47,6 +47,7 @@ from lycoris.kohya.model_utils import (
 import torch
 
 
+@torch.no_grad()
 def main():
     base = load_models_from_stable_diffusion_checkpoint(ARGS.is_v2, ARGS.base_model)
     if ARGS.lycoris_model.rsplit('.', 1)[-1] == 'safetensors':
@@ -75,7 +76,7 @@ def main():
     
     save_stable_diffusion_checkpoint(
         ARGS.is_v2, ARGS.output_name, 
-        base[0], base[2], 
+        base[0].cpu(), base[2].cpu(), 
         None, 0, 0, dtype, 
         base[1]
     )

@@ -7,6 +7,8 @@
 import math
 from warnings import warn
 import os
+import sys
+sys.setrecursionlimit(10000)
 from typing import List
 import torch
 import torch.utils.checkpoint as checkpoint
@@ -18,10 +20,25 @@ from ..modules.ia3 import IA3Module
 from ..modules.lokr import LokrModule
 from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
-from ..modules.hypernet import ImgWeightGenerator, TextWeightGenerator
+from ..modules.norms import NormModule
+from ..modules.full import FullModule
+from ..modules import make_module
 
 from ..config import PRESET
 from ..utils.preset import read_preset
+from ..utils import get_module
+
+
+network_module_dict = {
+    'lora': LoConModule,
+    'locon': LoConModule,
+    'loha': LohaModule,
+    'ia3':  IA3Module,
+    'lokr': LokrModule,
+    'dylora': DyLoraModule,
+    'glora': GLoRAModule,
+    'full': FullModule,
+}
 
 
 def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs):
@@ -33,18 +50,19 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_cp = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False))
+    use_tucker = (not kwargs.get('disable_conv_cp', True)
+              or kwargs.get('use_conv_cp', False)
+              or kwargs.get('use_cp', False)
+              or kwargs.get('use_tucker', False))
+    if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
+        warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
+    use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
-    network_module = {
-        'lora': LoConModule,
-        'locon': LoConModule,
-        'loha': LohaModule,
-        'ia3':  IA3Module,
-        'lokr': LokrModule,
-        'dylora': DyLoraModule,
-        'glora': GLoRAModule,
-    }[algo]
+    train_norm = kwargs.get('train_norm', False)
+    
+    if algo == 'glora' and conv_dim>0:
+        conv_dim = 0
+        print('Disable conv layer for GLoRA')
     
     preset = kwargs.get('preset', 'full')
     if preset not in PRESET:
@@ -83,8 +101,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             lora_dim=network_dim, conv_lora_dim=conv_dim, 
             alpha=network_alpha, conv_alpha=conv_alpha,
             dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
-            use_cp=use_cp,
-            network_module=network_module,
+            use_tucker=use_tucker, use_scalar=use_scalar,
+            network_module=algo, train_norm=train_norm,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
             block_size = block_size
@@ -92,9 +110,66 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     
     if algo=='dylora':
         #dylora didn't support scale weight norm yet
-        delattr(network, 'apply_max_norm_regularization')
+        delattr(type(network), 'apply_max_norm_regularization')
     
     return network
+
+
+def create_network_from_weights(multiplier, file, vae, text_encoder, unet, weights_sd=None, for_inference=False, **kwargs):
+    if weights_sd is None:
+        if os.path.splitext(file)[1] == ".safetensors":
+            from safetensors.torch import load_file, safe_open
+            weights_sd = load_file(file)
+        else:
+            weights_sd = torch.load(file, map_location="cpu")
+
+    # get dim/alpha mapping
+    unet_loras = {}
+    te_loras = {}
+    for key, value in weights_sd.items():
+        if "." not in key:
+            continue
+
+        lora_name = key.split(".")[0]
+        if lora_name.startswith(LycorisNetwork.LORA_PREFIX_UNET):
+            unet_loras[lora_name] = None
+        elif lora_name.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
+            te_loras[lora_name] = None
+    
+    for name, modules in unet.named_modules():
+        lora_name = f'{LycorisNetwork.LORA_PREFIX_UNET}_{name}'.replace('.','_')
+        if lora_name in unet_loras:
+            unet_loras[lora_name] = modules
+    
+    for name, modules in text_encoder.named_modules():
+        lora_name = f'{LycorisNetwork.LORA_PREFIX_TEXT_ENCODER}_{name}'.replace('.','_')
+        if lora_name in te_loras:
+            te_loras[lora_name] = modules
+    
+    network = LycorisNetwork(text_encoder, unet)
+    network.unet_loras = []
+    network.text_encoder_loras = []
+    
+    for lora_name, orig_modules in unet_loras.items():
+        if orig_modules is None:
+            continue
+        lyco_type, params = get_module(weights_sd, lora_name)
+        module = make_module(lyco_type, params, lora_name, orig_modules)
+        if module is not None:
+            network.unet_loras.append(module)
+    
+    for lora_name, orig_modules in te_loras.items():
+        if orig_modules is None:
+            continue
+        lyco_type, params = get_module(weights_sd, lora_name)
+        module = make_module(lyco_type, params, lora_name, orig_modules)
+        if module is not None:
+            network.text_encoder_loras.append(module)
+    
+    for lora in network.unet_loras + network.text_encoder_loras:
+        lora.multiplier = multiplier
+    
+    return network, weights_sd
 
 
 def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encoder, unet, vocab_size, **kwargs):
@@ -104,8 +179,12 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_cp = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False))
+    use_tucker = (not kwargs.get('disable_conv_cp', True)
+              or kwargs.get('use_conv_cp', False)
+              or kwargs.get('use_cp', False)
+              or kwargs.get('use_tucker', False))
+    if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
+        warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
     block_size = int(kwargs.get('block_size', 4) or 4)
     down_dim = int(kwargs.get('down_dim', 128) or 128)
     up_dim = int(kwargs.get('up_dim', 64) or 64)
@@ -122,7 +201,7 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
         text_encoder, unet, 
         multiplier=multiplier, 
         lora_dim=network_dim, alpha=network_alpha,
-        use_cp=use_cp,
+        use_tucker=use_tucker,
         dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
         network_module=network_module,
         down_dim=down_dim, up_dim=up_dim, delta_iters=delta_iters, 
@@ -181,12 +260,14 @@ class LycorisNetwork(torch.nn.Module):
         multiplier=1.0, 
         lora_dim=4, conv_lora_dim=4, 
         alpha=1, conv_alpha=1,
-        use_cp = False,
+        use_tucker = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
-        network_module = LoConModule,
+        network_module:str = 'locon', 
+        norm_modules = NormModule, train_norm = False,
         **kwargs,
     ) -> None:
         super().__init__()
+        root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         
@@ -212,94 +293,121 @@ class LycorisNetwork(torch.nn.Module):
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
         
+        self.use_tucker = use_tucker
+        
+        def create_single_module(
+            lora_name: str, 
+            module: torch.nn.Module, 
+            algo_name,
+            dim = None,
+            alpha = None,
+            use_tucker = self.use_tucker,
+            **kwargs,
+        ):
+            for k, v in root_kwargs.items():
+                if k in kwargs: continue
+                kwargs[k] = v
+            
+            if train_norm and 'Norm' in module.__class__.__name__:
+                return norm_modules(
+                    lora_name, module, self.multiplier, 
+                    self.rank_dropout, self.module_dropout, 
+                    **kwargs
+                )
+            lora = None
+            if module.__class__.__name__ == 'Linear' and lora_dim>0:
+                dim = dim or lora_dim
+                alpha = alpha or self.alpha
+            elif module.__class__.__name__ == 'Conv2d':
+                k_size, *_ = module.kernel_size
+                if k_size==1 and lora_dim>0:
+                    dim = dim or lora_dim
+                    alpha = alpha or self.alpha
+                elif conv_lora_dim>0 or dim:
+                    dim = dim or conv_lora_dim
+                    alpha = alpha or self.conv_alpha
+                else:
+                    return None
+            else:
+                return None
+            lora = network_module_dict[algo_name](
+                lora_name, module, self.multiplier, 
+                dim, alpha, 
+                self.dropout, self.rank_dropout, self.module_dropout,
+                use_tucker,
+                **kwargs
+            )
+            return lora
+        
+        def create_modules_(
+            prefix: str,
+            root_module: torch.nn.Module,
+            algo,
+            configs = {},
+        ):
+            loras = {}
+            lora_names = []
+            for name, module in root_module.named_modules():
+                if module is root_module: continue
+                module_name = module.__class__.__name__
+                if module_name in self.MODULE_ALGO_MAP:
+                    next_config = self.MODULE_ALGO_MAP[module_name]
+                    next_algo = next_config.get('algo', algo)
+                    new_loras, new_lora_names = create_modules_(
+                        f'{prefix}_{name}', module, next_algo, next_config
+                    )
+                    for lora_name, lora in zip(new_lora_names, new_loras):
+                        if lora_name not in loras:
+                            loras[lora_name] = lora
+                            lora_names.append(lora_name)
+                    continue
+                lora_name = prefix + '.' + name
+                lora_name = lora_name.replace('.', '_')
+                if lora_name in loras: continue
+                
+                lora = create_single_module(
+                    lora_name, module, algo, **configs
+                )
+                if lora is not None:
+                    loras[lora_name] = lora
+                    lora_names.append(lora_name)
+            return [loras[lora_name] for lora_name in lora_names], lora_names
+        
         # create module instances
         def create_modules(
             prefix, 
             root_module: torch.nn.Module, 
             target_replace_modules,
             target_replace_names = []
-        ) -> List[network_module]:
+        ) -> List:
             print('Create LyCORIS Module')
             loras = []
+            next_config = {}
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules:
                     if module_name in self.MODULE_ALGO_MAP:
-                        algo = self.MODULE_ALGO_MAP[module_name]
+                        next_config = self.MODULE_ALGO_MAP[module_name]
+                        algo = next_config.get('algo', network_module)
                     else:
                         algo = network_module
-                    for child_name, child_module in module.named_modules():
-                        lora_name = prefix + '.' + name + '.' + child_name
-                        lora_name = lora_name.replace('.', '_')
-                        if child_module.__class__.__name__ == 'Linear' and lora_dim>0:
-                            lora = algo(
-                                lora_name, child_module, self.multiplier, 
-                                self.lora_dim, self.alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        elif child_module.__class__.__name__ == 'Conv2d':
-                            k_size, *_ = child_module.kernel_size
-                            if k_size==1 and lora_dim>0:
-                                lora = algo(
-                                    lora_name, child_module, self.multiplier, 
-                                    self.lora_dim, self.alpha, 
-                                    self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
-                                    **kwargs
-                                )
-                            elif conv_lora_dim>0:
-                                lora = algo(
-                                    lora_name, child_module, self.multiplier, 
-                                    self.conv_lora_dim, self.conv_alpha, 
-                                    self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
-                                    **kwargs
-                                )
-                            else:
-                                continue
-                        else:
-                            continue
-                        loras.append(lora)
+                    loras.extend(create_modules_(f'{prefix}_{name}', module, algo, next_config)[0])
+                    next_config = {}
                 elif name in target_replace_names:
                     if name in self.NAME_ALGO_MAP:
-                        algo = self.NAME_ALGO_MAP[name]
+                        next_config = self.NAME_ALGO_MAP[name]
+                        algo = next_config.get('algo', network_module)
+                    elif module_name in self.MODULE_ALGO_MAP:
+                        next_config = self.MODULE_ALGO_MAP[module_name]
+                        algo = next_config.get('algo', network_module)
                     else:
                         algo = network_module
                     lora_name = prefix + '.' + name
                     lora_name = lora_name.replace('.', '_')
-                    if module.__class__.__name__ == 'Linear' and lora_dim>0:
-                        lora = algo(
-                            lora_name, module, self.multiplier, 
-                            self.lora_dim, self.alpha, 
-                            self.dropout, self.rank_dropout, self.module_dropout, 
-                            use_cp,
-                            **kwargs
-                        )
-                    elif module.__class__.__name__ == 'Conv2d':
-                        k_size, *_ = module.kernel_size
-                        if k_size==1 and lora_dim>0:
-                            lora = algo(
-                                lora_name, module, self.multiplier, 
-                                self.lora_dim, self.alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        elif conv_lora_dim>0:
-                            lora = algo(
-                                lora_name, module, self.multiplier, 
-                                self.conv_lora_dim, self.conv_alpha, 
-                                self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
-                                **kwargs
-                            )
-                        else:
-                            continue
-                    else:
-                        continue
-                    loras.append(lora)
+                    lora = create_single_module(lora_name, module, algo, **next_config)
+                    next_config = {}
+                    if lora is not None:
+                        loras.append(lora)
             return loras
         
         if network_module == GLoRAModule:
@@ -323,12 +431,23 @@ class LycorisNetwork(torch.nn.Module):
             self.text_encoder_loras.extend(create_modules(
                 LycorisNetwork.LORA_PREFIX_TEXT_ENCODER + (f'{i+1}' if use_index else ''),
                 te, 
-                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
+                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_NAME
             ))
         print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
-        self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
+        self.unet_loras = create_modules(
+            LycorisNetwork.LORA_PREFIX_UNET, 
+            unet, 
+            LycorisNetwork.UNET_TARGET_REPLACE_MODULE,
+            LycorisNetwork.UNET_TARGET_REPLACE_NAME
+        )
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        
+        algo_table = {}
+        for lora in self.text_encoder_loras + self.unet_loras:
+            algo_table[lora.__class__.__name__] = algo_table.get(lora.__class__.__name__, 0) + 1
+        print(f"module type table: {algo_table}")
 
         self.weights_sd = None
 
@@ -405,6 +524,9 @@ class LycorisNetwork(torch.nn.Module):
                 norms.append(norm)
                 key_scaled += scaled
         
+        if key_scaled==0:
+            return key_scaled, 0, 0
+        
         return key_scaled, sum(norms)/len(norms), max(norms)
 
     def enable_gradient_checkpointing(self):
@@ -415,7 +537,7 @@ class LycorisNetwork(torch.nn.Module):
         self.apply(make_ckpt)
         pass
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
             params = []
             for lora in loras:
@@ -511,12 +633,13 @@ class HyperDreamNetwork(torch.nn.Module):
         text_encoder, unet, 
         multiplier=1.0, 
         lora_dim=4, alpha=1,
-        use_cp = False,
+        use_tucker = False,
         dropout = 0, rank_dropout = 0, module_dropout = 0,
         network_module = LoConModule,
         down_dim = 100, up_dim = 50, delta_iters = 5, decoder_blocks = 4, vocab_size = 49408,
         **kwargs,
     ) -> None:
+        from ..modules.hypernet import ImgWeightGenerator, TextWeightGenerator
         super().__init__()
         self.gradient_ckpt = False
         self.multiplier = multiplier
@@ -554,7 +677,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                 lora_name, child_module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
+                                use_tucker,
                                 **kwargs
                             )
                         elif child_module.__class__.__name__ == 'Conv2d':
@@ -564,7 +687,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                     lora_name, child_module, self.multiplier, 
                                     self.lora_dim, self.alpha, 
                                     self.dropout, self.rank_dropout, self.module_dropout, 
-                                    use_cp,
+                                    use_tucker,
                                     **kwargs
                                 )
                             else:
@@ -580,7 +703,7 @@ class HyperDreamNetwork(torch.nn.Module):
                             lora_name, module, self.multiplier, 
                             self.lora_dim, self.alpha, 
                             self.dropout, self.rank_dropout, self.module_dropout, 
-                            use_cp,
+                            use_tucker,
                             **kwargs
                         )
                     elif module.__class__.__name__ == 'Conv2d':
@@ -590,7 +713,7 @@ class HyperDreamNetwork(torch.nn.Module):
                                 lora_name, module, self.multiplier, 
                                 self.lora_dim, self.alpha, 
                                 self.dropout, self.rank_dropout, self.module_dropout, 
-                                use_cp,
+                                use_tucker,
                                 **kwargs
                             )
                         else:
@@ -866,13 +989,22 @@ class IA3Network(torch.nn.Module):
                         loras.append(lora)
             return loras
 
-        self.text_encoder_loras = create_modules(
-            IA3Network.LORA_PREFIX_TEXT_ENCODER,
-            text_encoder, 
-            IA3Network.TEXT_ENCODER_TARGET_REPLACE_MODULE,
-            IA3Network.TEXT_ENCODER_TARGET_REPLACE_NAME,
-            IA3Network.TRAIN_INPUT
-        )
+        if isinstance(text_encoder, list):
+            text_encoders = text_encoder
+            use_index = True
+        else:
+            text_encoders = [text_encoder]
+            use_index = False
+
+        self.text_encoder_loras = []
+        for i, te in enumerate(text_encoders):
+            self.text_encoder_loras.extend(create_modules(
+                IA3Network.LORA_PREFIX_TEXT_ENCODER + (f'{i+1}' if use_index else ''),
+                te, 
+                IA3Network.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                IA3Network.TEXT_ENCODER_TARGET_REPLACE_NAME,
+                IA3Network.TRAIN_INPUT
+            ))
         print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
         self.unet_loras = create_modules(
@@ -952,7 +1084,7 @@ class IA3Network(torch.nn.Module):
         self.apply(make_ckpt)
         pass
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
             params = []
             for lora in loras:

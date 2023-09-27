@@ -93,23 +93,23 @@ class LohaModule(nn.Module):
         org_module: nn.Module, 
         multiplier=1.0, lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_cp=False,
+        use_tucker=False,
+        use_scalar=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
-        self.cp=False
+        self.tucker=False
         
         self.shape = org_module.weight.shape
-        self.scalar = nn.Parameter(torch.tensor(0.0))
         if org_module.__class__.__name__ == 'Conv2d':
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
-            self.cp = use_cp and k_size!=(1, 1)
-            if self.cp:
+            self.tucker = use_tucker and k_size!=(1, 1)
+            if self.tucker:
                 shape = (out_dim, in_dim, *k_size)
             else:
                 shape = (out_dim, in_dim*k_size[0]*k_size[1])
@@ -127,7 +127,7 @@ class LohaModule(nn.Module):
             self.op = F.linear
             self.extra_args = {}
         
-        if self.cp:
+        if self.tucker:
             self.hada_t1 = nn.Parameter(torch.empty(lora_dim, lora_dim, shape[2], shape[3]))
             self.hada_w1_a = nn.Parameter(torch.empty(lora_dim, shape[0])) # out_dim, 1-mode
             self.hada_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1])) # in_dim , 2-mode
@@ -154,28 +154,35 @@ class LohaModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.scalar = torch.tensor(1.0)
         # Need more experiments on init method
-        if self.cp:
+        if self.tucker:
             torch.nn.init.normal_(self.hada_t1, std=0.1)
             torch.nn.init.normal_(self.hada_t2, std=0.1)
         torch.nn.init.normal_(self.hada_w1_b, std=1)
         torch.nn.init.normal_(self.hada_w1_a, std=0.1)
         torch.nn.init.normal_(self.hada_w2_b, std=1)
-        torch.nn.init.normal_(self.hada_w2_a, std=0.1)
+        if use_scalar:
+            torch.nn.init.normal_(self.hada_w2_a, std=0.1)
+        else:
+            torch.nn.init.constant_(self.hada_w2_a, 0)
 
         self.multiplier = multiplier
         self.org_module = [org_module] # remove in applying
         self.grad_ckpt = False
         self.register_load_state_dict_post_hook(self.load_weight_hook)
     
-    def load_weight_hook(self):
+    def load_weight_hook(self, *args, **kwargs):
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self):
         self.org_module[0].forward = self.forward
 
     def get_weight(self, orig_weight=None):
-        if self.cp:
+        if self.tucker:
             weight = make_weight_cp(
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
                 self.hada_t1, self.hada_w2_a, self.hada_w2_b,
@@ -218,7 +225,7 @@ class LohaModule(nn.Module):
         destination[f'{prefix}hada_w1_b'] = self.hada_w1_b
         destination[f'{prefix}hada_w2_a'] = self.hada_w2_a
         destination[f'{prefix}hada_w2_b'] = self.hada_w2_b
-        if self.cp:
+        if self.tucker:
             destination[f'{prefix}hada_t1'] = self.hada_t1
             destination[f'{prefix}hada_t2'] = self.hada_t2
         return destination
@@ -246,7 +253,7 @@ class LohaModule(nn.Module):
                     None if self.org_module[0].bias is None else self.org_module[0].bias.data
                 )
         weight = (
-            self.org_module[0].weight.data 
+            self.org_module[0].weight.data.to(x.device, dtype=self.hada_w1_a.dtype)
             + self.get_weight(self.org_module[0].weight.data) * self.scalar * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data

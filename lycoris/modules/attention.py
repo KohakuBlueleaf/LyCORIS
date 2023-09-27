@@ -44,6 +44,19 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
+def vanilla_attention(q, k, v, mask, scale=None):
+    if scale is None:
+        scale = math.sqrt(q.size(-1))
+    scores = torch.bmm(q, k.transpose(-1, -2)) / scale
+    if mask is not None:
+        mask = rearrange(mask, 'b ... -> b (...)')
+        max_neg_value = -torch.finfo(scores.dtype).max
+        mask = repeat(mask, 'b j -> (b h) j', h=q.size(-3))
+        scores = scores.masked_fill(~mask, max_neg_value)
+    p_attn = F.softmax(scores, dim=-1)
+    return torch.bmm(p_attn, v)
+
+
 MEMORY_LAYOUTS = {
     'torch': (
         'b n (h d) -> b h n d',
@@ -62,22 +75,10 @@ MEMORY_LAYOUTS = {
     )
 }
 ATTN_FUNCTION = {
-    'torch': getattr(F, 'scaled_dot_product_attention'),
+    'vanilla': vanilla_attention,
+    'torch': getattr(F, 'scaled_dot_product_attention', None),
     'xformers': memory_efficient_attention
 }
-
-
-def vanilla_attention(q, k, v, mask, scale=None):
-    if scale is None:
-        scale = math.sqrt(q.size(-1))
-    scores = torch.bmm(q, k.transpose(-1, -2)) / scale
-    if mask is not None:
-        mask = rearrange(mask, 'b ... -> b (...)')
-        max_neg_value = -torch.finfo(scores.dtype).max
-        mask = repeat(mask, 'b j -> (b h) j', h=q.size(-3))
-        scores = scores.masked_fill(~mask, max_neg_value)
-    p_attn = F.softmax(scores, dim=-1)
-    return torch.bmm(p_attn, v)
 
 
 class Attention(nn.Module):
@@ -92,6 +93,7 @@ class Attention(nn.Module):
         heads=8,
         head_ch=64,
         self_cross=False,
+        double_attn=False,
         single_kv_head=False,
         attn_backend='torch',
         cosine_attn=False,
@@ -121,6 +123,7 @@ class Attention(nn.Module):
         
         self.heads = heads
         self.self_cross = self_cross
+        self.double_attn = double_attn
         self.single_kv_head = single_kv_head
         self.attn = ATTN_FUNCTION[attn_backend]
         self.memory_layout = MEMORY_LAYOUTS[attn_backend]
@@ -138,23 +141,29 @@ class Attention(nn.Module):
             self.ck = nn.Linear(context_ch, k_ch, bias=False)
             self.cv = nn.Linear(context_ch, v_ch, bias=False)
         else:
+            assert double_attn == False
             self.k = nn.Linear(context_ch, k_ch, bias=False)
             self.v = nn.Linear(context_ch, v_ch, bias=False)
         
-        self.out = nn.Linear(inner_ch, in_ch)
+        if double_attn:
+            self.out = nn.Linear(inner_ch*2, in_ch)
+        else:
+            self.out = nn.Linear(inner_ch, in_ch)
     
     def forward(self, x:torch.Tensor, context=None, mask=None):
         # Input Projection
         heads = self.heads
         q = self.q(x)
+        ck = cv = None
         if self.self_cross:
             k = self.k(x)
             v = self.v(x)
             if context is not None:
                 ck = self.ck(context)
                 cv = self.cv(context)
-                k = torch.concat([k, ck], dim=1)
-                v = torch.concat([v, cv], dim=1)
+                if not self.double_attn:
+                    k = torch.concat([k, ck], dim=1)
+                    v = torch.concat([v, cv], dim=1)
         else:
             ctx = default(context, x)
             k = self.k(ctx)
@@ -176,14 +185,22 @@ class Attention(nn.Module):
         if self.cosine_attn:
             q = (F.normalize(q, dim=-1) * math.sqrt(q.size(-1))).to(v.dtype)
             k = (F.normalize(k, dim=-1) * self.scale).to(v.dtype)
+            if ck is not None and self.double_attn:
+                ck = (F.normalize(ck, dim=-1) * self.scale).to(v.dtype)
         
         # Attention
         out = self.attn(
             q.contiguous(), k.contiguous(), v.contiguous(), mask
         )
+        out = rearrange(out, self.memory_layout[1], h=heads)
+        if self.double_attn:
+            out2 = self.attn(
+                q.contiguous(), ck.contiguous(), cv.contiguous(), mask
+            )
+            out2 = rearrange(out2, self.memory_layout[1], h=heads)
+            out = torch.cat([out, out2], dim=-1)
         
         # Output Projection
-        out = rearrange(out, self.memory_layout[1], h=heads)
         return self.out(out)
 
 
