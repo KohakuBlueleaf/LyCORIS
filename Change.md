@@ -5,6 +5,7 @@
 * Add full modules (So you can "native finetune" with lycoris now, should be convinient to try different weight)
 * Add preset config system
 * Add custom config system
+* Support resuming from models
 * Merge script support norm and full modules
 * Fix errors with optional requirements
 * Fix errors with not necessary import
