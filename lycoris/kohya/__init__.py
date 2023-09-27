@@ -293,12 +293,15 @@ class LycorisNetwork(torch.nn.Module):
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
         
+        self.use_tucker = use_tucker
+        
         def create_single_module(
             lora_name: str, 
             module: torch.nn.Module, 
             algo_name,
             dim = None,
             alpha = None,
+            use_tucker = self.use_tucker,
             **kwargs,
         ):
             for k, v in root_kwargs.items():
@@ -330,7 +333,7 @@ class LycorisNetwork(torch.nn.Module):
             lora = network_module_dict[algo_name](
                 lora_name, module, self.multiplier, 
                 dim, alpha, 
-                self.dropout, self.rank_dropout, self.module_dropout, 
+                self.dropout, self.rank_dropout, self.module_dropout,
                 use_tucker,
                 **kwargs
             )
@@ -428,11 +431,17 @@ class LycorisNetwork(torch.nn.Module):
             self.text_encoder_loras.extend(create_modules(
                 LycorisNetwork.LORA_PREFIX_TEXT_ENCODER + (f'{i+1}' if use_index else ''),
                 te, 
-                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE
+                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_NAME
             ))
         print(f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules.")
 
-        self.unet_loras = create_modules(LycorisNetwork.LORA_PREFIX_UNET, unet, LycorisNetwork.UNET_TARGET_REPLACE_MODULE)
+        self.unet_loras = create_modules(
+            LycorisNetwork.LORA_PREFIX_UNET, 
+            unet, 
+            LycorisNetwork.UNET_TARGET_REPLACE_MODULE,
+            LycorisNetwork.UNET_TARGET_REPLACE_NAME
+        )
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
         
         algo_table = {}
