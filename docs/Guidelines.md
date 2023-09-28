@@ -6,6 +6,8 @@ The following guidelines are subject to discussion and based on our limited expe
 
 For further details you can refer to our paper: [Navigating Text-To-Image Customization: From LyCORIS Fine-Tuning to Model Evaluation](https://arxiv.org/abs/2309.14859)
 
+Check also [Resources](Resources.md) to learn more about Stable Diffusion fine-tuning
+
 ### Summary table
 
 To be taken with a grain of salt
