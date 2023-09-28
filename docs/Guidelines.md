@@ -47,7 +47,8 @@ This make me conjecture the following: we need to first fix the model capacity, 
 4. Things become more complex when we consider the effect of captions. Can it be the case that LoHa just attributes the learned concept more uniformly to different words appearing in the caption? This warrants further investigation.
 5. Also pay attention to the effect of alpha. Fixing alpha to 1 and half of dimensions is not the same thing when you increase dimension! For the latter you would feel the concept is better learned, while for the former it could be quite the contrary. 
 See appendix B.1 of the paper for a relation between alpha and learning rate and initialization.
-7. As for the training of convolutional layers or not, the difference is much harder to see as we do not have a systematic way to evaluate "details" or "texture". Recall also that SD is a latent diffusion model, so it is hard to really talk about details without understanding how the VAE reacts change in latent space. I would personally recommend sticking to `preset=attn-mlp` in most cases.
+6. As for the training of convolutional layers or not, the difference is much harder to see as we do not have a systematic way to evaluate "details" or "texture". Recall also that SD is a latent diffusion model, so it is hard to really talk about details without understanding how the VAE reacts change in latent space. I would personally recommend sticking to `preset=attn-mlp` in most cases.
+7. Sidenote: I note that some people complain that increasing batch size causes result to be worse. It is important to remember that you should also increase learning rate / training epochs accordingly when you increase batch size to achieve similar results.
 
 
 ### Training time, Vram usage, File size
