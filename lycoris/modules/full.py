@@ -57,11 +57,11 @@ class FullModule(nn.Module):
         self.org_module[0].forward = self.forward
 
     def make_weight(self, scale = 1, device=None):
-        drop = (
-            torch.rand(self.dim, device=device) < self.rank_dropout 
-            if self.rank_dropout and self.training 
-            else 1
-        )
+        if self.rank_dropout and self.training:
+            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.diff.dtype)
+            drop /= drop.mean()
+        else:
+            drop = 1
         org_weight = self.org_module[0].weight.to(device, dtype=self.diff.dtype)
         weight = self.diff.to(device) * drop * scale
         weight = weight + org_weight

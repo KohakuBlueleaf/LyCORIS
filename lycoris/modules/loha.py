@@ -197,8 +197,10 @@ class LohaModule(nn.Module):
         if orig_weight is not None:
             weight = weight.reshape(orig_weight.shape)
         if self.training and self.rank_dropout:
-            drop = torch.rand(weight.size(0)) < self.rank_dropout
-            weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
+            drop = (torch.rand(weight.size(0)) < self.rank_dropout).to(weight.dtype)
+            drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
+            drop /= drop.mean()
+            weight *= drop
         return weight
     
     def state_dict(self, *args, destination=None, prefix='', keep_vars=False):

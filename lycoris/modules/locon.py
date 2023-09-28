@@ -204,7 +204,8 @@ class LoConModule(nn.Module):
             mid = self.down_op(x, weight)
         
         if self.rank_dropout and self.training:
-            drop = torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout
+            drop = (torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout).to(mid.dtype)
+            drop /= drop.mean()
             if (dims:=len(x.shape)) == 4:
                 drop = drop.view(1, -1, 1, 1)
             else:
@@ -250,7 +251,8 @@ class LoConModule(nn.Module):
             mid = self.lora_down(x)
         
         if self.rank_dropout and self.training:
-            drop = torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout
+            drop = (torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout).to(mid.dtype)
+            drop /= drop.mean()
             if (dims:=len(x.shape)) == 4:
                 drop = drop.view(1, -1, 1, 1)
             else:

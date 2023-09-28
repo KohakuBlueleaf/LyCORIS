@@ -89,8 +89,10 @@ class GLoRAModule(nn.Module):
         bx_mid = self.b1(x) * scale
         
         if self.rank_dropout and self.training:
-            drop_a = torch.rand(self.lora_dim, device=ax_mid.device) < self.rank_dropout
-            drop_b = torch.rand(self.lora_dim, device=bx_mid.device) < self.rank_dropout
+            drop_a = (torch.rand(self.lora_dim, device=ax_mid.device) < self.rank_dropout).to(ax_mid.dtype)
+            drop_a /= drop_a.mean()
+            drop_b = (torch.rand(self.lora_dim, device=bx_mid.device) < self.rank_dropout).to(bx_mid.dtype)
+            drop_b /= drop_b.mean()
             if (dims:=len(x.shape)) == 4:
                 drop_a = drop_a.view(1, -1, 1, 1)
                 drop_b = drop_b.view(1, -1, 1, 1)
