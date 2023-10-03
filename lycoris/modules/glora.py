@@ -17,6 +17,7 @@ class GLoRAModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
+        rank_dropout_scale=False,
         *args,
         **kwargs,
     ):
@@ -50,6 +51,7 @@ class GLoRAModule(nn.Module):
         else:
             self.dropout = nn.Identity()
         self.rank_dropout = rank_dropout
+        self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
         
         if type(alpha) == torch.Tensor:
@@ -90,9 +92,11 @@ class GLoRAModule(nn.Module):
         
         if self.rank_dropout and self.training:
             drop_a = (torch.rand(self.lora_dim, device=ax_mid.device) < self.rank_dropout).to(ax_mid.dtype)
-            drop_a /= drop_a.mean()
+            if self.rank_dropout_scale:
+                drop_a /= drop_a.mean()
             drop_b = (torch.rand(self.lora_dim, device=bx_mid.device) < self.rank_dropout).to(bx_mid.dtype)
-            drop_b /= drop_b.mean()
+            if self.rank_dropout_scale:
+                drop_b /= drop_b.mean()
             if (dims:=len(x.shape)) == 4:
                 drop_a = drop_a.view(1, -1, 1, 1)
                 drop_b = drop_b.view(1, -1, 1, 1)

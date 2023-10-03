@@ -19,6 +19,7 @@ class LoConModule(nn.Module):
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
         use_tucker=False, use_scalar=False,
+        rank_dropout_scale=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -61,6 +62,7 @@ class LoConModule(nn.Module):
         else:
             self.dropout = nn.Identity()
         self.rank_dropout = rank_dropout
+        self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
         
         if type(alpha) == torch.Tensor:
@@ -205,7 +207,8 @@ class LoConModule(nn.Module):
         
         if self.rank_dropout and self.training:
             drop = (torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout).to(mid.dtype)
-            drop /= drop.mean()
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
             if (dims:=len(x.shape)) == 4:
                 drop = drop.view(1, -1, 1, 1)
             else:
@@ -252,7 +255,8 @@ class LoConModule(nn.Module):
         
         if self.rank_dropout and self.training:
             drop = (torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout).to(mid.dtype)
-            drop /= drop.mean()
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
             if (dims:=len(x.shape)) == 4:
                 drop = drop.view(1, -1, 1, 1)
             else:
