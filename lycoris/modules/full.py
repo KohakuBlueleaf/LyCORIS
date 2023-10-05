@@ -18,7 +18,7 @@ class FullModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_tucker=False, use_scalar=False,
+        use_tucker=False, use_scalar=False, rank_dropout_scale=False
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -47,6 +47,7 @@ class FullModule(nn.Module):
             self.diff_b = None
         
         self.rank_dropout = rank_dropout
+        self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
         
         self.multiplier = multiplier
@@ -57,11 +58,12 @@ class FullModule(nn.Module):
         self.org_module[0].forward = self.forward
 
     def make_weight(self, scale = 1, device=None):
-        drop = (
-            torch.rand(self.dim, device=device) < self.rank_dropout 
-            if self.rank_dropout and self.training 
-            else 1
-        )
+        if self.rank_dropout and self.training:
+            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.diff.dtype)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+        else:
+            drop = 1
         org_weight = self.org_module[0].weight.to(device, dtype=self.diff.dtype)
         weight = self.diff.to(device) * drop * scale
         weight = weight + org_weight

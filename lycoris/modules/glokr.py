@@ -78,6 +78,7 @@ class LokrModule(nn.Module):
         use_tucker=False,
         decompose_both = False,
         factor:int=-1, # factorization factor
+        rank_dropout_scale=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -160,6 +161,7 @@ class LokrModule(nn.Module):
         if dropout:
             print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
         self.rank_dropout = rank_dropout
+        self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
         
         if isinstance(alpha, torch.Tensor):
@@ -212,8 +214,11 @@ class LokrModule(nn.Module):
         if orig_weight is not None:
             weight = weight.reshape(orig_weight.shape)
         if self.training and self.rank_dropout:
-            drop = torch.rand(weight.size(0)) < self.rank_dropout
-            weight *= drop.view(-1, [1]*len(weight.shape[1:])).to(weight.device)
+            drop = (torch.rand(weight.size(0)) < self.rank_dropout).to(weight.dtype)
+            drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+            weight *= drop
         return weight
 
     @torch.no_grad()

@@ -16,6 +16,7 @@ class NormModule(nn.Module):
         self, 
         lora_name, org_module: nn.Module, 
         multiplier=1.0, rank_dropout=0., module_dropout=0.,
+        rank_dropout_scale=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -37,6 +38,7 @@ class NormModule(nn.Module):
         self.b_norm = nn.Parameter(torch.zeros(self.dim))
         
         self.rank_dropout = rank_dropout
+        self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
         
         self.multiplier = multiplier
@@ -49,6 +51,12 @@ class NormModule(nn.Module):
     def make_weight(self, scale = 1, device=None):
         org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
         org_bias = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+        if self.rank_dropout and self.training:
+            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.w_norm.device)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+        else:
+            drop = 1
         drop = (
             torch.rand(self.dim, device=device) < self.rank_dropout 
             if self.rank_dropout and self.training 
