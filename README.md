@@ -136,6 +136,17 @@ usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--safete
                         base_model db_model output_name
 ```
 
+### Merge LyCORIS back to model
+You can merge your LyCORIS model back to your checkpoint(base model)
+```bash
+python3 merge.py <settings> <base_model> <lycoris_model> <output>
+```
+Use --help to get more info
+```
+$ python3 merge.py --help
+usage: merge.py [-h] [--is_v2] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
+```
+
 
 
 ## Change Log
