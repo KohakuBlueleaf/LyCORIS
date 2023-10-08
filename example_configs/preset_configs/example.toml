@@ -1,0 +1,50 @@
+enable_conv = true
+
+# An example for use different algo/settings in "full" preset
+unet_target_module = [
+  "Transformer2DModel", 
+  "ResnetBlock2D", 
+  "Downsample2D", 
+  "Upsample2D",
+]
+unet_target_name = [
+  "conv_in",
+  "conv_out",
+  "time_embedding.linear_1",
+  "time_embedding.linear_2",
+]
+text_encoder_target_module = [
+  "CLIPAttention",
+  "CLIPMLP",
+]
+text_encoder_target_name = [
+  # "token_embedding", # not supported, Embedding module in CLIP
+]
+
+
+[module_algo_map]
+  [module_algo_map.CrossAttention]  # Attention Layer in UNet
+    algo = "lokr"
+    dim = 10000000000000
+    factor = 64                     # Try to fit the head dim (doesn't have special effect)
+  
+  [module_algo_map.FeedForward]     # MLP Layer in UNet
+    algo = "lokr"
+    dim = 100000000000              # Trigger full matrix
+    factor = 12
+  
+  [module_algo_map.ResnetBlock2D]   # ResBlock in UNet
+    algo = "lora"
+    dim = 4
+    alpha = 1
+    use_tucker = true               # Use tucker decomposition for convolution
+    factor = 8
+  
+  [module_algo_map.CLIPAttention]   # Attention Layer in TE
+    algo = "lora"
+    dim = 8
+    alpha = 1
+  
+  [module_algo_map.CLIPMLP]         # MLP Layer in TE
+    algo = "lokr"
+    dim = 100000000000              # Trigger full matrix

@@ -1,0 +1,152 @@
+[Basics]
+pretrained_model_name_or_path = "/path/to/model"
+train_data_dir = "/path/to/dataset"
+resolution = "512"
+seed = 23
+max_train_steps = 10000	# This is overwritten by max_train_epochs anyway
+max_train_epochs = 2
+clip_skip = 2
+
+[Save]
+output_dir = "/path/to/output_dir/"
+output_name = "name"
+save_precision = "fp16"
+save_model_as = "safetensors"
+save_every_n_epochs = 10
+save_every_n_steps = 5000
+save_state = false
+save_last_n_steps_state = 1	# basically saving the last + final state if save_state set to true
+# save_last_n_epochs_state = 1
+# save_n_epoch_ratio = 10
+# save_last_n_epochs = 10
+# save_last_n_steps = 100000
+
+[SDv2]
+v2 = false
+v_parameterization = false
+scale_v_pred_loss_like_noise_pred = false
+
+[Network_setup]
+network_dim = 16
+network_alpha = 8
+dim_from_weights = false
+network_dropout = 0
+network_train_unet_only = false
+network_train_text_encoder_only = false
+resume = false
+# network_weights = 'path/to/network_weights'
+# base_weights = 'path/to/base_weights'
+# base_weights_multiplier = 1
+
+[LyCORIS]
+network_module = "lycoris.kohya"
+network_args = [ "preset=attn-mlp", "algo=lora",]
+
+[Optimizer]
+train_batch_size = 8
+gradient_checkpointing = false
+gradient_accumulation_steps = 1
+optimizer_type = "AdamW8bit"
+unet_lr = 2e-4
+text_encoder_lr = 2e-4
+max_grad_norm = 1.0
+optimizer_args = [ "weight_decay=0.1", "betas=0.9,0.99",]
+
+[Lr_scheduler]
+lr_scheduler_type = ""
+lr_scheduler = "constant"
+lr_warmup_steps = 0
+lr_scheduler_num_cycles = 1
+lr_scheduler_power = 1.0	# Polynomial power for polynomial scheduler
+# lr_scheduler_args = ...
+
+[Training_preciscion]
+mixed_precision = "bf16"
+full_fp16 = false
+
+[Further_improvement]
+min_snr_gamma = 5
+# noise_offset = 0.05   # cannot be set with multires_noise
+# adaptive_noise_scale = 0
+multires_noise_discount = 0.3
+multires_noise_iterations = 10
+# scale_weight_norms = 1
+
+[ARB]
+enable_bucket = true
+min_bucket_reso = 320
+max_bucket_reso = 960
+bucket_reso_steps = 64
+bucket_no_upscale = false
+
+[Captions]
+shuffle_caption = false
+caption_extension = ".txt"
+keep_tokens = 0
+caption_dropout_rate = 0.05
+caption_dropout_every_n_epochs = 0
+caption_tag_dropout_rate = 0.0
+max_token_length = 150
+weighted_captions = false
+token_warmup_min = 1
+token_warmup_step = 0
+
+[Attention]
+mem_eff_attn = false
+xformers = true
+
+[Data_augmentation]
+color_aug = false
+flip_aug = false
+random_crop = false
+
+[Cache_latents]
+cache_latents = true
+vae_batch_size = 1
+cache_latents_to_disk = true
+
+[Sampling_during_training]
+sample_sampler = "ddim"
+# sample_every_n_steps = 5000	# overwritten by n_epochs
+# sample_every_n_epochs = 1
+# sample_prompts = "sample_prompts.txt"
+
+[Logging]
+logging_dir = "logs_training"
+log_with = "tensorboard"
+log_prefix = "lora_"
+# log_tracker_name = ?
+# wandb_api_key = ?
+
+[Dataset]
+max_data_loader_n_workers = 8
+persistent_data_loader_workers = true
+dataset_repeats = 1	# Not sure how this is used 
+# dataset_class = package.module.Class
+# dataset_config = ...
+
+[Regularization]
+# This is not really needed because you can do regularization by putting everything in train
+# reg_data_dir = "/path/to/reg"
+prior_loss_weight = 1.0
+
+[Huggingface]
+save_state_to_huggingface = false
+resume_from_huggingface = false
+async_upload = false
+# There are more arguments
+
+[Debugging]
+debug_dataset = false
+
+[Deprecated]
+use_8bit_adam = false
+use_lion_optimizer = false
+learning_rate = 0.0002
+
+[Others]
+lowram = false
+# in_json = "/path/to/json_metadata"
+# face_crop_aug_range = 2.0
+# vae = "/path/to/vae"
+training_comment = ""

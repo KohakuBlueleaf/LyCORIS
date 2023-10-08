@@ -1,7 +1,10 @@
 # Demo, Example, Comparing
 
+**Warning: While the example images are always valid, it is better to check the [Guidelines](Guidelines.md) for more up-to-date information on algorithm comparison**
 
-## expand LoRA to Convolution Layer
+Check [our paper](https://arxiv.org/abs/2309.14859) for more examples
+
+## Expand LoRA to Convolution Layer
 lora for transformer only
 vs
 lora for whole model
@@ -20,7 +23,6 @@ xy grid:
 
 With some experiments from community, finetuning whole model can learn "More". But in some case this means it will overfit heavily.
 
----
 
 ## Hadamard product vs Conventional
 We introduced LoRA finetuning with Hadamard Product representation from FedPara.
