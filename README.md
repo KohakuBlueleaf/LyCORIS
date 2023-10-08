@@ -100,7 +100,7 @@ A detilaed description of the network arguments is provided [here](docs/Network-
         ```bash
         python train_network.py --config_file XXX.toml
         ```
-        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs](examples/training_configs).
+        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs](example_configs/training_configs).
 
 
 * Tips:
