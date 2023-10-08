@@ -4,7 +4,7 @@ Arguments to put in `network_args` for kohya sd  scripts
 
 ### Algo
 - Set with `algo=ALGO_NAME`
-- check [List of Implemented Algorithms](Algo-List.md) for algorithms to use
+- Check [List of Implemented Algorithms](Algo-List.md) for algorithms to use
 
 ### Preset
 - Set with `preset=PRESET/CONFIG_FILE`
