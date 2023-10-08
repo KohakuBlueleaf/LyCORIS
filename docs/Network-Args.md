@@ -16,7 +16,7 @@ Arguments to put in `network_args` for kohya sd  scripts
 ### Dimension
 - Set with `dim=INT`
 - Valid for all but (IA)^3 and native fine-tuning
-- For LoKr, setting dimension to sufficiently large value (10240) prevents the second block from being further decomposed
+- For LoKr, setting dimension to sufficiently large value (>10240/2) prevents the second block from being further decomposed
 
 ### Alpha
 - Set with `alpha=NUMBER`
