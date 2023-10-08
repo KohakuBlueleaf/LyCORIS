@@ -16,9 +16,9 @@ There are so many tutorials for this first step, in both text and video formats,
 
 Resources with detailed explanation on the effects of training parameters are much scarce. Suggestions for this block are welcome.
 
-- [bmaltais/LoRA training parameters](https://github.com/bmaltais/kohya_ss/wiki/LoRA-training-parameters): simple explanation of what each argument in kohya/sd-scripts does
+- [bmaltais/LoRA training parameters](https://github.com/bmaltais/kohya_ss/wiki/LoRA-training-parameters): Simple explanation of what each argument in kohya/sd-scripts does
 - [THE OTHER LoRA TRAINING RENTRY](https://rentry.org/59xed3): A deep dive into different aspects of training
-- [LyCORIS-experiments](https://rentry.org/LyCORIS-experiments): Investigation on transfer between base models and impacts of various design decisions
+- [LyCORIS-experiments](https://rentry.org/LyCORIS-experiments): Investigation on transfer between base models and impacts of various training decisions
 - [lora training logs & notes - crude science](https://rentry.org/lora-training-science): On U-Net and TextEncoder learning rate
 - [A simple guide for VEHICLE LORA](https://civitai.com/articles/822/a-simple-guide-for-vehicle-lora): Captioning for vehicle LoRA
 - [followfox blog](https://followfoxai.substack.com/archive?sort=new): This blog contains many interesting experiments on Stable Diffusion fine-tuning

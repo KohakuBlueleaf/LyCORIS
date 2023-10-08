@@ -1,12 +1,13 @@
 # Preset/Config system
 
-preset/config system is added after LyCORIS 1.9.0 for more detailed control.
+Preset/config system is added after LyCORIS 1.9.0 for more fine-grained control.
 
 ## Preset
-LyCORIS provide few presets for common users
+
+LyCORIS provides a few presets for common users
 
 * `preset=full`
-  * Default preset, train all the layers in the UNet and CLIP.
+  * default preset, train all the layers in the UNet and CLIP.
 * `preset=full-lin`
   * `full` but skip convolutional layers.
 * `preset=attn-mlp`
