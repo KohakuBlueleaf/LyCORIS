@@ -8,6 +8,8 @@ This project originated from LoCon (see archive branch).
 
 [![Discord!](https://i.imgur.com/A8tOvFS.jpg)](https://discord.gg/VtTFKrj9gJ)
 
+**If you want to check more in-depth experiments result and discussion for LyCORIS, you can check our [paper](https://arxiv.org/abs/2309.14859)**
+
 ## Algorithm Overview
 
 LyCORIS currently contains LoRA (LoCon), LoHa, LoKr, (IA)^3, DyLoRA, Native fine-tuning (aka dreambooth).
