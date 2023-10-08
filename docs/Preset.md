@@ -27,4 +27,4 @@ config system allows you to:
 * Use different setting for specific module type/module
 * Enable training for specific module type/module
 
-You can check [example config](example_configs/preset_configs/example.toml) for example usage.
+You can check [example config](../example_configs/preset_configs/example.toml) for example usage.
