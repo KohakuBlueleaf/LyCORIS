@@ -1,5 +1,7 @@
 # LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion.
 
+![banner image](docs/images/banner.png)
+
 A project that implements different parameter-efficient fine-tuning algorithms for Stable Diffusion.
 
 This project originated from LoCon (see archive branch).
@@ -100,7 +102,7 @@ A detilaed description of the network arguments is provided [here](docs/Network-
         ```bash
         python train_network.py --config_file XXX.toml
         ```
-        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs](examples/training_configs).
+        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs](example_configs/training_configs).
 
 
 * Tips:
