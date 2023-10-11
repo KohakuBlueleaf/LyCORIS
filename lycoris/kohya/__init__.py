@@ -22,6 +22,7 @@ from ..modules.dylora import DyLoraModule
 from ..modules.glora import GLoRAModule
 from ..modules.norms import NormModule
 from ..modules.full import FullModule
+from ..modules.diag_oft import DiagOFTModule
 from ..modules import make_module
 
 from ..config import PRESET
@@ -38,6 +39,7 @@ network_module_dict = {
     'dylora': DyLoraModule,
     'glora': GLoRAModule,
     'full': FullModule,
+    'diag-oft': DiagOFTModule,
 }
 
 
