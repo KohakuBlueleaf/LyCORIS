@@ -32,3 +32,6 @@ if not logger.handlers:
         ColoredFormatter("[%(name)s]-%(levelname)s: %(message)s")
     )
     logger.addHandler(handler)
+
+logger.setLevel(logging.DEBUG)
+logger.debug("Logger initialized.")

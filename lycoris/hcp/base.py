@@ -69,7 +69,6 @@ class LycorisPluginContainer(PatchPluginContainer):
         for name in self.plugin_names:
             lyco_plugin_block = getattr(self, name)
             diff_weight, diff_bias, diff_output = lyco_plugin_block(org_weight, org_bias, new_weight, new_bias, *args, **kwargs)
-            
             if diff_weight is not None:
                 new_weight = new_weight + diff_weight
             if diff_bias is not None:
@@ -81,8 +80,7 @@ class LycorisPluginContainer(PatchPluginContainer):
             "weight": new_weight,
             "bias": new_bias,
         }
-        output = self.op(**weight_dict, **self.extra_args)
-        
+        output = self.op(*args, **weight_dict, **self.extra_args)
         return output + total_diff_output
 
 
@@ -94,7 +92,7 @@ class LycorisPluginBlock(PatchPluginBlock):
         use_tucker=False, **kwargs
     ):
         super(LycorisPluginBlock, self).__init__(*args, **kwargs)
-        self.module_type = self.get_container().module_type
+        self.module_type = self.container().module_type
         self.dim = dim
         self.alpha = alpha
         self.dropout = dropout

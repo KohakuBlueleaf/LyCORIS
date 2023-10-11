@@ -27,10 +27,11 @@ class LohaBlock(LycorisPluginBlock):
             self.hada_w2_a = nn.Parameter(torch.empty(self.shape[0], self.dim))
             self.hada_w2_b = nn.Parameter(torch.empty(self.dim, self.shape[1]))
 
-        if type(alpha) == torch.Tensor:
-            alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
-        alpha = self.dim if alpha is None or alpha == 0 else alpha
-        self.scale = alpha / self.self.dim
+        if type(self.alpha) == torch.Tensor:
+            self.alpha = self.alpha.detach().float().numpy()  # without casting, bf16 causes error
+        alpha = self.dim if self.alpha is None or self.alpha == 0 else self.alpha
+        self.scale = alpha / self.dim
+        delattr(self, 'alpha')
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
         if self.tucker:
