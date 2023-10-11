@@ -18,7 +18,7 @@ class FullModule(nn.Module):
         multiplier=1.0, 
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
-        use_tucker=False, use_scalar=False, rank_dropout_scale=False
+        use_tucker=False, use_scalar=False, rank_dropout_scale=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
