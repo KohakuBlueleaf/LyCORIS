@@ -1,0 +1,53 @@
+_base_:
+  - example_configs/training_configs/hcp/base_dataset.yaml
+  - example_configs/training_configs/hcp/train_base.yaml
+  - example_configs/training_configs/hcp/tuning_base.yaml
+
+
+plugin_unet:
+  loha:
+    _target_: lycoris.hcp.LohaBlock
+    _partial_: True
+    lr: 5e-4
+    dim: 32
+    alpha: 16
+    layers:
+      - 're:.*\.to_q$'
+      - 're:.*\.to_k$'
+      - 're:.*\.to_v$'
+
+
+tokenizer_pt:
+  train: null
+
+train:
+  gradient_accumulation_steps: 1
+  save_step: 100
+
+  scheduler:
+    name: 'constant'
+    num_training_steps: 100
+
+
+model:
+  pretrained_model_name_or_path: 'KBlueLeaf/kohaku-v4-rev1.2'
+  tokenizer_repeats: 1
+  ema_unet: 0
+  ema_text_encoder: 0
+
+
+data:
+  dataset1:
+    batch_size: 4
+    cache_latents: False
+
+    source:
+      data_source1:
+        img_root: 'C:\Users\apoll\Desktop\AI\training_data\fuzi-choko\5_author_27517'
+        prompt_template: 'example_configs/training_configs/hcp/hcp_caption.txt'
+        caption_file: 'C:\Users\apoll\Desktop\AI\training_data\fuzi-choko\5_author_27517'
+
+    bucket:
+      _target_: hcpdiff.data.bucket.RatioBucket.from_files # aspect ratio bucket
+      target_area: ${hcp.eval:"512*512"}
+      num_bucket: 12

@@ -1,0 +1,38 @@
+data:
+  dataset1:
+    _target_: hcpdiff.data.TextImagePairDataset
+    _partial_: True # Not directly instantiate the object here. There are other parameters to be added in the runtime.
+    batch_size: 4
+    cache_latents: False
+    att_mask_encode: False
+    loss_weight: 1.0
+
+    source:
+      data_source1:
+        img_root: 'imgs/'
+        prompt_template: 'prompt_tuning_template/object.txt'
+        caption_file: null # path to image captions (file_words)
+        att_mask: null
+        bg_color: [ 255, 255, 255 ] # RGB; for ARGB -> RGB
+
+        word_names: {}
+
+        image_transforms:
+          _target_: torchvision.transforms.Compose # "_target_" for hydra.utils.instantiate
+          transforms:
+            - _target_: torchvision.transforms.ToTensor
+            - _target_: torchvision.transforms.Normalize
+              mean: [ 0.5 ]
+              std: [ 0.5 ]
+        tag_transforms:
+          _target_: torchvision.transforms.Compose
+          transforms:
+            - _target_: hcpdiff.utils.caption_tools.TagShuffle
+            - _target_: hcpdiff.utils.caption_tools.TagDropout
+              p: 0.1
+            - _target_: hcpdiff.utils.caption_tools.TemplateFill
+              word_names: ${....word_names}
+    bucket:
+      _target_: hcpdiff.data.bucket.RatioBucket.from_files # aspect ratio bucket
+      target_area: ${hcp.eval:"512*512"}
+      num_bucket: 5
