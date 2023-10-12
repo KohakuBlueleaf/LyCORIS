@@ -1,11 +1,14 @@
 # test
 test_model/
 huggingface/
+logs/
+output/
+exps/
+*.ps1
 *.safetensors
 *.pt
 *.ckpt
-logs/
-output/
+test*.py
 
 # Editors
 .vscode/

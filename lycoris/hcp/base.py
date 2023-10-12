@@ -7,6 +7,7 @@ import torch.nn.functional as F
 try:
     import hcpdiff
     from hcpdiff.models.plugin import PatchPluginContainer, PatchPluginBlock
+    from hcpdiff.utils.utils import isinstance_list
 except ImportError:
     print(
         'HCP-Diffusion is not installed, hcp feature will be disabled. '
@@ -69,6 +70,7 @@ class LycorisPluginContainer(PatchPluginContainer):
         for name in self.plugin_names:
             lyco_plugin_block = getattr(self, name)
             diff_weight, diff_bias, diff_output = lyco_plugin_block(org_weight, org_bias, new_weight, new_bias, *args, **kwargs)
+            # logger.debug(f'diff weight norm: {torch.norm(diff_weight).detach().cpu().item()}')
             if diff_weight is not None:
                 new_weight = new_weight + diff_weight
             if diff_bias is not None:
@@ -105,11 +107,11 @@ class LycorisPluginBlock(PatchPluginBlock):
             self.in_dim = self.host().in_channels
             self.k_size = self.host().kernel_size
             self.tucker = use_tucker
-            self.shape = (self.out_dim, self.in_dim, *self.k_size)
+            self.shape = [self.out_dim, self.in_dim, *self.k_size]
         elif self.module_type == 'linear':
             self.out_dim = self.host().out_features
             self.in_dim = self.host().in_features
-            self.shape = (self.out_dim, self.in_dim)
+            self.shape = [self.out_dim, self.in_dim]
         elif self.module_type == 'norm':
             self.dim = self.host().weight.shape[0]
         else:

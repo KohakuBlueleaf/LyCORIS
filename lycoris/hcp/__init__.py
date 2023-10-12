@@ -3,3 +3,4 @@ from .base import (
     LycorisPluginBlock
 )
 from .loha import LohaBlock
+from .lokr import LokrBlock
