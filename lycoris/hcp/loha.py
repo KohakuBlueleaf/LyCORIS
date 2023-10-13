@@ -46,7 +46,7 @@ class LohaBlock(LycorisPluginBlock):
         if self.tucker:
             weight = make_weight_cp(
                 self.hada_t1, self.hada_w1_a, self.hada_w1_b,
-                self.hada_t1, self.hada_w2_a, self.hada_w2_b,
+                self.hada_t2, self.hada_w2_a, self.hada_w2_b,
                 scale = torch.tensor(self.scale),
             )
         else:
