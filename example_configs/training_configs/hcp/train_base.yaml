@@ -9,10 +9,10 @@ vis_info:
   negative_prompt: ''
 
 train:
-  train_steps: 100
+  train_steps: 1000
   train_epochs: null # Choose one of [train_steps, train_epochs]
   gradient_accumulation_steps: 1
-  workers: 0
+  workers: 4
   max_grad_norm: 1.0
   set_grads_to_none: False
   save_step: 100
@@ -58,12 +58,11 @@ logger:
     _target_: hcpdiff.loggers.CLILogger
     _partial_: True
     out_path: 'train.log'
-    log_step: 1
+    log_step: 20
 
 model:
   revision: null
   pretrained_model_name_or_path: null
-  tokenizer_name: null
   tokenizer_repeats: 2
   enable_xformers: True
   gradient_checkpointing: True
@@ -72,12 +71,11 @@ model:
   ema_text_encoder: 0 # 0 to disable
   clip_skip: 0
   clip_final_norm: True
-  noise_scheduler:
-    _target_: diffusers.DDPMScheduler.from_pretrained
-    pretrained_model_name_or_path: ${model.pretrained_model_name_or_path}
-    subfolder: scheduler
 
-previewer:
-  _target_: hcpdiff.loggers.preview.ImagePreviewer
-  _partial_: True
-  infer_cfg: example_configs/training_configs/hcp/text2img.yaml
+  tokenizer: null
+  noise_scheduler: null
+  unet: null
+  text_encoder: null
+  vae: null
+
+previewer: null

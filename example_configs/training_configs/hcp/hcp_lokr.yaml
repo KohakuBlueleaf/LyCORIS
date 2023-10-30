@@ -6,28 +6,28 @@ _base_:
 
 plugin_unet:
   lokr:
-    _target_: lycoris.hcp.LokrBlock
+    _target_: lycoris.hcp.LokrBlock.wrap_model
     _partial_: True
     lr: 5e-4
     dim: 10000
     alpha: 1
     factor: 8
     layers:
-      - 're:.*\.to_q$'
-      - 're:.*\.to_k$'
-      - 're:.*\.to_v$'
+      - 're:.*\.attn.?$'
+      - 're:.*\.ff$'
 
 
 plugin_TE:
   lokr:
-    _target_: lycoris.hcp.LokrBlock
+    _target_: lycoris.hcp.LokrBlock.wrap_model
     _partial_: True
     lr: 5e-4
     dim: 10000
     alpha: 1
     factor: 8
     layers:
-      - 're:.*\..*_proj$'
+      - 're:.*self_attn$'
+      - 're:.*mlp$'
 
 
 tokenizer_pt:
@@ -49,6 +49,7 @@ train:
 
 model:
   pretrained_model_name_or_path: 'KBlueLeaf/kohaku-v4-rev1.2'
+  clip_skip: 1
   tokenizer_repeats: 1
   ema_unet: 0
   ema_text_encoder: 0
@@ -61,9 +62,9 @@ data:
 
     source:
       data_source1:
-        img_root: 'C:\Users\apoll\Desktop\AI\training_data\fuzi-choko\5_author_27517'
+        img_root: 'F:\dataset\yog_lora\10_yog_pre'
         prompt_template: 'example_configs/training_configs/hcp/hcp_caption.txt'
-        caption_file: 'C:\Users\apoll\Desktop\AI\training_data\fuzi-choko\5_author_27517'
+        caption_file: 'F:\dataset\yog_lora\10_yog_pre'
 
     bucket:
       _target_: hcpdiff.data.bucket.RatioBucket.from_files # aspect ratio bucket

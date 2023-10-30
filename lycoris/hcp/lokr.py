@@ -9,6 +9,8 @@ from ..modules.lokr import make_kron, make_weight_cp, factorization
 
 
 class LokrBlock(LycorisPluginBlock):
+    wrapable_classes = [nn.Conv2d, nn.Linear]
+
     def __init__(
         self, *args, factor=-1, decompose_both=False, **kwargs
     ):

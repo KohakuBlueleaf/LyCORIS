@@ -3,12 +3,13 @@ data:
     _target_: hcpdiff.data.TextImagePairDataset
     _partial_: True # Not directly instantiate the object here. There are other parameters to be added in the runtime.
     batch_size: 4
-    cache_latents: False
+    cache_latents: True
     att_mask_encode: False
     loss_weight: 1.0
 
     source:
       data_source1:
+        _target_: hcpdiff.data.source.Text2ImageAttMapSource
         img_root: 'imgs/'
         prompt_template: 'prompt_tuning_template/object.txt'
         caption_file: null # path to image captions (file_words)
@@ -17,14 +18,7 @@ data:
 
         word_names: {}
 
-        image_transforms:
-          _target_: torchvision.transforms.Compose # "_target_" for hydra.utils.instantiate
-          transforms:
-            - _target_: torchvision.transforms.ToTensor
-            - _target_: torchvision.transforms.Normalize
-              mean: [ 0.5 ]
-              std: [ 0.5 ]
-        tag_transforms:
+        text_transforms:
           _target_: torchvision.transforms.Compose
           transforms:
             - _target_: hcpdiff.utils.caption_tools.TagShuffle

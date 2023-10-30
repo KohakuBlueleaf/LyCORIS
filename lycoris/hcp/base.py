@@ -1,8 +1,9 @@
 from typing import Tuple, Callable, Any, Optional
 import torch
-from torch import nn
 import torch.nn as nn
 import torch.nn.functional as F
+
+from diffusers.models.lora import LoRACompatibleLinear, LoRACompatibleConv
 
 try:
     import hcpdiff
@@ -61,6 +62,12 @@ class LycorisPluginContainer(PatchPluginContainer):
         if self.op is None:
             return self._host(*args, **kwargs)
         
+        if isinstance(self._host, (LoRACompatibleLinear, LoRACompatibleConv)) and len(args)==2:
+            scale = args[1]
+            args = [args[0]]
+        else:
+            scale = 1
+        
         org_weight = self._host.weight
         org_bias = getattr(self._host, "bias", None)
         new_weight = org_weight
@@ -72,11 +79,11 @@ class LycorisPluginContainer(PatchPluginContainer):
             diff_weight, diff_bias, diff_output = lyco_plugin_block(org_weight, org_bias, new_weight, new_bias, *args, **kwargs)
             # logger.debug(f'diff weight norm: {torch.norm(diff_weight).detach().cpu().item()}')
             if diff_weight is not None:
-                new_weight = new_weight + diff_weight
+                new_weight = new_weight + diff_weight * scale
             if diff_bias is not None:
-                new_bias = diff_bias if new_bias is None else new_bias + diff_bias
+                new_bias = diff_bias * scale if new_bias is None else new_bias + diff_bias * scale
             if diff_output is not None:
-                total_diff_output = total_diff_output + diff_output
+                total_diff_output = total_diff_output + diff_output * scale
         
         weight_dict = {
             "weight": new_weight,
