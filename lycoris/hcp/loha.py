@@ -7,7 +7,7 @@ from ..modules.loha import make_weight, make_weight_cp
 
 
 class LohaBlock(LycorisPluginBlock):
-    wrapable_classes = [nn.Conv2d, nn.Linear]
+    wrapable_classes = (nn.Conv2d, nn.Linear)
 
     def __init__(
         self, *args, **kwargs
