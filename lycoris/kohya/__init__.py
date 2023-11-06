@@ -470,27 +470,16 @@ class LycorisNetwork(torch.nn.Module):
             self.weights_sd = load_file(file)
         else:
             self.weights_sd = torch.load(file, map_location='cpu')
+        missing, unexpected = self.load_state_dict(self.weights_sd, strict=False)
+        state = {}
+        if missing:
+            state['missing keys'] = missing
+        if unexpected:
+            state['unexpected keys'] = unexpected
+        return state
 
     def apply_to(self, text_encoder, unet, apply_text_encoder=None, apply_unet=None):
-        if self.weights_sd:
-            weights_has_text_encoder = weights_has_unet = False
-            for key in self.weights_sd.keys():
-                if key.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
-                    weights_has_text_encoder = True
-                elif key.startswith(LycorisNetwork.LORA_PREFIX_UNET):
-                    weights_has_unet = True
-
-            if apply_text_encoder is None:
-                apply_text_encoder = weights_has_text_encoder
-            else:
-                assert apply_text_encoder == weights_has_text_encoder, f"text encoder weights: {weights_has_text_encoder} but text encoder flag: {apply_text_encoder} / 重みとText Encoderのフラグが矛盾しています"
-
-            if apply_unet is None:
-                apply_unet = weights_has_unet
-            else:
-                assert apply_unet == weights_has_unet, f"u-net weights: {weights_has_unet} but u-net flag: {apply_unet} / 重みとU-Netのフラグが矛盾しています"
-        else:
-            assert apply_text_encoder is not None and apply_unet is not None, f"internal error: flag not set"
+        assert apply_text_encoder is not None and apply_unet is not None, f"internal error: flag not set"
 
         if apply_text_encoder:
             print("enable LyCORIS for text encoder")
