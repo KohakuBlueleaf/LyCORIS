@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class GLoRAModule(nn.Module):
+class GLoRAModule(ModuleCustomSD):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """

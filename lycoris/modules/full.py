@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class FullModule(nn.Module):
+class FullModule(ModuleCustomSD):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """

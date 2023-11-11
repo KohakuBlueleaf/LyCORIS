@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class DyLoraModule(nn.Module):
+class DyLoraModule(ModuleCustomSD):
     """
     Hadamard product Implementaion for Dynamic Low Rank adaptation
     """

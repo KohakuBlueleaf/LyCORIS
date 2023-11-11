@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LoConModule(nn.Module):
+class LoConModule(ModuleCustomSD):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """

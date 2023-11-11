@@ -62,7 +62,7 @@ def make_kron(w1, w2, scale):
     return rebuild*scale
 
 
-class LokrModule(nn.Module):
+class LokrModule(ModuleCustomSD):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
         and from KohakuBlueleaf/LyCORIS/lycoris:loha:LoHaModule

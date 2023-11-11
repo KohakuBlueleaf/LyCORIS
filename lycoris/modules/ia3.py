@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class IA3Module(nn.Module):
+class IA3Module(ModuleCustomSD):
     """
     Hadamard product Implementaion for Low Rank Adaptation
     """

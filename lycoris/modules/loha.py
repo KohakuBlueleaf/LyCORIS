@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import ModuleCustomSD
+
 
 class HadaWeight(torch.autograd.Function):
     @staticmethod
@@ -82,7 +84,7 @@ def make_weight_cp(t1, w1a, w1b, t2, w2a, w2b, scale):
     return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
-class LohaModule(nn.Module):
+class LohaModule(ModuleCustomSD):
     """
     Hadamard product Implementaion for Low Rank Adaptation
     """
@@ -206,33 +208,16 @@ class LohaModule(nn.Module):
             weight *= drop
         return weight
     
-    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
-        # TODO: Remove `args` and the parsing logic when BC allows.
-        if len(args) > 0:
-            if destination is None:
-                destination = args[0]
-            if len(args) > 1 and prefix == '':
-                prefix = args[1]
-            if len(args) > 2 and keep_vars is False:
-                keep_vars = args[2]
-            # DeprecationWarning is ignored by default
-
-        if destination is None:
-            destination = OrderedDict()
-            destination._metadata = OrderedDict()
-
-        local_metadata = dict(version=self._version)
-        if hasattr(destination, "_metadata"):
-            destination._metadata[prefix[:-1]] = local_metadata
-
-        destination[f'{prefix}alpha'] = self.alpha
-        destination[f'{prefix}hada_w1_a'] = self.hada_w1_a * self.scalar
-        destination[f'{prefix}hada_w1_b'] = self.hada_w1_b
-        destination[f'{prefix}hada_w2_a'] = self.hada_w2_a
-        destination[f'{prefix}hada_w2_b'] = self.hada_w2_b
+    def custom_state_dict(self):
+        destination = {}
+        destination['alpha'] = self.alpha
+        destination['hada_w1_a'] = self.hada_w1_a * self.scalar
+        destination['hada_w1_b'] = self.hada_w1_b
+        destination['hada_w2_a'] = self.hada_w2_a
+        destination['hada_w2_b'] = self.hada_w2_b
         if self.tucker:
-            destination[f'{prefix}hada_t1'] = self.hada_t1
-            destination[f'{prefix}hada_t2'] = self.hada_t2
+            destination['hada_t1'] = self.hada_t1
+            destination['hada_t2'] = self.hada_t2
         return destination
 
     @torch.no_grad()
