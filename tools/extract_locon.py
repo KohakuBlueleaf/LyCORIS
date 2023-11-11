@@ -128,9 +128,9 @@ def main():
         base_unet = base[3]
     else:
         db_tes = [db[0]]
-        db_unet = [db[2]]
+        db_unet = db[2]
         base_tes = [base[0]]
-        base_unet = [base[2]]
+        base_unet = base[2]
     
     state_dict = extract_diff(
         base_tes,
