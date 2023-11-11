@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument(
         "--mode", 
         help=(
-            'extraction mode, can be "fixed", "threshold", "ratio", "quantile". '
+            'extraction mode, can be "full", "fixed", "threshold", "ratio", "quantile". '
             'If not "fixed", network_dim and conv_dim will be ignored'
         ),
         default='fixed', type=str
@@ -91,6 +91,7 @@ ARGS = get_args()
 
 from lycoris.utils import extract_diff
 from lycoris.kohya.model_utils import load_models_from_stable_diffusion_checkpoint
+from lycoris.kohya.sdxl_model_util import load_models_from_sdxl_checkpoint
 
 import torch
 from safetensors.torch import save_file
@@ -99,7 +100,8 @@ from safetensors.torch import save_file
 def main():
     args = ARGS
     if args.is_sdxl:
-        pass
+        base = load_models_from_sdxl_checkpoint(None, args.base_model)
+        db = load_models_from_sdxl_checkpoint(None, args.db_model)
     else:
         base = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.base_model)
         db = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.db_model)
@@ -120,7 +122,10 @@ def main():
     }[args.mode]
     
     if args.is_sdxl:
-        pass
+        db_tes = [db[0], db[1]]
+        db_unet = db[3]
+        base_tes = [base[0], base[1]]
+        base_unet = base[3]
     else:
         db_tes = [db[0]]
         db_unet = [db[2]]
