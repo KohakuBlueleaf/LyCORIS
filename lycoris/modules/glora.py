@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import ModuleCustomSD
+
 
 class GLoRAModule(ModuleCustomSD):
     """

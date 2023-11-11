@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import ModuleCustomSD
+
 
 def factorization(dimension: int, factor:int=-1) -> tuple[int, int]:
     '''
