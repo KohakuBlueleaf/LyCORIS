@@ -22,6 +22,10 @@ def get_args():
         default=False, action="store_true"
     )
     parser.add_argument(
+        "--is_sdxl", help="Your base/db model is sdxl or not",
+        default=False, action="store_true"
+    )
+    parser.add_argument(
         "--device", help="Which device you want to use to extract the locon",
         default='cpu', type=str
     )
@@ -94,24 +98,40 @@ from safetensors.torch import save_file
 
 def main():
     args = ARGS
-    base = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.base_model)
-    db = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.db_model)
+    if args.is_sdxl:
+        pass
+    else:
+        base = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.base_model)
+        db = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.db_model)
     
     linear_mode_param = {
         'fixed': args.linear_dim,
         'threshold': args.linear_threshold,
         'ratio': args.linear_ratio,
         'quantile': args.linear_quantile,
+        'full': None,
     }[args.mode]
     conv_mode_param = {
         'fixed': args.conv_dim,
         'threshold': args.conv_threshold,
         'ratio': args.conv_ratio,
         'quantile': args.conv_quantile,
+        'full': None,
     }[args.mode]
     
+    if args.is_sdxl:
+        pass
+    else:
+        db_tes = [db[0]]
+        db_unet = [db[2]]
+        base_tes = [base[0]]
+        base_unet = [base[2]]
+    
     state_dict = extract_diff(
-        base, db,
+        base_tes,
+        db_tes,
+        base_unet,
+        db_unet,
         args.mode,
         linear_mode_param, conv_mode_param,
         args.device, 

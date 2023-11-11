@@ -117,8 +117,10 @@ def extract_linear(
 
 
 def extract_diff(
-    base_model,
-    db_model,
+    base_tes,
+    db_tes,
+    base_unet,
+    db_unet,
     mode = 'fixed',
     linear_mode_param = 0,
     conv_mode_param = 0,
@@ -307,20 +309,22 @@ def extract_diff(
                     raise NotImplementedError
         return loras
     
-    text_encoder_loras = make_state_dict(
-        LORA_PREFIX_TEXT_ENCODER, 
-        base_model[0], db_model[0], 
-        TEXT_ENCODER_TARGET_REPLACE_MODULE
-    )
+    all_loras = {}
+    for te1, te2 in zip(base_tes, db_tes):
+        all_loras |= make_state_dict(
+            LORA_PREFIX_TEXT_ENCODER, 
+            te1, te2, 
+            TEXT_ENCODER_TARGET_REPLACE_MODULE
+        )
     
-    unet_loras = make_state_dict(
+    all_loras |= make_state_dict(
         LORA_PREFIX_UNET,
-        base_model[2], db_model[2], 
+        base_unet, db_unet, 
         UNET_TARGET_REPLACE_MODULE,
         UNET_TARGET_REPLACE_NAME
     )
-    print(len(text_encoder_loras), len(unet_loras))
-    return text_encoder_loras|unet_loras
+    print(len(all_loras))
+    return all_loras
 
 
 def get_module(
@@ -461,7 +465,8 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
 
 @torch.no_grad()
 def merge(
-    base_model,
+    tes,
+    unet,
     lyco_state_dict,
     scale: float = 1.0,
     device = 'cpu'
@@ -526,18 +531,19 @@ def merge(
         if device=='cpu':
             lyco_state_dict[k] = v.float().cpu()
         else:
-            lyco_state_dict[k] = v.to(device, dtype=base_model[0].parameters().__next__().dtype)
+            lyco_state_dict[k] = v.to(device, dtype=tes[0].parameters().__next__().dtype)
     
-    merge_state_dict(
-        LORA_PREFIX_TEXT_ENCODER,
-        base_model[0].to(device),
-        lyco_state_dict,
-        TEXT_ENCODER_TARGET_REPLACE_MODULE,
-        UNET_TARGET_REPLACE_NAME
-    )
+    for te in tes:
+        merge_state_dict(
+            LORA_PREFIX_TEXT_ENCODER,
+            te.to(device),
+            lyco_state_dict,
+            TEXT_ENCODER_TARGET_REPLACE_MODULE,
+            UNET_TARGET_REPLACE_NAME
+        )
     merge_state_dict(
         LORA_PREFIX_UNET,
-        base_model[2].to(device),
+        unet.to(device),
         lyco_state_dict,
         UNET_TARGET_REPLACE_MODULE,
         UNET_TARGET_REPLACE_NAME
