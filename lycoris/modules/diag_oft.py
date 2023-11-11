@@ -8,10 +8,11 @@ import torch.nn.functional as F
 
 from einops import rearrange
 
+from .base import ModuleCustomSD
 from .lokr import factorization
 
 
-class DiagOFTModule(nn.Module):
+class DiagOFTModule(ModuleCustomSD):
     """
     modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
     """
@@ -23,6 +24,7 @@ class DiagOFTModule(nn.Module):
         lora_dim=4, alpha=1, 
         dropout=0., rank_dropout=0., module_dropout=0.,
         use_tucker=False, use_scalar=False, rank_dropout_scale=False,
+        constrain=0, rescaled=False,
         **kwargs,
     ):
         """ if alpha == 0 or None, alpha is rank (no scaling). """
@@ -48,7 +50,18 @@ class DiagOFTModule(nn.Module):
         out_dim = org_module.weight.shape[0]
         self.block_size, self.block_num = factorization(out_dim, lora_dim)
         # block_num > block_size
-        self.oft_diag = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
+        self.rescaled = rescaled
+        self.constrain = constrain
+        if self.constrain>0:
+            #follow kohya's naming to reduce more works in inference
+            self.oft_blocks = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
+        else:
+            # For non-constrained OFT, different formulation so use different naming
+            self.oft_diag = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
+        if rescaled:
+            self.rescale = nn.Parameter(torch.zeros(self.block_num, self.block_size))
+        self.I: torch.Tensor
+        self.register_buffer("I", torch.eye(self.block_size), False)
         
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -68,13 +81,28 @@ class DiagOFTModule(nn.Module):
                 drop /= drop.mean()
         else:
             drop = 1
-        org_weight = self.org_module[0].weight.to(device, dtype=self.oft_diag.dtype)
-        org_weight = rearrange(org_weight, '(k n) ... -> k n ...', k=self.block_num, n=self.block_size)
+
+        if self.constrain > 0:
+            # for Q = -Q^T
+            q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
+            q_norm = torch.norm(q) + 1e-8
+            if q_norm > self.constrain:
+                normed_q = q * self.constrain / q_norm
+            else:
+                normed_q = q
+            r = (self.I + normed_q) @ (self.I - normed_q).inverse()
+        else:
+            r = self.oft_diag
         
+        if self.rescaled:
+            # Noted: not implemented in Kohya
+            r = self.rescale * r
+        
+        org_weight = self.org_module[0].weight.to(device, dtype=r.dtype)
+        org_weight = rearrange(org_weight, '(k n) ... -> k n ...', k=self.block_num, n=self.block_size)
         weight = torch.einsum(
             "k n m, k n ... -> k m ...", 
-            self.oft_diag * scale + torch.eye(self.block_size, device=device), 
-            org_weight
+            r * scale + self.I * (1-scale), org_weight
         )
         weight = rearrange(weight, 'k m ... -> (k m) ...')
         return weight
