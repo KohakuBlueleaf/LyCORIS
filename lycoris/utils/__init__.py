@@ -303,7 +303,7 @@ def extract_diff(
                 elif decompose_mode == 'full':
                     loras[f'{lora_name}.diff'] = weight.detach().cpu().contiguous().half()
                     if weights.bias is not None:
-                        bias_diff = (root_module.bias-weights.bias)
+                        bias_diff = (module.bias-weights.bias)
                         loras[f'{lora_name}.diff_b'] = bias_diff.detach().cpu().contiguous().half()
                 else:
                     raise NotImplementedError
