@@ -1,5 +1,4 @@
 import math
-from weakref import ref
 
 import torch
 import torch.nn as nn

@@ -1,5 +1,4 @@
 import math
-from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -239,39 +238,22 @@ class LokrModule(ModuleCustomSD):
             weight *= drop
         return weight
     
-    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
-        # TODO: Remove `args` and the parsing logic when BC allows.
-        if len(args) > 0:
-            if destination is None:
-                destination = args[0]
-            if len(args) > 1 and prefix == '':
-                prefix = args[1]
-            if len(args) > 2 and keep_vars is False:
-                keep_vars = args[2]
-            # DeprecationWarning is ignored by default
-
-        if destination is None:
-            destination = OrderedDict()
-            destination._metadata = OrderedDict()
-
-        local_metadata = dict(version=self._version)
-        if hasattr(destination, "_metadata"):
-            destination._metadata[prefix[:-1]] = local_metadata
-
-        destination[f'{prefix}alpha'] = self.alpha
+    def custom_state_dict(self):
+        destination = {}
+        destination['alpha'] = self.alpha
         if self.use_w1:
-            destination[f'{prefix}lokr_w1'] = self.lokr_w1 * self.scalar
+            destination['lokr_w1'] = self.lokr_w1 * self.scalar
         else:
-            destination[f'{prefix}lokr_w1_a'] = self.lokr_w1_a * self.scalar
-            destination[f'{prefix}lokr_w1_b'] = self.lokr_w1_b
+            destination['lokr_w1_a'] = self.lokr_w1_a * self.scalar
+            destination['lokr_w1_b'] = self.lokr_w1_b
         
         if self.use_w2:
-            destination[f'{prefix}lokr_w2'] = self.lokr_w2
+            destination['lokr_w2'] = self.lokr_w2
         else:
-            destination[f'{prefix}lokr_w2_a'] = self.lokr_w2_a
-            destination[f'{prefix}lokr_w2_b'] = self.lokr_w2_b
+            destination['lokr_w2_a'] = self.lokr_w2_a
+            destination['lokr_w2_b'] = self.lokr_w2_b
             if self.cp:
-                destination[f'{prefix}lokr_t2'] = self.lokr_t2
+                destination['lokr_t2'] = self.lokr_t2
         return destination
 
     @torch.no_grad()

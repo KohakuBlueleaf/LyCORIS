@@ -1,8 +1,6 @@
 import math
 import random
 
-from collections import OrderedDict, abc as container_abcs
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -85,30 +83,13 @@ class DyLoraModule(ModuleCustomSD):
         self.grad_ckpt = False
         self.state_dict()
     
-    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
-        # TODO: Remove `args` and the parsing logic when BC allows.
-        if len(args) > 0:
-            if destination is None:
-                destination = args[0]
-            if len(args) > 1 and prefix == '':
-                prefix = args[1]
-            if len(args) > 2 and keep_vars is False:
-                keep_vars = args[2]
-            # DeprecationWarning is ignored by default
-
-        if destination is None:
-            destination = OrderedDict()
-            destination._metadata = OrderedDict()
-
-        local_metadata = dict(version=self._version)
-        if hasattr(destination, "_metadata"):
-            destination._metadata[prefix[:-1]] = local_metadata
-
-        destination[f'{prefix}alpha'] = self.alpha
-        destination[f'{prefix}lora_up.weight'] = nn.Parameter(
+    def custom_state_dict(self):
+        destination = {}
+        destination['alpha'] = self.alpha
+        destination['lora_up.weight'] = nn.Parameter(
             torch.concat(list(self.up_list), dim=1)
         )
-        destination[f'{prefix}lora_down.weight'] = nn.Parameter(
+        destination['lora_down.weight'] = nn.Parameter(
             torch.concat(list(self.down_list))
         )
         return destination

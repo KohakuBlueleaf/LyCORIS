@@ -1,6 +1,4 @@
 import math
-from weakref import ref
-from collections import OrderedDict, abc as container_abcs
 
 import torch
 import torch.nn as nn
@@ -105,30 +103,13 @@ class LoConModule(ModuleCustomSD):
         wb = self.lora_down.weight.to(device)
         return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(self.shape) * self.scalar
     
-    def state_dict(self, *args, destination=None, prefix='', keep_vars=False):
-        # TODO: Remove `args` and the parsing logic when BC allows.
-        if len(args) > 0:
-            if destination is None:
-                destination = args[0]
-            if len(args) > 1 and prefix == '':
-                prefix = args[1]
-            if len(args) > 2 and keep_vars is False:
-                keep_vars = args[2]
-            # DeprecationWarning is ignored by default
-
-        if destination is None:
-            destination = OrderedDict()
-            destination._metadata = OrderedDict()
-
-        local_metadata = dict(version=self._version)
-        if hasattr(destination, "_metadata"):
-            destination._metadata[prefix[:-1]] = local_metadata
-
-        destination[f'{prefix}alpha'] = self.alpha
-        destination[f'{prefix}lora_up.weight'] = self.lora_up.weight * self.scalar
-        destination[f'{prefix}lora_down.weight'] = self.lora_down.weight
+    def custom_state_dict(self):
+        destination = {}
+        destination['alpha'] = self.alpha
+        destination['lora_up.weight'] = self.lora_up.weight * self.scalar
+        destination['lora_down.weight'] = self.lora_down.weight
         if self.tucker:
-            destination[f'{prefix}lora_mid.weight'] = self.lora_mid.weight
+            destination['lora_mid.weight'] = self.lora_mid.weight
         return destination
 
     @torch.no_grad()
