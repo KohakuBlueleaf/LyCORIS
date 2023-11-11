@@ -69,15 +69,13 @@ class DiagOFTModule(ModuleCustomSD):
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
-
-    def make_weight(self, scale = 1, device=None):
-        if self.rank_dropout and self.training:
-            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.oft_diag.dtype)
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
-        else:
-            drop = 1
-
+    
+    def custom_state_dict(self):
+        return {
+            'oft_diag': self.get_r()
+        }
+    
+    def get_r(self):
         if self.constrain > 0:
             # for Q = -Q^T
             q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
@@ -93,7 +91,17 @@ class DiagOFTModule(ModuleCustomSD):
         if self.rescaled:
             # Noted: not implemented in Kohya
             r = self.rescale * r
-        
+        return r
+
+    def make_weight(self, scale = 1, device=None):
+        if self.rank_dropout and self.training:
+            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.oft_diag.dtype)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+        else:
+            drop = 1
+
+        r = self.get_r()
         org_weight = self.org_module[0].weight.to(device, dtype=r.dtype)
         org_weight = rearrange(org_weight, '(k n) ... -> k n ...', k=self.block_num, n=self.block_size)
         weight = torch.einsum(
