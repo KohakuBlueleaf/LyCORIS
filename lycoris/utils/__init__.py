@@ -35,7 +35,9 @@ def extract_conv(
     
     U, S, Vh = linalg.svd(weight.reshape(out_ch, -1))
     
-    if mode=='fixed':
+    if mode=='full':
+        return weight, 'full'
+    elif mode=='fixed':
         lora_rank = mode_param
     elif mode=='threshold':
         assert mode_param>=0
@@ -79,7 +81,9 @@ def extract_linear(
     
     U, S, Vh = linalg.svd(weight)
     
-    if mode=='fixed':
+    if mode=='full':
+        return weight, 'full'
+    elif mode=='fixed':
         lora_rank = mode_param
     elif mode=='threshold':
         assert mode_param>=0
@@ -156,9 +160,9 @@ def extract_diff(
                 for child_name, child_module in module.named_modules():
                     if child_module.__class__.__name__ not in {'Linear', 'Conv2d'}:
                         continue
-                    temp[name][child_name] = child_module.weight
+                    temp[name][child_name] = child_module
             elif name in target_replace_names:
-                temp_name[name] = module.weight
+                temp_name[name] = module
         
         for name, module in tqdm(list(target_module.named_modules())):
             if name in temp:
@@ -169,12 +173,12 @@ def extract_diff(
                     layer = child_module.__class__.__name__
                     if layer in {'Linear', 'Conv2d'}:
                         root_weight = child_module.weight
-                        if torch.allclose(root_weight, weights[child_name]):
+                        if torch.allclose(root_weight, weights[child_name].weight):
                             continue
                     
                     if layer == 'Linear':
                         weight, decompose_mode = extract_linear(
-                            (child_module.weight - weights[child_name]),
+                            (child_module.weight - weights[child_name].weight),
                             mode,
                             linear_mode_param,
                             device = extract_device,
@@ -185,7 +189,7 @@ def extract_diff(
                         is_linear = (child_module.weight.shape[2] == 1
                                      and child_module.weight.shape[3] == 1)
                         weight, decompose_mode = extract_conv(
-                            (child_module.weight - weights[child_name]), 
+                            (child_module.weight - weights[child_name].weight), 
                             mode,
                             linear_mode_param if is_linear else conv_mode_param,
                             device = extract_device,
@@ -225,6 +229,9 @@ def extract_diff(
                         del extract_a, extract_b, diff
                     elif decompose_mode == 'full':
                         loras[f'{lora_name}.diff'] = weight.detach().cpu().contiguous().half()
+                        if weights[child_name].bias is not None:
+                            bias_diff = (child_module.bias-weights[child_name].bias)
+                            loras[f'{lora_name}.diff_b'] = bias_diff.detach().cpu().contiguous().half()
                     else:
                         raise NotImplementedError
             elif name in temp_name:
@@ -235,12 +242,12 @@ def extract_diff(
                 
                 if layer in {'Linear', 'Conv2d'}:
                     root_weight = module.weight
-                    if torch.allclose(root_weight, weights):
+                    if torch.allclose(root_weight, weights.weight):
                         continue
                 
                 if layer == 'Linear':
                     weight, decompose_mode = extract_linear(
-                        (root_weight - weights),
+                        (root_weight - weights.weight),
                         mode,
                         linear_mode_param,
                         device = extract_device,
@@ -253,7 +260,7 @@ def extract_diff(
                         and root_weight.shape[3] == 1
                     )
                     weight, decompose_mode = extract_conv(
-                        (root_weight - weights), 
+                        (root_weight - weights.weight), 
                         mode,
                         linear_mode_param if is_linear else conv_mode_param,
                         device = extract_device,
@@ -293,6 +300,9 @@ def extract_diff(
                     del extract_a, extract_b, diff
                 elif decompose_mode == 'full':
                     loras[f'{lora_name}.diff'] = weight.detach().cpu().contiguous().half()
+                    if weights.bias is not None:
+                        bias_diff = (root_module.bias-weights.bias)
+                        loras[f'{lora_name}.diff_b'] = bias_diff.detach().cpu().contiguous().half()
                 else:
                     raise NotImplementedError
         return loras
