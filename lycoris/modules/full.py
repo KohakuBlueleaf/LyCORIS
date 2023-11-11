@@ -10,10 +10,6 @@ from .base import ModuleCustomSD
 
 
 class FullModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-    """
-
     def __init__(
         self, 
         lora_name, org_module: nn.Module, 
@@ -23,81 +19,22 @@ class FullModule(ModuleCustomSD):
         use_tucker=False, use_scalar=False, rank_dropout_scale=False,
         **kwargs,
     ):
-        """ if alpha == 0 or None, alpha is rank (no scaling). """
         super().__init__()
+        
         self.lora_name = lora_name
-
-        if isinstance(org_module, nn.Linear):
-            self.op = F.linear
-            self.dim = org_module.out_features
-            self.kw_dict = {}
-        elif isinstance(org_module, nn.Conv2d):
-            self.op = F.conv2d
-            self.dim = org_module.out_channels
-            self.kw_dict = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            raise NotImplementedError
-        self.diff = nn.Parameter(torch.zeros_like(org_module.weight))
-        if org_module.bias is not None:
-            self.diff_b = nn.Parameter(torch.zeros_like(org_module.bias))
-        else:
-            self.diff_b = None
-        
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
-        
-        self.multiplier = multiplier
         self.org_module = [org_module]
 
     def apply_to(self, **kwargs):
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
-
-    def make_weight(self, scale = 1, device=None):
-        if self.rank_dropout and self.training:
-            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.diff.dtype)
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
+        self.org_weight = self.org_module[0].weight.data.clone().cpu()
+        if self.org_module[0].bias is not None:
+            self.org_bias = self.org_module[0].bias.data.clone().cpu()
         else:
-            drop = 1
-        org_weight = self.org_module[0].weight.to(device, dtype=self.diff.dtype)
-        weight = self.diff.to(device) * drop * scale
-        weight = weight + org_weight
-        
-        if self.diff_b is not None:
-            org_bias = self.org_module[0].bias.to(device, dtype=self.diff_b.dtype)
-            bias = self.diff_b.to(device) * drop * scale
-            bias = bias + org_bias
-        else:
-            bias = None
-        return weight, bias
+            self.org_bias = None
 
-    @torch.no_grad()
-    def apply_max_norm(self, max_norm, device=None):
-        orig_norm = self.diff.to(device).norm()
-        norm = torch.clamp(orig_norm, max_norm/2)
-        desired = torch.clamp(norm, max=max_norm)
-        ratio = desired/norm
-        
-        scaled = ratio.item() != 1.0
-        if scaled:
-            self.diff *= ratio
-            self.diff_b *= ratio
-        
-        return scaled, orig_norm*ratio
-
-    def forward(self, x):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
-        scale = self.multiplier
-        
-        w, b = self.make_weight(scale, x.device)
-        kw_dict = self.kw_dict | {"weight": w, "bias": b}
-        return self.op(x, **kw_dict)
+    def custom_state_dict(self):
+        sd = {
+            'diff': self.org_module[0].weight.data.cpu() - self.org_weight
+        }
+        if self.org_bias is not None:
+            sd['diff_b'] = self.org_module[0].bias.data.cpu() - self.org_bias
+        return sd
