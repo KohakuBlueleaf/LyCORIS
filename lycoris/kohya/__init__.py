@@ -61,6 +61,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     use_scalar = kwargs.get('use_scalar', False)
     block_size = int(kwargs.get('block_size', 4) or 4)
     train_norm = kwargs.get('train_norm', False)
+    constrain = int(kwargs.get('constrain', 0) or 0)
+    rescaled = kwargs.get('rescaled', False)
     
     if algo == 'glora' and conv_dim>0:
         conv_dim = 0
@@ -107,9 +109,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             network_module=algo, train_norm=train_norm,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
-            constrain=kwargs.get('constrain', 0),
-            rescaled=kwargs.get('rescaled', False),
-            block_size = block_size
+            block_size = block_size,
+            constrain=constrain, rescaled=rescaled
         )
     
     if algo=='dylora':
