@@ -27,7 +27,7 @@ from ..modules import make_module
 
 from ..config import PRESET
 from ..utils.preset import read_preset
-from ..utils import get_module
+from ..utils import get_module, str_bool
 
 
 network_module_dict = {
@@ -52,17 +52,19 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_tucker = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False)
-              or kwargs.get('use_cp', False)
-              or kwargs.get('use_tucker', False))
+    use_tucker = str_bool(
+        not kwargs.get('disable_conv_cp', True)
+        or kwargs.get('use_conv_cp', False)
+        or kwargs.get('use_cp', False)
+        or kwargs.get('use_tucker', False)
+    )
     if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
         warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
-    use_scalar = kwargs.get('use_scalar', False)
+    use_scalar = str_bool(kwargs.get('use_scalar', False))
     block_size = int(kwargs.get('block_size', 4) or 4)
-    train_norm = kwargs.get('train_norm', False)
+    train_norm = str_bool(kwargs.get('train_norm', False))
     constrain = int(kwargs.get('constrain', 0) or 0)
-    rescaled = kwargs.get('rescaled', False)
+    rescaled = str_bool(kwargs.get('rescaled', False))
     
     if algo == 'glora' and conv_dim>0:
         conv_dim = 0
@@ -184,10 +186,12 @@ def create_hypernetwork(multiplier, network_dim, network_alpha, vae, text_encode
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
     algo = (kwargs.get('algo', 'lora') or 'lora').lower()
-    use_tucker = (not kwargs.get('disable_conv_cp', True)
-              or kwargs.get('use_conv_cp', False)
-              or kwargs.get('use_cp', False)
-              or kwargs.get('use_tucker', False))
+    use_tucker = str_bool(
+        not kwargs.get('disable_conv_cp', True)
+        or kwargs.get('use_conv_cp', False)
+        or kwargs.get('use_cp', False)
+        or kwargs.get('use_tucker', False)
+    )
     if 'disable_conv_cp' in kwargs or 'use_cp' in kwargs or 'use_conv_cp' in kwargs:
         warn("disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.", stacklevel=2)
     block_size = int(kwargs.get('block_size', 4) or 4)

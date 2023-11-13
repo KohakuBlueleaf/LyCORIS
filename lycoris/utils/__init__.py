@@ -11,6 +11,10 @@ import torch.linalg as linalg
 from tqdm import tqdm
 
 
+def str_bool(val):
+    return str(val).lower() != 'false'
+
+
 def default(val, d):
     return val if val is not None else d
 
