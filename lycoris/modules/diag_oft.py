@@ -87,7 +87,9 @@ class DiagOFTModule(ModuleCustomSD):
                 normed_q = q * self.constrain / q_norm
             else:
                 normed_q = q
-            r = (I + normed_q) @ (I - normed_q).inverse()
+            # assume we have autocast enabled
+            # use float() to prevent unsupported type
+            r = (I + normed_q) @ (I - normed_q).float().inverse()
         else:
             r = self.oft_diag
         
