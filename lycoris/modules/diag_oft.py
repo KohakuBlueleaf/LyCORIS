@@ -109,6 +109,7 @@ class DiagOFTModule(ModuleCustomSD):
         r = self.get_r()
         org_weight = self.org_module[0].weight.to(device, dtype=r.dtype)
         org_weight = rearrange(org_weight, '(k n) ... -> k n ...', k=self.block_num, n=self.block_size)
+        # Init R=0, so add I on it to ensure the output of step0 is original model output
         weight = torch.einsum(
             "k n m, k n ... -> k m ...", 
             r * scale + self.I, org_weight
