@@ -56,8 +56,6 @@ class DiagOFTModule(ModuleCustomSD):
             self.oft_diag = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
         if rescaled:
             self.rescale = nn.Parameter(torch.zeros(self.block_num, self.block_size))
-        self.I: torch.Tensor
-        self.register_buffer("I", torch.eye(self.block_size), False)
         
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -65,6 +63,10 @@ class DiagOFTModule(ModuleCustomSD):
         
         self.multiplier = multiplier
         self.org_module = [org_module]
+
+    @property
+    def I(self):
+        return torch.eye(self.block_size, device=next(self.parameters()).device)
 
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
@@ -77,6 +79,7 @@ class DiagOFTModule(ModuleCustomSD):
     
     def get_r(self):
         if self.constrain > 0:
+            I = self.I
             # for Q = -Q^T
             q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
             q_norm = torch.norm(q) + 1e-8
@@ -84,13 +87,13 @@ class DiagOFTModule(ModuleCustomSD):
                 normed_q = q * self.constrain / q_norm
             else:
                 normed_q = q
-            r = (self.I + normed_q) @ (self.I - normed_q).inverse()
+            r = (I + normed_q) @ (I - normed_q).inverse()
         else:
             r = self.oft_diag
         
         if self.rescaled:
             # Noted: not implemented in Kohya
-            r = self.rescale * r
+            r = self.rescale.unsqueeze(0) * r
         return r
 
     def make_weight(self, scale = 1, device=None):
