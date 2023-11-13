@@ -237,7 +237,7 @@ class LoConModule(ModuleCustomSD):
             mid = self.lora_down(x)
         
         if self.rank_dropout and self.training:
-            drop = (torch.rand(self.lora_dim, device=mid.device) < self.rank_dropout).to(mid.dtype)
+            drop = (torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout).to(mid.dtype)
             if self.rank_dropout_scale:
                 drop /= drop.mean()
             if (dims:=len(x.shape)) == 4:

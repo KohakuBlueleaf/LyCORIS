@@ -198,7 +198,7 @@ class LohaModule(ModuleCustomSD):
         if orig_weight is not None:
             weight = weight.reshape(orig_weight.shape)
         if self.training and self.rank_dropout:
-            drop = (torch.rand(weight.size(0)) < self.rank_dropout).to(weight.dtype)
+            drop = (torch.rand(weight.size(0)) > self.rank_dropout).to(weight.dtype)
             drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
             if self.rank_dropout_scale:
                 drop /= drop.mean()
