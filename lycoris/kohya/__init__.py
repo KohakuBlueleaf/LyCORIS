@@ -107,6 +107,8 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
             network_module=algo, train_norm=train_norm,
             decompose_both=kwargs.get('decompose_both', False),
             factor=kwargs.get('factor', -1),
+            constrain=kwargs.get('constrain', 0),
+            rescaled=kwargs.get('rescaled', False),
             block_size = block_size
         )
     
