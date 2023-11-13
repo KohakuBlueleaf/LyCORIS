@@ -28,7 +28,7 @@ class ModuleCustomSD(nn.Module):
             destination._metadata[prefix[:-1]] = local_metadata
         
         if (custom_sd := self.custom_state_dict()) is not None:
-            for k, v in custom_sd:
+            for k, v in custom_sd.items():
                 destination[f'{prefix}{k}'] = v
             return destination
         else:
