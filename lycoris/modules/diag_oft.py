@@ -55,7 +55,7 @@ class DiagOFTModule(ModuleCustomSD):
             # For non-constrained OFT, different formulation so use different naming
             self.oft_diag = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
         if rescaled:
-            self.rescale = nn.Parameter(torch.zeros(self.block_num, self.block_size))
+            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size))
         
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -111,7 +111,7 @@ class DiagOFTModule(ModuleCustomSD):
         org_weight = rearrange(org_weight, '(k n) ... -> k n ...', k=self.block_num, n=self.block_size)
         weight = torch.einsum(
             "k n m, k n ... -> k m ...", 
-            r * scale + self.I * (1-scale), org_weight
+            r * scale + self.I, org_weight
         )
         weight = rearrange(weight, 'k m ... -> (k m) ...')
         return weight
