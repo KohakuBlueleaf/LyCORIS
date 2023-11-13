@@ -53,9 +53,9 @@ class DiagOFTModule(ModuleCustomSD):
             self.oft_blocks = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
         else:
             # For non-constrained OFT, different formulation so use different naming
-            self.oft_diag = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
+            self.oft_diag = nn.Parameter(torch.eye(self.block_size, self.block_size).repeat([self.block_num, 1, 1]))
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size))
+            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
         
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -95,7 +95,7 @@ class DiagOFTModule(ModuleCustomSD):
         
         if self.rescaled:
             # Noted: not implemented in Kohya
-            r = self.rescale.unsqueeze(0) * r
+            r = self.rescale * r
         return r
 
     def make_weight(self, scale = 1, device=None):
@@ -112,7 +112,7 @@ class DiagOFTModule(ModuleCustomSD):
         # Init R=0, so add I on it to ensure the output of step0 is original model output
         weight = torch.einsum(
             "k n m, k n ... -> k m ...", 
-            r * scale + self.I, org_weight
+            r * scale + (1-scale) * self.I, org_weight
         )
         weight = rearrange(weight, 'k m ... -> (k m) ...')
         return weight
