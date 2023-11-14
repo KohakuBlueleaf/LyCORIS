@@ -45,7 +45,7 @@ mac_lin_bax = 0
 mac_conv_bax = 0
 mac_lin_wba = 0
 mac_conv_wba = 0
-rank = 128
+rank = 8
 
 
 for shape in shape_list:
@@ -71,12 +71,13 @@ for shape in shape_list:
     mac_conv_backward_wba = mac_matmul(rank, shape[0]*3**2, shape[0]) + mac_matmul(rank, shape[0], shape[0]*3**2)
 
     print(f"lin")
+    print(f"lin w size    : {shape[0]**2}")
     print(f"original_lin  : {original_lin}")
     print(f"mac_lin_bax   : {mac_lin_bax}")
     print(f"mac_lin_bwax  : {mac_lin_backward_bax}")
     print(f"mac_lin_wba   : {mac_lin_wba}")
     print(f"mac_lin_bwba  : {mac_lin_backward_wba}")
-    print(f"conv")
+    print(f"conv w size   : {shape[0]**2*3**2}")
     print(f"original_conv : {original_conv}")
     print(f"mac_conv_bax  : {mac_conv_bax}")
     print(f"mac_conv_wba  : {mac_conv_wba}")
