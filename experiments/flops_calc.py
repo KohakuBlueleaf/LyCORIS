@@ -66,7 +66,7 @@ for shape in shape_list:
     mac_conv_bax = mac_for_conv_bax(shape[1], shape[2], shape[0], shape[0], rank)
     mac_conv_backward_bax = (
         
-    )# 2 times of forward I guess
+    )# 2 times of forward I guess, since for linear it is 2 times.
     mac_conv_wba = mac_for_conv_wba(shape[0], shape[0], rank)
     mac_conv_backward_wba = mac_matmul(rank, shape[0]*3**2, shape[0]) + mac_matmul(rank, shape[0], shape[0]*3**2)
 
