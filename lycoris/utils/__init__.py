@@ -462,7 +462,8 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
         merged = orig_weight + rebuild * scale
         merged_bias = orig_bias + rebuild_b * scale
     else:
-        raise NotImplementedError
+        merged = orig_weight
+        merged_bias = orig_bias
     
     return merged, merged_bias
 

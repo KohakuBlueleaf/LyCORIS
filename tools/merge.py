@@ -58,7 +58,7 @@ import torch
 @torch.no_grad()
 def main():
     if args.is_sdxl:
-        base = load_models_from_sdxl_checkpoint(None, args.base_model)
+        base = load_models_from_sdxl_checkpoint(None, args.base_model, map_location=args.device)
     else:
         base = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.base_model)
     if ARGS.lycoris_model.rsplit('.', 1)[-1] == 'safetensors':
@@ -97,8 +97,8 @@ def main():
         save_sdxl_checkpoint(
             ARGS.output_name, 
             base[0].cpu(), base[1].cpu(), base[3].cpu(),
-            None, 0, 0, dtype, 
-            base[2]
+            0, 0, None, base[2], getattr(base[1], 'logit_scale', None),
+            dtype
         )
     else:
         save_stable_diffusion_checkpoint(
