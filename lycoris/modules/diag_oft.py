@@ -78,20 +78,16 @@ class DiagOFTModule(ModuleCustomSD):
         }
     
     def get_r(self):
+        I = self.I
+        # for Q = -Q^T
+        q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
+        normed_q = q
         if self.constrain > 0:
-            I = self.I
-            # for Q = -Q^T
-            q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
             q_norm = torch.norm(q) + 1e-8
             if q_norm > self.constrain:
                 normed_q = q * self.constrain / q_norm
-            else:
-                normed_q = q
-            # assume we have autocast enabled
-            # use float() to prevent unsupported type
-            r = (I + normed_q) @ (I - normed_q).float().inverse()
-        else:
-            r = self.oft_diag
+        # use float() to prevent unsupported type
+        r = (I + normed_q) @ (I - normed_q).float().inverse()
         
         if self.rescaled:
             # Noted: not implemented in Kohya
