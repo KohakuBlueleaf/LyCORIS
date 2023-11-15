@@ -48,12 +48,7 @@ class DiagOFTModule(ModuleCustomSD):
         # block_num > block_size
         self.rescaled = rescaled
         self.constrain = constrain
-        if self.constrain>0:
-            #follow kohya's naming to reduce more works in inference
-            self.oft_blocks = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
-        else:
-            # For non-constrained OFT, different formulation so use different naming
-            self.oft_diag = nn.Parameter(torch.eye(self.block_size, self.block_size).repeat([self.block_num, 1, 1]))
+        self.oft_blocks = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
         if rescaled:
             self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
         
