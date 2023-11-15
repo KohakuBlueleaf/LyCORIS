@@ -128,5 +128,5 @@ class DiagOFTModule(ModuleCustomSD):
         scale = self.multiplier
         
         w = self.make_weight(scale, x.device)
-        kw_dict = self.kw_dict | {"weight": w}
+        kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
         return self.op(x, **kw_dict)
