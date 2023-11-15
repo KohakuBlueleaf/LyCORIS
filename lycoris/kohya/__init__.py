@@ -63,7 +63,7 @@ def create_network(multiplier, network_dim, network_alpha, vae, text_encoder, un
     use_scalar = str_bool(kwargs.get('use_scalar', False))
     block_size = int(kwargs.get('block_size', 4) or 4)
     train_norm = str_bool(kwargs.get('train_norm', False))
-    constrain = int(kwargs.get('constrain', 0) or 0)
+    constrain = float(kwargs.get('constrain', 0) or 0)
     rescaled = str_bool(kwargs.get('rescaled', False))
     
     if algo == 'glora' and conv_dim>0:
