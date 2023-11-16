@@ -15,6 +15,7 @@ class FullModule(ModuleCustomSD):
         use_tucker=False, use_scalar=False, rank_dropout_scale=False,
         **kwargs,
     ):
+        super().__init__()
         self.lora_name = lora_name
 
         if isinstance(org_module, nn.Linear):
