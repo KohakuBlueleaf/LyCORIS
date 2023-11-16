@@ -47,7 +47,7 @@ class DiagOFTModule(ModuleCustomSD):
         self.block_size, self.block_num = factorization(out_dim, lora_dim)
         # block_num > block_size
         self.rescaled = rescaled
-        self.constrain = constrain
+        self.constrain = constrain * out_dim
         self.oft_blocks = nn.Parameter(torch.zeros(self.block_num, self.block_size, self.block_size))
         if rescaled:
             self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
