@@ -91,7 +91,7 @@ class DiagOFTModule(ModuleCustomSD):
 
     def make_weight(self, scale = 1, device=None):
         if self.rank_dropout and self.training:
-            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.oft_diag.dtype)
+            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(self.oft_blocks.dtype)
             if self.rank_dropout_scale:
                 drop /= drop.mean()
         else:
@@ -117,7 +117,7 @@ class DiagOFTModule(ModuleCustomSD):
         
         scaled = ratio.item() != 1.0
         if scaled:
-            self.oft_diag *= ratio
+            self.oft_blocks *= ratio
         
         return scaled, orig_norm*ratio
 
