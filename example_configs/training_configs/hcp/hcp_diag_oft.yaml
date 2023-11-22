@@ -5,26 +5,22 @@ _base_:
 
 
 plugin_unet:
-  lokr:
-    _target_: lycoris.hcp.LokrBlock.wrap_model
+  diag_oft:
+    _target_: lycoris.hcp.DiagOFTBlock.wrap_model
     _partial_: True
-    lr: 1e-4
-    dim: 10000
-    alpha: 0
-    factor: 8
+    lr: 3e-4
+    dim: 4
     layers:
       - 're:.*\.attn.?$'
       - 're:.*\.ff$'
 
 
 plugin_TE:
-  lokr:
-    _target_: lycoris.hcp.LokrBlock.wrap_model
+  diag_oft:
+    _target_: lycoris.hcp.DiagOFTBlock.wrap_model
     _partial_: True
-    lr: 1e-4
-    dim: 10000
-    alpha: 0
-    factor: 8
+    lr: 3e-4
+    dim: 4
     layers:
       - 're:.*self_attn$'
       - 're:.*mlp$'
