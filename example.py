@@ -11,18 +11,17 @@ class DemoNet(nn.Module):
         self._3test = nn.Linear(128, 128)
 
 net = DemoNet()
-LycorisNetwork.apply_preset({
-    'target_name':[
-        '.*te.*'
-    ]
-})
-lycoris_net = create_lycoris(
-    net, 1.0,
-    linear_dim = 16, linear_alpha= 2.0,
-    algo = 'lokr'
-)
-lycoris_net.apply_to()
+LycorisNetwork.apply_preset({'target_name': ['.*te.*']})
+lycoris_net1 = create_lycoris(net, 1.0, linear_dim = 16, linear_alpha = 2.0, algo = 'lokr')
+lycoris_net1.apply_to()
 
+LycorisNetwork.apply_preset({'target_name': ['.*es.*']})
+lycoris_net2 = create_lycoris(net, 1.0, linear_dim = 16, linear_alpha = 2.0, algo = 'lokr')
+lycoris_net2.apply_to()
 
-print(sum(p.numel() for p in net.parameters()))
-print(sum(p.numel() for p in lycoris_net.parameters()))
+print(f'#Modules of net1: {len(lycoris_net1.loras)}')
+print(f'#Modules of net2: {len(lycoris_net2.loras)}')
+
+print('Total params:', sum(p.numel() for p in net.parameters()))
+print('Net1 Params:', sum(p.numel() for p in lycoris_net1.parameters()))
+print('Net2 Params:', sum(p.numel() for p in lycoris_net2.parameters()))
