@@ -1,8 +1,4 @@
 # General LyCORIS wrapper based on kohya-ss/sd-scripts' style
-# reference:
-# https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
-# https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
-# https://github.com/kohya-ss/sd-scripts/blob/main/networks/lora.py
 
 import math
 from warnings import warn
@@ -40,11 +36,11 @@ network_module_dict = {
 }
 
 
-def create_lycoris(module, multiplier, linear_dim, network_alpha, **kwargs):
+def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     if linear_dim is None:
         linear_dim = 4                     # default
     conv_dim = int(kwargs.get('conv_dim', linear_dim) or linear_dim)
-    conv_alpha = float(kwargs.get('conv_alpha', network_alpha) or network_alpha)
+    conv_alpha = float(kwargs.get('conv_alpha', linear_alpha) or linear_alpha)
     dropout = float(kwargs.get('dropout', 0.) or 0.)
     rank_dropout = float(kwargs.get("rank_dropout", 0.) or 0.)
     module_dropout = float(kwargs.get("module_dropout", 0.) or 0.)
@@ -96,7 +92,7 @@ def create_lycoris(module, multiplier, linear_dim, network_alpha, **kwargs):
         module, 
         multiplier=multiplier, 
         lora_dim=linear_dim, conv_lora_dim=conv_dim, 
-        alpha=network_alpha, conv_alpha=conv_alpha,
+        alpha=linear_alpha, conv_alpha=conv_alpha,
         dropout=dropout, rank_dropout=rank_dropout, module_dropout=module_dropout,
         use_tucker=use_tucker, use_scalar=use_scalar,
         network_module=algo, train_norm=train_norm,
@@ -131,7 +127,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         loras[lora_name] = None
     
     for name, modules in module.named_modules():
-        lora_name = f'{LycorisNetwork.LORA_PREFIX_UNET}_{name}'.replace('.','_')
+        lora_name = f'{LycorisNetwork.LORA_PREFIX}_{name}'.replace('.','_')
         if lora_name in loras:
             loras[lora_name] = modules
     
@@ -153,23 +149,9 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
 
 
 class LycorisNetwork(torch.nn.Module):
-    '''
-    LoRA + LoCon
-    '''
-    # Ignore proj_in or proj_out, their channels is only a few.
     ENABLE_CONV = True
-    TARGET_REPLACE_MODULE = [
-        "Transformer2DModel", 
-        "ResnetBlock2D", 
-        "Downsample2D", 
-        "Upsample2D"
-    ]
-    TARGET_REPLACE_NAME = [
-        "conv_in",
-        "conv_out",
-        "time_embedding.linear_1",
-        "time_embedding.linear_2",
-    ]
+    TARGET_REPLACE_MODULE = ["Conv2d", "Linear"]
+    TARGET_REPLACE_NAME = []
     LORA_PREFIX = 'lycoris'
     MODULE_ALGO_MAP = {}
     NAME_ALGO_MAP = {}
@@ -179,9 +161,9 @@ class LycorisNetwork(torch.nn.Module):
         if 'enable_conv' in preset:
             cls.ENABLE_CONV = preset['enable_conv']
         if 'target_module' in preset:
-            cls.UNET_TARGET_REPLACE_MODULE = preset['unet_target_module']
+            cls.TARGET_REPLACE_MODULE = preset['target_module']
         if 'target_name' in preset:
-            cls.UNET_TARGET_REPLACE_NAME = preset['unet_target_name']
+            cls.TARGET_REPLACE_NAME = preset['target_name']
         if 'module_algo_map' in preset:
             cls.MODULE_ALGO_MAP = preset['module_algo_map']
         if 'name_algo_map' in preset:
@@ -282,7 +264,6 @@ class LycorisNetwork(torch.nn.Module):
             loras = {}
             lora_names = []
             for name, module in root_module.named_modules():
-                if module is root_module: continue
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP:
                     next_config = self.MODULE_ALGO_MAP[module_name]
@@ -350,7 +331,7 @@ class LycorisNetwork(torch.nn.Module):
             LycorisNetwork.TARGET_REPLACE_MODULE,
             LycorisNetwork.TARGET_REPLACE_NAME
         )
-        print(f"create LyCORIS: {len(self.unet_loras)} modules.")
+        print(f"create LyCORIS: {len(self.loras)} modules.")
         
         algo_table = {}
         for lora in self.loras:
@@ -384,7 +365,7 @@ class LycorisNetwork(torch.nn.Module):
             state['unexpected keys'] = unexpected
         return state
 
-    def apply_to(self, module: torch.nn.Module):
+    def apply_to(self):
         for lora in self.loras:
             lora.apply_to()
             self.add_module(lora.lora_name, lora)
