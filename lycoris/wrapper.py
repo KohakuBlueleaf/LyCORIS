@@ -1,11 +1,13 @@
 # General LyCORIS wrapper based on kohya-ss/sd-scripts' style
 
 import math
-from warnings import warn
 import os
+import regex as re
 import sys
 sys.setrecursionlimit(10000)
 from typing import List
+from warnings import warn
+
 import torch
 
 from .utils import *
@@ -150,7 +152,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
 
 class LycorisNetwork(torch.nn.Module):
     ENABLE_CONV = True
-    TARGET_REPLACE_MODULE = ["Conv2d", "Linear"]
+    TARGET_REPLACE_MODULE = []
     TARGET_REPLACE_NAME = []
     LORA_PREFIX = 'lycoris'
     MODULE_ALGO_MAP = {}
@@ -308,7 +310,7 @@ class LycorisNetwork(torch.nn.Module):
                         algo = network_module
                     loras.extend(create_modules_(f'{prefix}_{name}', module, algo, next_config)[0])
                     next_config = {}
-                elif name in target_replace_names:
+                elif name in target_replace_names or any(re.match(t, name) for t in target_replace_names):
                     if name in self.NAME_ALGO_MAP:
                         next_config = self.NAME_ALGO_MAP[name]
                         algo = next_config.get('algo', network_module)
