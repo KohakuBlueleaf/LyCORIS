@@ -593,24 +593,6 @@ class LycorisNetwork(torch.nn.Module):
             save_file(state_dict, file, metadata)
         else:
             torch.save(state_dict, file)
-    
-    def apply_max_norm_regularization(self, max_norm_value, device):
-        norms = []
-        scaled = 0
-        
-        for lora in self.unet_loras:
-            if hasattr(lora, 'apply_max_norm'):
-                scaled, norm = lora.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                scaled += int(scaled)
-        
-        for lora in self.text_encoder_loras:
-            if hasattr(lora, 'apply_max_norm'):
-                scaled, norm = lora.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                scaled += int(scaled)
-        
-        return scaled, sum(norms)/len(norms), max(norms)
 
 
 class HyperDreamNetwork(torch.nn.Module):
