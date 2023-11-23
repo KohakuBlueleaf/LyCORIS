@@ -19,6 +19,7 @@ class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
         
         out_dim = self.shape[0]
         self.block_size, self.block_num = factorization(out_dim, self.dim)
+        self.scale = 1.0
         # block_num > block_size
         self.rescaled = rescaled
         self.constrain = constrain * out_dim
@@ -41,7 +42,8 @@ class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
         # Init R=0, so add I on it to ensure the output of step0 is original model output
         weight = torch.einsum(
             "k n m, k n ... -> k m ...", 
-            r - self.I, org_weight
+            r * self.scale + (1-self.scale) * self.I, org_weight
         )
         weight = rearrange(weight, 'k m ... -> (k m) ...')
-        return weight, None, None
+        # disable update weight for replace the weight directly
+        return weight, None, None, False, False

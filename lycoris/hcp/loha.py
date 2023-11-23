@@ -64,4 +64,4 @@ class LohaBlock(LycorisPluginBlock):
             drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
             drop /= drop.mean()
             weight *= drop
-        return weight, None, None
+        return weight, None, None, True, True

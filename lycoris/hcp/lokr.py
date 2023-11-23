@@ -72,6 +72,7 @@ class LokrBlock(LycorisPluginBlock):
             self.alpha = self.alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = self.dim if self.alpha is None or self.alpha == 0 else self.alpha
         self.scale = alpha / self.dim
+        print(self.scale)
         delattr(self, 'alpha')
         self.register_buffer('alpha', torch.tensor(alpha)) # 定数として扱える
 
@@ -99,4 +100,4 @@ class LokrBlock(LycorisPluginBlock):
             drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
             drop /= drop.mean()
             weight *= drop
-        return weight, None, None
+        return weight, None, None, True, True

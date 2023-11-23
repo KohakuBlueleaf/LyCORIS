@@ -76,12 +76,18 @@ class LycorisPluginContainer(PatchPluginContainer):
         
         for name in self.plugin_names:
             lyco_plugin_block = getattr(self, name)
-            diff_weight, diff_bias, diff_output = lyco_plugin_block(org_weight, org_bias, new_weight, new_bias, *args, **kwargs)
+            diff_weight, diff_bias, diff_output, update_weight, update_bias = lyco_plugin_block(org_weight, org_bias, new_weight, new_bias, *args, **kwargs)
             # logger.debug(f'diff weight norm: {torch.norm(diff_weight).detach().cpu().item()}')
             if diff_weight is not None:
-                new_weight = new_weight + diff_weight * scale
+                if update_weight:
+                    new_weight = new_weight + diff_weight * scale
+                else:
+                    new_weight = diff_weight
             if diff_bias is not None:
-                new_bias = diff_bias * scale if new_bias is None else new_bias + diff_bias * scale
+                if update_bias:
+                    new_bias = diff_bias * scale if new_bias is None else new_bias + diff_bias * scale
+                else:
+                    new_bias = diff_bias
             if diff_output is not None:
                 total_diff_output = total_diff_output + diff_output * scale
         
