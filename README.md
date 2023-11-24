@@ -59,58 +59,69 @@ However, newer model types may not always be supported. If you encounter this is
 
 ### Training
 
-For the time being LyCORIS is mainly trained with [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section). Supports for other trainers are coming soon.
+There are three different ways to train LyCORIS models.
 
-A detilaed description of the network arguments is provided [here](docs/Network-Args.md).
+- With [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section)
+- With [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion)
+- With your own script by using LyCORIS as standalone wrappers for any pytorch modules.
+
+In any case, please install this package in the corresponding virtual environment. You can either install it
+- through pip
+    ```bash
+    pip install lycoris_lora
+    ```
+
+- or from source
+    ```bash
+    git clone https://github.com/KohakuBlueleaf/LyCORIS
+    cd LyCORIS
+    pip install .
+    ```
+
+A detilaed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
 
 #### kohya script
 
-1. Activate sd-scripts' venv with
+You can use this package's kohya module to run kohya's training script to train lycoris module for SD models
+
+- with command line arguments
     ```bash
-    source PATH_TO_SDSCRIPTS_VENV/Scripts/activate
+    accelerate launch train_network.py \
+      --network_module lycoris.kohya \
+      --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
+      --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
+      "dropout=DROPOUT_RATE" "algo=locon" \
     ```
-    or
-    ```powershell
-    PATH_TO_SDSCRIPTS_VENV\Scripts\Activate.ps1 # or .bat     for cmd
+
+- with `toml` files
+    ```bash
+    accelerate launch train_network.py \
+      --config_file example_configs/training_configs/kohya/loha_config.toml
     ```
-
-2. Install this package
-    * through pip
-        ```bash
-        pip install lycoris_lora
-        ```
-
-    * from source
-        ```bash
-        git clone https://github.com/KohakuBlueleaf/LyCORIS
-        cd LyCORIS
-        pip install .
-        ````
-
-3. Use this package's kohya module to run kohya's training script to train lycoris module for SD models
-
-    - with command line arguments
-        ```bash
-        python3 sd-scripts/train_network.py \
-          --network_module lycoris.kohya \
-          --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
-          --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
-          "dropout=DROPOUT_RATE" "algo=locon" \
-        ```
-
-    - with `toml` files
-        ```bash
-        python train_network.py --config_file XXX.toml
-        ```
-        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
+    For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
 
 
-* Tips:
-  * Use network_dim=0 or conv_dim=0 to disable linear/conv layer
-  * LoHa/LoKr/(IA)^3 doesn't support dropout yet.
+#### HCP-Diffusion
+
+You can use this package's hcp module to run HCP-Diffusion's training script to train lycoris module for SD models
+
+```bash
+accelerate launch -m hcpdiff.train_ac_single \
+  --cfg example_configs/training_configs/hcp/hcp_diag_oft.yaml
+```
+For your convenience, some example `yaml` files for HCP LyCORIS training are provided in [example/training_configs/hcp](example_configs/training_configs/hcp).
+
+For the moment being the outputs of HCP-Diffusion are not directly compatible with a1111/sdwebui.
+You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_convert.py).
+
+In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
 
 
-#### Graphical Interfaces and Colabs
+#### As standalone wrappers
+
+TODO
+
+#### Graphical Interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
 * [bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)
@@ -121,7 +132,7 @@ and colabs (please help us complete the list!)
 * [hollowstrawberry/kohya-colab](https://github.com/hollowstrawberry/kohya-colab)
 * [Linaqruf/kohya-trainer](https://github.com/Linaqruf/kohya-trainer)
 
-However, they are not guaranteed to be up-to-date. In particular, newer types may not be supported. Consider requesting the developpers for support or simply use the original kohya script in this case.
+However, they are not guaranteed to be up-to-date. In particular, newer types may not be supported. Consider requesting the developers for support or simply use the original kohya script in this case.
 
 
 ## Utilities
