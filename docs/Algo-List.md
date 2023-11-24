@@ -82,4 +82,4 @@ However, newer methods may only be available in the latest release / the dev bra
 * It converges faster than LoRA according to the original paper, but experiments are still needed.
 * `dim` corresponds to block size: we fix block size instead of block number here to make it more comparable to LoRA
 * Set `constrain` to get COFT and set `rescaled` to get rescaled OFT
-* Ref: [Controlling Text-to-Image Diffusion by Orthogonal Finetuning](https://arxiv.org/pdf/2306.07280.pdf)
+* Ref: [Controlling Text-to-Image Diffusion by Orthogonal Finetuning](https://arxiv.org/abs/2306.07280)
