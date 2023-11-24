@@ -1,5 +1,24 @@
 # Change Log
 
+## 2023/xx/xx update to 2.0.0
+* Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
+  * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
+  * Add Pivotal tuning utilities
+  * Add hcp convert utilities
+  * Have no plan at this time to support full/lora and train_norms since they are built-in
+* Add Diag-OFT modules
+* Add standalone usage support
+  * Can wrap any pytorch module which contains Linear/Conv2d modules
+* Add SDXL support in Merge script
+* Add SDXL support in Extract-locon
+* More efficient (speed/vram) implementation for full module
+* Better implementation of custom state_dict
+* Fix errors of dropouts
+* Fix errors of apply_max_norms
+* Fix errors of resume
+
+---
+
 ## 2023/09/27 update to 1.9.0
 * Add norm modules (for training LayerNorm and GroupNorm, which should be good for style)
 * Add full modules (So you can "native finetune" with lycoris now, should be convinient to try different weight)
