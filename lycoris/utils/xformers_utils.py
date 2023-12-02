@@ -6,6 +6,7 @@ except:
 
 try:
     from xformers.ops import memory_efficient_attention
+
     XFORMERS_AVAIL = True
 except:
     memory_efficient_attention = None

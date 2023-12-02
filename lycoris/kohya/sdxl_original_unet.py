@@ -79,7 +79,9 @@ class FlashAttentionFunction(torch.autograd.Function):
 
         o = torch.zeros_like(q)
         all_row_sums = torch.zeros((*q.shape[:-1], 1), dtype=dtype, device=device)
-        all_row_maxes = torch.full((*q.shape[:-1], 1), max_neg_value, dtype=dtype, device=device)
+        all_row_maxes = torch.full(
+            (*q.shape[:-1], 1), max_neg_value, dtype=dtype, device=device
+        )
 
         scale = q.shape[-1] ** -0.5
 
@@ -108,15 +110,17 @@ class FlashAttentionFunction(torch.autograd.Function):
             for k_ind, (kc, vc) in enumerate(col_splits):
                 k_start_index = k_ind * k_bucket_size
 
-                attn_weights = torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                attn_weights = (
+                    torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                )
 
                 if exists(row_mask):
                     attn_weights.masked_fill_(~row_mask, max_neg_value)
 
                 if causal and q_start_index < (k_start_index + k_bucket_size - 1):
-                    causal_mask = torch.ones((qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device).triu(
-                        q_start_index - k_start_index + 1
-                    )
+                    causal_mask = torch.ones(
+                        (qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device
+                    ).triu(q_start_index - k_start_index + 1)
                     attn_weights.masked_fill_(causal_mask, max_neg_value)
 
                 block_row_maxes = attn_weights.amax(dim=-1, keepdims=True)
@@ -126,18 +130,27 @@ class FlashAttentionFunction(torch.autograd.Function):
                 if exists(row_mask):
                     exp_weights.masked_fill_(~row_mask, 0.0)
 
-                block_row_sums = exp_weights.sum(dim=-1, keepdims=True).clamp(min=EPSILON)
+                block_row_sums = exp_weights.sum(dim=-1, keepdims=True).clamp(
+                    min=EPSILON
+                )
 
                 new_row_maxes = torch.maximum(block_row_maxes, row_maxes)
 
-                exp_values = torch.einsum("... i j, ... j d -> ... i d", exp_weights, vc)
+                exp_values = torch.einsum(
+                    "... i j, ... j d -> ... i d", exp_weights, vc
+                )
 
                 exp_row_max_diff = torch.exp(row_maxes - new_row_maxes)
                 exp_block_row_max_diff = torch.exp(block_row_maxes - new_row_maxes)
 
-                new_row_sums = exp_row_max_diff * row_sums + exp_block_row_max_diff * block_row_sums
+                new_row_sums = (
+                    exp_row_max_diff * row_sums
+                    + exp_block_row_max_diff * block_row_sums
+                )
 
-                oc.mul_((row_sums / new_row_sums) * exp_row_max_diff).add_((exp_block_row_max_diff / new_row_sums) * exp_values)
+                oc.mul_((row_sums / new_row_sums) * exp_row_max_diff).add_(
+                    (exp_block_row_max_diff / new_row_sums) * exp_values
+                )
 
                 row_maxes.copy_(new_row_maxes)
                 row_sums.copy_(new_row_sums)
@@ -187,12 +200,14 @@ class FlashAttentionFunction(torch.autograd.Function):
             for k_ind, (kc, vc, dkc, dvc) in enumerate(col_splits):
                 k_start_index = k_ind * k_bucket_size
 
-                attn_weights = torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                attn_weights = (
+                    torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                )
 
                 if causal and q_start_index < (k_start_index + k_bucket_size - 1):
-                    causal_mask = torch.ones((qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device).triu(
-                        q_start_index - k_start_index + 1
-                    )
+                    causal_mask = torch.ones(
+                        (qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device
+                    ).triu(q_start_index - k_start_index + 1)
                     attn_weights.masked_fill_(causal_mask, max_neg_value)
 
                 exp_attn_weights = torch.exp(attn_weights - mc)
@@ -247,7 +262,9 @@ def get_timestep_embedding(
     assert len(timesteps.shape) == 1, "Timesteps should be a 1d-array"
 
     half_dim = embedding_dim // 2
-    exponent = -math.log(max_period) * torch.arange(start=0, end=half_dim, dtype=torch.float32, device=timesteps.device)
+    exponent = -math.log(max_period) * torch.arange(
+        start=0, end=half_dim, dtype=torch.float32, device=timesteps.device
+    )
     exponent = exponent / (half_dim - downscale_freq_shift)
 
     emb = torch.exp(exponent)
@@ -288,7 +305,9 @@ class ResnetBlock2D(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
         )
 
-        self.emb_layers = nn.Sequential(nn.SiLU(), nn.Linear(TIME_EMBED_DIM, out_channels))
+        self.emb_layers = nn.Sequential(
+            nn.SiLU(), nn.Linear(TIME_EMBED_DIM, out_channels)
+        )
 
         self.out_layers = nn.Sequential(
             GroupNorm32(32, out_channels),
@@ -298,7 +317,9 @@ class ResnetBlock2D(nn.Module):
         )
 
         if in_channels != out_channels:
-            self.skip_connection = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+            self.skip_connection = nn.Conv2d(
+                in_channels, out_channels, kernel_size=1, stride=1, padding=0
+            )
         else:
             self.skip_connection = nn.Identity()
 
@@ -322,7 +343,9 @@ class ResnetBlock2D(nn.Module):
 
                 return custom_forward
 
-            x = torch.utils.checkpoint.checkpoint(create_custom_forward(self.forward_body), x, emb)
+            x = torch.utils.checkpoint.checkpoint(
+                create_custom_forward(self.forward_body), x, emb
+            )
         else:
             x = self.forward_body(x, emb)
 
@@ -356,7 +379,9 @@ class Downsample2D(nn.Module):
 
                 return custom_forward
 
-            hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(self.forward_body), hidden_states)
+            hidden_states = torch.utils.checkpoint.checkpoint(
+                create_custom_forward(self.forward_body), hidden_states
+            )
         else:
             hidden_states = self.forward_body(hidden_states)
 
@@ -374,7 +399,9 @@ class CrossAttention(nn.Module):
     ):
         super().__init__()
         inner_dim = dim_head * heads
-        cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
+        cross_attention_dim = (
+            cross_attention_dim if cross_attention_dim is not None else query_dim
+        )
         self.upcast_attention = upcast_attention
 
         self.scale = dim_head**-0.5
@@ -403,14 +430,18 @@ class CrossAttention(nn.Module):
         batch_size, seq_len, dim = tensor.shape
         head_size = self.heads
         tensor = tensor.reshape(batch_size, seq_len, head_size, dim // head_size)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size * head_size, seq_len, dim // head_size)
+        tensor = tensor.permute(0, 2, 1, 3).reshape(
+            batch_size * head_size, seq_len, dim // head_size
+        )
         return tensor
 
     def reshape_batch_dim_to_heads(self, tensor):
         batch_size, seq_len, dim = tensor.shape
         head_size = self.heads
         tensor = tensor.reshape(batch_size // head_size, head_size, seq_len, dim)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size // head_size, seq_len, dim * head_size)
+        tensor = tensor.permute(0, 2, 1, 3).reshape(
+            batch_size // head_size, seq_len, dim * head_size
+        )
         return tensor
 
     def forward(self, hidden_states, context=None, mask=None):
@@ -443,7 +474,13 @@ class CrossAttention(nn.Module):
             key = key.float()
 
         attention_scores = torch.baddbmm(
-            torch.empty(query.shape[0], query.shape[1], key.shape[1], dtype=query.dtype, device=query.device),
+            torch.empty(
+                query.shape[0],
+                query.shape[1],
+                key.shape[1],
+                dtype=query.dtype,
+                device=query.device,
+            ),
             query,
             key.transpose(-1, -2),
             beta=0,
@@ -472,13 +509,17 @@ class CrossAttention(nn.Module):
         k_in = self.to_k(context)
         v_in = self.to_v(context)
 
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b n h d", h=h), (q_in, k_in, v_in))
+        q, k, v = map(
+            lambda t: rearrange(t, "b n (h d) -> b n h d", h=h), (q_in, k_in, v_in)
+        )
         del q_in, k_in, v_in
 
         q = q.contiguous()
         k = k.contiguous()
         v = v.contiguous()
-        out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None)  # 最適なのを選んでくれる
+        out = xformers.ops.memory_efficient_attention(
+            q, k, v, attn_bias=None
+        )  # 最適なのを選んでくれる
         del q, k, v
 
         out = rearrange(out, "b n h d -> b n (h d)", h=h)
@@ -517,10 +558,14 @@ class CrossAttention(nn.Module):
         k_in = self.to_k(context)
         v_in = self.to_v(context)
 
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q_in, k_in, v_in))
+        q, k, v = map(
+            lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q_in, k_in, v_in)
+        )
         del q_in, k_in, v_in
 
-        out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False)
+        out = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False
+        )
 
         out = rearrange(out, "b h n d -> b n (h d)", h=h)
 
@@ -577,7 +622,12 @@ class FeedForward(nn.Module):
 
 class BasicTransformerBlock(nn.Module):
     def __init__(
-        self, dim: int, num_attention_heads: int, attention_head_dim: int, cross_attention_dim: int, upcast_attention: bool = False
+        self,
+        dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        cross_attention_dim: int,
+        upcast_attention: bool = False,
     ):
         super().__init__()
 
@@ -641,7 +691,12 @@ class BasicTransformerBlock(nn.Module):
 
                 return custom_forward
 
-            output = torch.utils.checkpoint.checkpoint(create_custom_forward(self.forward_body), hidden_states, context, timestep)
+            output = torch.utils.checkpoint.checkpoint(
+                create_custom_forward(self.forward_body),
+                hidden_states,
+                context,
+                timestep,
+            )
         else:
             output = self.forward_body(hidden_states, context, timestep)
 
@@ -666,13 +721,17 @@ class Transformer2DModel(nn.Module):
         inner_dim = num_attention_heads * attention_head_dim
         self.use_linear_projection = use_linear_projection
 
-        self.norm = torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
+        self.norm = torch.nn.GroupNorm(
+            num_groups=32, num_channels=in_channels, eps=1e-6, affine=True
+        )
         # self.norm = GroupNorm32(32, in_channels, eps=1e-6, affine=True)
 
         if use_linear_projection:
             self.proj_in = nn.Linear(in_channels, inner_dim)
         else:
-            self.proj_in = nn.Conv2d(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
+            self.proj_in = nn.Conv2d(
+                in_channels, inner_dim, kernel_size=1, stride=1, padding=0
+            )
 
         blocks = []
         for _ in range(num_transformer_layers):
@@ -691,7 +750,9 @@ class Transformer2DModel(nn.Module):
         if use_linear_projection:
             self.proj_out = nn.Linear(in_channels, inner_dim)
         else:
-            self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+            self.proj_out = nn.Conv2d(
+                inner_dim, in_channels, kernel_size=1, stride=1, padding=0
+            )
 
         self.gradient_checkpointing = False
 
@@ -712,23 +773,37 @@ class Transformer2DModel(nn.Module):
         if not self.use_linear_projection:
             hidden_states = self.proj_in(hidden_states)
             inner_dim = hidden_states.shape[1]
-            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * weight, inner_dim)
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(
+                batch, height * weight, inner_dim
+            )
         else:
             inner_dim = hidden_states.shape[1]
-            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * weight, inner_dim)
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(
+                batch, height * weight, inner_dim
+            )
             hidden_states = self.proj_in(hidden_states)
 
         # 2. Blocks
         for block in self.transformer_blocks:
-            hidden_states = block(hidden_states, context=encoder_hidden_states, timestep=timestep)
+            hidden_states = block(
+                hidden_states, context=encoder_hidden_states, timestep=timestep
+            )
 
         # 3. Output
         if not self.use_linear_projection:
-            hidden_states = hidden_states.reshape(batch, height, weight, inner_dim).permute(0, 3, 1, 2).contiguous()
+            hidden_states = (
+                hidden_states.reshape(batch, height, weight, inner_dim)
+                .permute(0, 3, 1, 2)
+                .contiguous()
+            )
             hidden_states = self.proj_out(hidden_states)
         else:
             hidden_states = self.proj_out(hidden_states)
-            hidden_states = hidden_states.reshape(batch, height, weight, inner_dim).permute(0, 3, 1, 2).contiguous()
+            hidden_states = (
+                hidden_states.reshape(batch, height, weight, inner_dim)
+                .permute(0, 3, 1, 2)
+                .contiguous()
+            )
 
         output = hidden_states + residual
 
@@ -760,9 +835,13 @@ class Upsample2D(nn.Module):
 
         # if `output_size` is passed we force the interpolation output size and do not make use of `scale_factor=2`
         if output_size is None:
-            hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest")
+            hidden_states = F.interpolate(
+                hidden_states, scale_factor=2.0, mode="nearest"
+            )
         else:
-            hidden_states = F.interpolate(hidden_states, size=output_size, mode="nearest")
+            hidden_states = F.interpolate(
+                hidden_states, size=output_size, mode="nearest"
+            )
 
         # If the input is bfloat16, we cast back to bfloat16
         if dtype == torch.bfloat16:
@@ -782,7 +861,9 @@ class Upsample2D(nn.Module):
 
                 return custom_forward
 
-            hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(self.forward_body), hidden_states, output_size)
+            hidden_states = torch.utils.checkpoint.checkpoint(
+                create_custom_forward(self.forward_body), hidden_states, output_size
+            )
         else:
             hidden_states = self.forward_body(hidden_states, output_size)
 
@@ -827,7 +908,12 @@ class SdxlUNet2DConditionModel(nn.Module):
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    nn.Conv2d(self.in_channels, self.model_channels, kernel_size=3, padding=(1, 1)),
+                    nn.Conv2d(
+                        self.in_channels,
+                        self.model_channels,
+                        kernel_size=3,
+                        padding=(1, 1),
+                    ),
                 )
             ]
         )
@@ -925,7 +1011,8 @@ class SdxlUNet2DConditionModel(nn.Module):
         for i in range(3):
             layers = [
                 ResnetBlock2D(
-                    in_channels=4 * self.model_channels + (4 if i <= 1 else 2) * self.model_channels,
+                    in_channels=4 * self.model_channels
+                    + (4 if i <= 1 else 2) * self.model_channels,
                     out_channels=4 * self.model_channels,
                 ),
                 Transformer2DModel(
@@ -951,7 +1038,8 @@ class SdxlUNet2DConditionModel(nn.Module):
         for i in range(3):
             layers = [
                 ResnetBlock2D(
-                    in_channels=2 * self.model_channels + (4 if i == 0 else (2 if i == 1 else 1)) * self.model_channels,
+                    in_channels=2 * self.model_channels
+                    + (4 if i == 0 else (2 if i == 1 else 1)) * self.model_channels,
                     out_channels=2 * self.model_channels,
                 ),
                 Transformer2DModel(
@@ -977,7 +1065,8 @@ class SdxlUNet2DConditionModel(nn.Module):
         for i in range(3):
             layers = [
                 ResnetBlock2D(
-                    in_channels=1 * self.model_channels + (2 if i == 0 else 1) * self.model_channels,
+                    in_channels=1 * self.model_channels
+                    + (2 if i == 0 else 1) * self.model_channels,
                     out_channels=1 * self.model_channels,
                 ),
             ]
@@ -986,7 +1075,11 @@ class SdxlUNet2DConditionModel(nn.Module):
 
         # output
         self.out = nn.ModuleList(
-            [GroupNorm32(32, self.model_channels), nn.SiLU(), nn.Conv2d(self.model_channels, self.out_channels, 3, padding=1)]
+            [
+                GroupNorm32(32, self.model_channels),
+                nn.SiLU(),
+                nn.Conv2d(self.model_channels, self.out_channels, 3, padding=1),
+            ]
         )
 
     # region diffusers compatibility
@@ -1007,7 +1100,10 @@ class SdxlUNet2DConditionModel(nn.Module):
         raise NotImplementedError("Attention slicing is not supported for this model.")
 
     def is_gradient_checkpointing(self) -> bool:
-        return any(hasattr(m, "gradient_checkpointing") and m.gradient_checkpointing for m in self.modules())
+        return any(
+            hasattr(m, "gradient_checkpointing") and m.gradient_checkpointing
+            for m in self.modules()
+        )
 
     def enable_gradient_checkpointing(self):
         self.gradient_checkpointing = True
@@ -1047,11 +1143,15 @@ class SdxlUNet2DConditionModel(nn.Module):
         timesteps = timesteps.expand(x.shape[0])
 
         hs = []
-        t_emb = get_timestep_embedding(timesteps, self.model_channels)  # , repeat_only=False)
+        t_emb = get_timestep_embedding(
+            timesteps, self.model_channels
+        )  # , repeat_only=False)
         t_emb = t_emb.to(x.dtype)
         emb = self.time_embed(t_emb)
 
-        assert x.shape[0] == y.shape[0], f"batch size mismatch: {x.shape[0]} != {y.shape[0]}"
+        assert (
+            x.shape[0] == y.shape[0]
+        ), f"batch size mismatch: {x.shape[0]} != {y.shape[0]}"
         assert x.dtype == y.dtype, f"dtype mismatch: {x.dtype} != {y.dtype}"
         # assert x.dtype == self.dtype
         emb = emb + self.label_emb(y)
@@ -1109,7 +1209,9 @@ if __name__ == "__main__":
 
     import transformers
 
-    optimizer = transformers.optimization.Adafactor(unet.parameters(), relative_step=True)  # working at 22.2GB with torch2
+    optimizer = transformers.optimization.Adafactor(
+        unet.parameters(), relative_step=True
+    )  # working at 22.2GB with torch2
 
     scaler = torch.cuda.amp.GradScaler(enabled=True)
 

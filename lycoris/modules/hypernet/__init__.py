@@ -1,5 +1,1 @@
-from .generater import (
-    WeightDecoder,
-    ImgWeightGenerator,
-    TextWeightGenerator
-)
+from .generater import WeightDecoder, ImgWeightGenerator, TextWeightGenerator

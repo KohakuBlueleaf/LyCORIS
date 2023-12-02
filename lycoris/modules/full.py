@@ -7,12 +7,18 @@ from .base import ModuleCustomSD
 
 class FullModule(ModuleCustomSD):
     def __init__(
-        self, 
-        lora_name, org_module: nn.Module, 
-        multiplier=1.0, 
-        lora_dim=4, alpha=1, 
-        dropout=0., rank_dropout=0., module_dropout=0.,
-        use_tucker=False, use_scalar=False, rank_dropout_scale=False,
+        self,
+        lora_name,
+        org_module: nn.Module,
+        multiplier=1.0,
+        lora_dim=4,
+        alpha=1,
+        dropout=0.0,
+        rank_dropout=0.0,
+        module_dropout=0.0,
+        use_tucker=False,
+        use_scalar=False,
+        rank_dropout_scale=False,
         **kwargs,
     ):
         super().__init__()
@@ -37,11 +43,11 @@ class FullModule(ModuleCustomSD):
         if org_module.bias is not None:
             self.bias = nn.Parameter(torch.zeros_like(org_module.bias))
         else:
-            self.bias= None
-        
+            self.bias = None
+
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
-        
+
         self.multiplier = multiplier
         self.org_module = [org_module]
 
@@ -52,20 +58,18 @@ class FullModule(ModuleCustomSD):
             self.bias.data.copy_(self.org_module[0].bias.data)
 
     def custom_state_dict(self):
-        sd = {
-            'diff': self.weight.data.cpu() - self.org_module[0].weight.data.cpu()
-        }
+        sd = {"diff": self.weight.data.cpu() - self.org_module[0].weight.data.cpu()}
         if self.bias is not None:
-            sd['diff_b'] = self.bias.data.cpu() - self.org_module[0].bias.data.cpu()
+            sd["diff_b"] = self.bias.data.cpu() - self.org_module[0].bias.data.cpu()
         return sd
 
-    def make_weight(self, scale = 1, device=None):
+    def make_weight(self, scale=1, device=None):
         drop = (
-            torch.rand(self.dim, device=device) > self.rank_dropout 
-            if self.rank_dropout and self.training 
+            torch.rand(self.dim, device=device) > self.rank_dropout
+            if self.rank_dropout and self.training
             else 1
         )
-        if drop!=1 or scale!=1:
+        if drop != 1 or scale != 1:
             org_weight = self.org_module[0].weight.to(device, dtype=self.weight.dtype)
             diff = self.weight.to(device) - org_weight
             weight = diff * drop * scale + org_weight

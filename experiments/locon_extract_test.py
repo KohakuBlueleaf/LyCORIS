@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(0, os.getcwd())
 import torch
 import torch.nn as nn
@@ -29,6 +30,6 @@ test_x = torch.randn(1, IN_CH, SIZE, SIZE)
 test_out_lora = convB(convA(test_x))
 test_out_orig = conv_orig(test_x)
 
-print('MSE Loss: ', F.mse_loss(test_out_orig, test_out_lora))
-print('L1 Loss : ', F.l1_loss(test_out_orig, test_out_lora))
-print('Distance: ', torch.dist(test_out_orig, test_out_lora))
+print("MSE Loss: ", F.mse_loss(test_out_orig, test_out_lora))
+print("L1 Loss : ", F.l1_loss(test_out_orig, test_out_lora))
+print("Distance: ", torch.dist(test_out_orig, test_out_lora))

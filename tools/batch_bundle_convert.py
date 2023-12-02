@@ -10,10 +10,10 @@ from safetensors.torch import save_file
 
 
 def load_state_dict(file_path):
-    is_safetensors = file_path.rsplit('.', 1)[-1] == 'safetensors'
+    is_safetensors = file_path.rsplit(".", 1)[-1] == "safetensors"
     if is_safetensors:
         state_dict = {}
-        with safe_open(file_path, framework='pt', device='cpu') as f:
+        with safe_open(file_path, framework="pt", device="cpu") as f:
             for key in f.keys():
                 state_dict[key] = f.get_tensor(key)
     else:
@@ -22,7 +22,7 @@ def load_state_dict(file_path):
 
 
 def save_state_dict(state, output_path):
-    if output_path.endswith('.safetensors'):
+    if output_path.endswith(".safetensors"):
         save_file(state, output_path)
     else:
         save(state, output_path)
@@ -33,36 +33,36 @@ def pack_bundle(lora, emb_dict, verbose=False):
         for key, value in emb_sd.items():
             if isinstance(value, dict):
                 for subkey, subvalue in value.items():
-                    lora[f'bundle_emb.{emb}.{key}.{subkey}'] = subvalue
+                    lora[f"bundle_emb.{emb}.{key}.{subkey}"] = subvalue
             elif isinstance(value, torch.Tensor):
-                lora[f'bundle_emb.{emb}.{key}'] = value
+                lora[f"bundle_emb.{emb}.{key}"] = value
     if verbose:
-        print('The following content has been added to lora')
+        print("The following content has been added to lora")
         for key, value in lora.items():
-            if key.startswith('bundle_emb'):
+            if key.startswith("bundle_emb"):
                 if isinstance(value, torch.Tensor):
-                    print(f' {key}: tensor of shape {value.shape}')
+                    print(f" {key}: tensor of shape {value.shape}")
                 else:
-                    print(f' {key}: {value}')
+                    print(f" {key}: {value}")
     return lora
 
 
-def unpack_bundle(lora, verbose, step='', emb_format='.pt'):
-    assert emb_format in ['.pt', '.safetensors']
-    if step != '':
-        step = '-' + str(step)
+def unpack_bundle(lora, verbose, step="", emb_format=".pt"):
+    assert emb_format in [".pt", ".safetensors"]
+    if step != "":
+        step = "-" + str(step)
     emb_dict = {}
     bundle_keys = []
     for lora_key, value in lora.items():
-        if lora_key.startswith('bundle_emb'):
+        if lora_key.startswith("bundle_emb"):
             bundle_keys.append(lora_key)
-            _, emb, *rest = lora_key.split('.')
+            _, emb, *rest = lora_key.split(".")
             emb = emb + step
             if emb not in emb_dict:
                 emb_dict[emb] = {}
             if len(rest) == 2:
                 key, subkey = rest
-                if emb_format == '.pt':
+                if emb_format == ".pt":
                     if key not in emb_dict[emb]:
                         emb_dict[emb][key] = {}
                     emb_dict[emb][key][subkey] = value
@@ -73,11 +73,11 @@ def unpack_bundle(lora, verbose, step='', emb_format='.pt'):
                 emb_dict[emb][key] = value
     for bundle_key in bundle_keys:
         del lora[bundle_key]
-    if emb_format == '.pt':
+    if emb_format == ".pt":
         for emb, emb_sd in emb_dict.items():
-            emb_sd['name'] = emb
+            emb_sd["name"] = emb
     if verbose:
-        print('The following embeddings have been loaded from bundle')
+        print("The following embeddings have been loaded from bundle")
         print_emb_information(emb_dict)
     return lora, emb_dict
 
@@ -86,32 +86,31 @@ def print_emb_information(emb_dict):
     for emb, emb_sd in emb_dict.items():
         print(emb)
         for key, value in emb_sd.items():
-            if isinstance(value,
-                          dict):  # Check if the value is another dictionary
+            if isinstance(value, dict):  # Check if the value is another dictionary
                 for subkey, subvalue in value.items():
                     if isinstance(subvalue, torch.Tensor):
-                        print(f' {key}.{subkey}: tensor of shape'
-                              f' {subvalue.shape}')
+                        print(f" {key}.{subkey}: tensor of shape" f" {subvalue.shape}")
                     else:
-                        print(f'  {key}.{subkey}: {subvalue}')
+                        print(f"  {key}.{subkey}: {subvalue}")
             elif isinstance(value, torch.Tensor):
-                print(f' {key}: tensor of shape {value.shape}')
+                print(f" {key}: tensor of shape {value.shape}")
             else:
-                print(f' {key}: {value}')
+                print(f" {key}: {value}")
 
 
 def extract_step(file_path):
     filename = os.path.splitext(os.path.basename(file_path))[0]
-    step = filename.split('-')[-1].replace('step', '')
+    step = filename.split("-")[-1].replace("step", "")
     if step.isdigit():
-        name = '-'.join(filename.split('-')[:-1])
+        name = "-".join(filename.split("-")[:-1])
         return name, int(step)
     else:
-        return name, ''
+        return name, ""
 
 
-def gather_files_from_list(paths: List[str], extensions: List[str],
-                           recursive: bool) -> List[str]:
+def gather_files_from_list(
+    paths: List[str], extensions: List[str], recursive: bool
+) -> List[str]:
     """
     Gather files from given paths based on specific extensions.
 
@@ -147,8 +146,7 @@ def gather_files_from_list(paths: List[str], extensions: List[str],
     return files
 
 
-def get_lora_embs_step_correspondance(lora_files: List[str],
-                                      emb_files: List[str]):
+def get_lora_embs_step_correspondance(lora_files: List[str], emb_files: List[str]):
     """
     Associate LoRA model files with embedding files based on their step count.
 
@@ -165,97 +163,103 @@ def get_lora_embs_step_correspondance(lora_files: List[str],
              'embs' (a list of paths to associated embedding files).
     :rtype: Dict[str, Dict[str, Union[str, List[str]]]]
     """
-    lora_embs = defaultdict(lambda: {'lora': None, 'embs': []})
+    lora_embs = defaultdict(lambda: {"lora": None, "embs": []})
     for lora_path in lora_files:
         _, step = extract_step(lora_path)
         if step in lora_embs:
-            raise ValueError('Find two Lora files with the same'
-                             f' step count {step}, abort')
-        lora_embs[step]['lora'] = lora_path
+            raise ValueError(
+                "Find two Lora files with the same" f" step count {step}, abort"
+            )
+        lora_embs[step]["lora"] = lora_path
     for emb_path in emb_files:
         _, step = extract_step(emb_path)
         if step in lora_embs:
-            lora_embs[step]['embs'].append(emb_path)
+            lora_embs[step]["embs"].append(emb_path)
         else:
-            print(f'Warning: no corresponding lora found for {emb_path}')
+            print(f"Warning: no corresponding lora found for {emb_path}")
     return lora_embs
 
 
 def convert_lora_name(lora_path, dst_dir, to_bundle):
     name, step = extract_step(lora_path)
-    if step != '':
-        step = '-' + str(step)
+    if step != "":
+        step = "-" + str(step)
     if to_bundle:
-        name = name + '-bundle'
-    elif name.endswith('-bundle'):
+        name = name + "-bundle"
+    elif name.endswith("-bundle"):
         name = name[:-7]
-    lora_save_path = os.path.join(dst_dir,
-                                  name + step + os.path.splitext(lora_path)[1])
+    lora_save_path = os.path.join(dst_dir, name + step + os.path.splitext(lora_path)[1])
     return lora_save_path
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Tool for packing and unpacking LoRA and embeddings.")
-    parser.add_argument("--lora_path",
-                        default=[],
-                        type=str,
-                        nargs="+",
-                        help="Paths to LoRA model files.")
-    parser.add_argument("--emb_path",
-                        default=[],
-                        type=str,
-                        nargs="+",
-                        help="Paths to embedding files.")
-    parser.add_argument("--dst_dir",
-                        default=None,
-                        type=str,
-                        help="Destination directory for output files.")
-    parser.add_argument("--from_bundle",
-                        action="store_true",
-                        help="Unpack from bundle.")
-    parser.add_argument("--to_bundle",
-                        action="store_true",
-                        help="Pack to bundle.")
-    parser.add_argument("--lora_ext",
-                        default=['.safetensors'],
-                        type=str,
-                        nargs="+",
-                        help="Extensions for LoRA files.")
-    parser.add_argument("--emb_ext",
-                        default=['.pt'],
-                        type=str,
-                        nargs="+",
-                        help="Extensions for embedding files.")
-    parser.add_argument("--recursive",
-                        action="store_true",
-                        help="Recursively search for files in directories.")
-    parser.add_argument("--pack_all_embeddings",
-                        action='store_true',
-                        help=('Pack all embeddings to all LoRA files'
-                              ' instead of using step correspondance.'))
-    parser.add_argument("--verbose",
-                        default=1,
-                        type=int,
-                        help="Verbosity level.")
+        description="Tool for packing and unpacking LoRA and embeddings."
+    )
+    parser.add_argument(
+        "--lora_path",
+        default=[],
+        type=str,
+        nargs="+",
+        help="Paths to LoRA model files.",
+    )
+    parser.add_argument(
+        "--emb_path", default=[], type=str, nargs="+", help="Paths to embedding files."
+    )
+    parser.add_argument(
+        "--dst_dir",
+        default=None,
+        type=str,
+        help="Destination directory for output files.",
+    )
+    parser.add_argument(
+        "--from_bundle", action="store_true", help="Unpack from bundle."
+    )
+    parser.add_argument("--to_bundle", action="store_true", help="Pack to bundle.")
+    parser.add_argument(
+        "--lora_ext",
+        default=[".safetensors"],
+        type=str,
+        nargs="+",
+        help="Extensions for LoRA files.",
+    )
+    parser.add_argument(
+        "--emb_ext",
+        default=[".pt"],
+        type=str,
+        nargs="+",
+        help="Extensions for embedding files.",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recursively search for files in directories.",
+    )
+    parser.add_argument(
+        "--pack_all_embeddings",
+        action="store_true",
+        help=(
+            "Pack all embeddings to all LoRA files"
+            " instead of using step correspondance."
+        ),
+    )
+    parser.add_argument("--verbose", default=1, type=int, help="Verbosity level.")
     args = parser.parse_args()
 
-    lora_paths = gather_files_from_list(args.lora_path, args.lora_ext,
-                                        args.recursive)
+    lora_paths = gather_files_from_list(args.lora_path, args.lora_ext, args.recursive)
 
     if args.from_bundle:
-        dst_dir = 'bundles_unpack' if args.dst_dir is None else args.dst_dir
+        dst_dir = "bundles_unpack" if args.dst_dir is None else args.dst_dir
         os.makedirs(dst_dir, exist_ok=True)
         for lora_path in lora_paths:
             if args.verbose >= 1:
-                print(f'Unpacking {lora_path}')
+                print(f"Unpacking {lora_path}")
             lora = load_state_dict(lora_path)
             _, step = extract_step(lora_path)
             lora, emb_dict = unpack_bundle(
-                lora, args.verbose >= 2, step=step, emb_format=args.emb_ext[0])
-            lora_save_path = convert_lora_name(lora_path,
-                                               dst_dir,
-                                               to_bundle=False)
+                lora, args.verbose >= 2, step=step, emb_format=args.emb_ext[0]
+            )
+            lora_save_path = convert_lora_name(lora_path, dst_dir, to_bundle=False)
             save_state_dict(lora, lora_save_path)
             for emb, emb_sd in emb_dict.items():
                 emb_save_path = os.path.join(dst_dir, emb + args.emb_ext[0])
@@ -263,28 +267,24 @@ if __name__ == '__main__':
     elif args.to_bundle:
         if args.emb_path == []:
             args.emb_path = args.lora_path
-        emb_paths = gather_files_from_list(args.emb_path, args.emb_ext,
-                                           args.recursive)
-        dst_dir = 'bundles' if args.dst_dir is None else args.dst_dir
+        emb_paths = gather_files_from_list(args.emb_path, args.emb_ext, args.recursive)
+        dst_dir = "bundles" if args.dst_dir is None else args.dst_dir
         os.makedirs(dst_dir, exist_ok=True)
         lora_embs_dict = {}
         if args.pack_all_embeddings:
             for i, lora_path in enumerate(lora_paths):
-                lora_embs_dict[i] = {'lora': lora_path, 'embs': emb_paths}
+                lora_embs_dict[i] = {"lora": lora_path, "embs": emb_paths}
         else:
-            lora_embs_dict = get_lora_embs_step_correspondance(
-                lora_paths, emb_paths)
+            lora_embs_dict = get_lora_embs_step_correspondance(lora_paths, emb_paths)
         for _, lora_embs_pair in lora_embs_dict.items():
-            lora_path = lora_embs_pair['lora']
+            lora_path = lora_embs_pair["lora"]
             if args.verbose >= 1:
-                print(f'Packing {lora_path}')
+                print(f"Packing {lora_path}")
             lora = load_state_dict(lora_path)
             emb_dict = {}
-            for emb_path in lora_embs_pair['embs']:
+            for emb_path in lora_embs_pair["embs"]:
                 name, _ = extract_step(emb_path)
                 emb_dict[name] = load_state_dict(emb_path)
             bundle = pack_bundle(lora, emb_dict, args.verbose >= 2)
-            lora_save_path = convert_lora_name(lora_path,
-                                               dst_dir,
-                                               to_bundle=True)
+            lora_save_path = convert_lora_name(lora_path, dst_dir, to_bundle=True)
             save_state_dict(bundle, lora_save_path)
