@@ -118,7 +118,7 @@ In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundl
 
 
 #### As standalone wrappers
-See `standalone_example.py` for full example.
+See [standalone_example.py](standalone_example.py) for full example.
 
 Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
 
