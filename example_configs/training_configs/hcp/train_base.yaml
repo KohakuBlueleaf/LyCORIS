@@ -1,0 +1,81 @@
+exp_dir: exps/${hcp.time:}
+mixed_precision: 'fp16'
+allow_tf32: False
+seed: 114514
+ckpt_type: 'safetensors' # [torch, safetensors]
+
+vis_info:
+  prompt: null
+  negative_prompt: ''
+
+train:
+  train_steps: 1000
+  train_epochs: null # Choose one of [train_steps, train_epochs]
+  gradient_accumulation_steps: 1
+  workers: 4
+  max_grad_norm: 1.0
+  set_grads_to_none: False
+  save_step: 100
+  cfg_scale: '1.0' # for DreamArtist
+
+  resume: null
+#  resume:
+#    ckpt_path:
+#      unet: []
+#      TE: []
+#      words: {}
+#    start_step: 0
+
+  loss:
+    criterion:
+      _target_: torch.nn.MSELoss
+      _partial_: True
+      reduction: 'none' # support for attention mask
+    type: 'eps' # 'eps' or 'sample'
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: True
+    weight_decay: 1e-3
+
+  optimizer_pt:
+    _target_: torch.optim.AdamW
+    _partial_: True
+    weight_decay: 5e-4
+
+  scale_lr: True # auto scale lr with total batch size
+  scheduler:
+    name: 'one_cycle'
+    num_warmup_steps: 200
+    num_training_steps: 1000
+    scheduler_kwargs: {} # args for scheduler
+
+  scale_lr_pt: True
+  scheduler_pt: ${.scheduler}
+
+logger:
+  -
+    _target_: hcpdiff.loggers.CLILogger
+    _partial_: True
+    out_path: 'train.log'
+    log_step: 20
+
+model:
+  revision: null
+  pretrained_model_name_or_path: null
+  tokenizer_repeats: 2
+  enable_xformers: True
+  gradient_checkpointing: True
+  force_cast_precision: False
+  ema_unet: 0 # 0 to disable
+  ema_text_encoder: 0 # 0 to disable
+  clip_skip: 0
+  clip_final_norm: True
+
+  tokenizer: null
+  noise_scheduler: null
+  unet: null
+  text_encoder: null
+  vae: null
+
+previewer: null

@@ -2,6 +2,9 @@
 
 See [Algo-Details.md](Algo-Details.md) and [Demo.md](Demo.md) for more examples and explanation
 
+All the methods below except for GLoKr are supported in a1111/sd-webui.
+However, newer methods may only be available in the latest release / the dev branch.
+
 ### Conventional LoRA
 * Trigged by `algo=lora`
 * Includes Conv layer implementation from LoCon.
@@ -34,12 +37,10 @@ See [Algo-Details.md](Algo-Details.md) and [Demo.md](Demo.md) for more examples 
 
 ### Native Fine-Tuning
 * Trigged by `algo=full`
-* **Only supported from a1111/sd-webui 1.6.0**
 * Also known as dreambooth. This just uses full matrix without further decomposition.
 * With our implementation you can use it as LoRA, change base model, and merge on the fly.
-* Pre-decomposing the difference makes training slower, so you may want to train the full model with another trainer (like [EveryDream](https://github.com/victorchall/EveryDream2trainer), [HCP-Diffusion](https://github.com/7eu7d7/HCP-Diffusion)) before extracting it to the LyCORIS full format.
 * Can potentially give the best result if everything is tuned correctly, but is probably also the most sensitive to hyperparameter adjustment.
-* Produces the biggest file, but does _not_ train slower than other methods. especially if you consider direct implementation in other trainers.
+* Produces the biggest file, but does _not_ train slower than other methods.
 
 ### (IA)^3
 * Trigged by `algo=ia3`
@@ -48,6 +49,7 @@ See [Algo-Details.md](Algo-Details.md) and [Demo.md](Demo.md) for more examples 
 * This method is good at learning style, but hard to transfer.
 * This method produces very tiny file (less than 1 MB).
 * No network arguments for this method (even preset is not applicable here).
+* **Can be regarded as a special case of Diag-OFT listed below.**
 * Ref: [Few-Shot Parameter-Efficient Fine-Tuning is Better and Cheaper than In-Context Learning](https://arxiv.org/abs/2205.05638)
 
 ### DyLoRA
@@ -64,8 +66,20 @@ See [Algo-Details.md](Algo-Details.md) and [Demo.md](Demo.md) for more examples 
 
 ### GLoRA
 
-- TODO
+* Triggered by `algo=glora`
+* Ref: [One-for-All: Generalized LoRA for Parameter-Efficient Fine-tuning](https://arxiv.org/abs/2306.07967)
+* TODO
 
 ### GLoKr
 
 - TODO
+
+
+### Diag-OFT
+
+* Triggered by `algo=diag-oft`
+* It preserves the hyperspherical energy by training orthogonal transformations that apply to outputs of each layer.
+* It converges faster than LoRA according to the original paper, but experiments are still needed.
+* `dim` corresponds to block size: we fix block size instead of block number here to make it more comparable to LoRA
+* Set `constrain` to get COFT and set `rescaled` to get rescaled OFT
+* Ref: [Controlling Text-to-Image Diffusion by Orthogonal Finetuning](https://arxiv.org/abs/2306.07280)

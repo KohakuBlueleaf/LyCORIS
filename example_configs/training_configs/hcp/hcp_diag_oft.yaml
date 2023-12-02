@@ -1,0 +1,69 @@
+_base_:
+  - example_configs/training_configs/hcp/base_dataset.yaml
+  - example_configs/training_configs/hcp/train_base.yaml
+  - example_configs/training_configs/hcp/tuning_base.yaml
+
+
+plugin_unet:
+  diag_oft:
+    _target_: lycoris.hcp.DiagOFTBlock.wrap_model
+    _partial_: True
+    lr: 3e-4
+    dim: 4
+    layers:
+      - 're:.*\.attn.?$'
+      - 're:.*\.ff$'
+
+
+plugin_TE:
+  diag_oft:
+    _target_: lycoris.hcp.DiagOFTBlock.wrap_model
+    _partial_: True
+    lr: 3e-4
+    dim: 4
+    layers:
+      - 're:.*self_attn$'
+      - 're:.*mlp$'
+
+
+tokenizer_pt:
+  train: null
+
+train:
+  train_steps: 100
+  gradient_accumulation_steps: 1
+  save_step: 100
+
+  scheduler:
+    name: 'constant'
+    num_training_steps: 100
+
+  loss:
+    criterion: # min SNR loss
+      _target_: hcpdiff.loss.MinSNRLoss
+      gamma: 5.0
+
+
+model:
+  pretrained_model_name_or_path: 'KBlueLeaf/kohaku-v4-rev1.2'
+  clip_skip: 1
+  tokenizer_repeats: 1
+  ema_unet: 0
+  ema_text_encoder: 0
+
+
+data:
+  dataset1:
+    batch_size: 4
+    cache_latents: False
+
+    source:
+      data_source1:
+        img_root: 'F:\dataset\yog_lora\10_yog_pre'
+        prompt_template: 'example_configs/training_configs/hcp/hcp_caption.txt'
+        caption_file: 'F:\dataset\yog_lora\10_yog_pre'
+
+    bucket:
+      _target_: hcpdiff.data.bucket.RatioBucket.from_files # aspect ratio bucket
+      target_area: ${hcp.eval:"512*512"}
+      num_bucket: 12

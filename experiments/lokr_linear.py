@@ -9,16 +9,16 @@ from einops import rearrange
 def lokr_linear(h, a, b, c):
     vq = a.size(1)
     uq = c.size(1)
-    
-    h_in_group = rearrange(h, 'b ... (uq vq) -> b ... uq vq', uq=uq, vq=vq)
+
+    h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
     ha = F.linear(h_in_group, a)
     hb = F.linear(ha, b)
-    
+
     h_cross_group = hb.transpose(-1, -2)
     hc = F.linear(h_cross_group, c)
-    
-    h = rearrange(hc, 'b ... vp up -> b ... (up vp)')
-    
+
+    h = rearrange(hc, "b ... vp up -> b ... (up vp)")
+
     return h
 
 

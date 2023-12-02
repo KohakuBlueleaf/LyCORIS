@@ -128,8 +128,18 @@ NORM_GROUPS: int = 32
 NORM_EPS: float = 1e-5
 TRANSFORMER_NORM_NUM_GROUPS = 32
 
-DOWN_BLOCK_TYPES = ["CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "DownBlock2D"]
-UP_BLOCK_TYPES = ["UpBlock2D", "CrossAttnUpBlock2D", "CrossAttnUpBlock2D", "CrossAttnUpBlock2D"]
+DOWN_BLOCK_TYPES = [
+    "CrossAttnDownBlock2D",
+    "CrossAttnDownBlock2D",
+    "CrossAttnDownBlock2D",
+    "DownBlock2D",
+]
+UP_BLOCK_TYPES = [
+    "UpBlock2D",
+    "CrossAttnUpBlock2D",
+    "CrossAttnUpBlock2D",
+    "CrossAttnUpBlock2D",
+]
 
 
 # region memory effcient attention
@@ -171,7 +181,9 @@ class FlashAttentionFunction(torch.autograd.Function):
 
         o = torch.zeros_like(q)
         all_row_sums = torch.zeros((*q.shape[:-1], 1), dtype=dtype, device=device)
-        all_row_maxes = torch.full((*q.shape[:-1], 1), max_neg_value, dtype=dtype, device=device)
+        all_row_maxes = torch.full(
+            (*q.shape[:-1], 1), max_neg_value, dtype=dtype, device=device
+        )
 
         scale = q.shape[-1] ** -0.5
 
@@ -200,15 +212,17 @@ class FlashAttentionFunction(torch.autograd.Function):
             for k_ind, (kc, vc) in enumerate(col_splits):
                 k_start_index = k_ind * k_bucket_size
 
-                attn_weights = torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                attn_weights = (
+                    torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                )
 
                 if exists(row_mask):
                     attn_weights.masked_fill_(~row_mask, max_neg_value)
 
                 if causal and q_start_index < (k_start_index + k_bucket_size - 1):
-                    causal_mask = torch.ones((qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device).triu(
-                        q_start_index - k_start_index + 1
-                    )
+                    causal_mask = torch.ones(
+                        (qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device
+                    ).triu(q_start_index - k_start_index + 1)
                     attn_weights.masked_fill_(causal_mask, max_neg_value)
 
                 block_row_maxes = attn_weights.amax(dim=-1, keepdims=True)
@@ -218,18 +232,27 @@ class FlashAttentionFunction(torch.autograd.Function):
                 if exists(row_mask):
                     exp_weights.masked_fill_(~row_mask, 0.0)
 
-                block_row_sums = exp_weights.sum(dim=-1, keepdims=True).clamp(min=EPSILON)
+                block_row_sums = exp_weights.sum(dim=-1, keepdims=True).clamp(
+                    min=EPSILON
+                )
 
                 new_row_maxes = torch.maximum(block_row_maxes, row_maxes)
 
-                exp_values = torch.einsum("... i j, ... j d -> ... i d", exp_weights, vc)
+                exp_values = torch.einsum(
+                    "... i j, ... j d -> ... i d", exp_weights, vc
+                )
 
                 exp_row_max_diff = torch.exp(row_maxes - new_row_maxes)
                 exp_block_row_max_diff = torch.exp(block_row_maxes - new_row_maxes)
 
-                new_row_sums = exp_row_max_diff * row_sums + exp_block_row_max_diff * block_row_sums
+                new_row_sums = (
+                    exp_row_max_diff * row_sums
+                    + exp_block_row_max_diff * block_row_sums
+                )
 
-                oc.mul_((row_sums / new_row_sums) * exp_row_max_diff).add_((exp_block_row_max_diff / new_row_sums) * exp_values)
+                oc.mul_((row_sums / new_row_sums) * exp_row_max_diff).add_(
+                    (exp_block_row_max_diff / new_row_sums) * exp_values
+                )
 
                 row_maxes.copy_(new_row_maxes)
                 row_sums.copy_(new_row_sums)
@@ -279,12 +302,14 @@ class FlashAttentionFunction(torch.autograd.Function):
             for k_ind, (kc, vc, dkc, dvc) in enumerate(col_splits):
                 k_start_index = k_ind * k_bucket_size
 
-                attn_weights = torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                attn_weights = (
+                    torch.einsum("... i d, ... j d -> ... i j", qc, kc) * scale
+                )
 
                 if causal and q_start_index < (k_start_index + k_bucket_size - 1):
-                    causal_mask = torch.ones((qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device).triu(
-                        q_start_index - k_start_index + 1
-                    )
+                    causal_mask = torch.ones(
+                        (qc.shape[-2], kc.shape[-2]), dtype=torch.bool, device=device
+                    ).triu(q_start_index - k_start_index + 1)
                     attn_weights.masked_fill_(causal_mask, max_neg_value)
 
                 exp_attn_weights = torch.exp(attn_weights - mc)
@@ -340,7 +365,9 @@ def get_timestep_embedding(
     assert len(timesteps.shape) == 1, "Timesteps should be a 1d-array"
 
     half_dim = embedding_dim // 2
-    exponent = -math.log(max_period) * torch.arange(start=0, end=half_dim, dtype=torch.float32, device=timesteps.device)
+    exponent = -math.log(max_period) * torch.arange(
+        start=0, end=half_dim, dtype=torch.float32, device=timesteps.device
+    )
     exponent = exponent / (half_dim - downscale_freq_shift)
 
     emb = torch.exp(exponent)
@@ -368,7 +395,13 @@ class SampleOutput:
 
 
 class TimestepEmbedding(nn.Module):
-    def __init__(self, in_channels: int, time_embed_dim: int, act_fn: str = "silu", out_dim: int = None):
+    def __init__(
+        self,
+        in_channels: int,
+        time_embed_dim: int,
+        act_fn: str = "silu",
+        out_dim: int = None,
+    ):
         super().__init__()
 
         self.linear_1 = nn.Linear(in_channels, time_embed_dim)
@@ -395,7 +428,9 @@ class TimestepEmbedding(nn.Module):
 
 
 class Timesteps(nn.Module):
-    def __init__(self, num_channels: int, flip_sin_to_cos: bool, downscale_freq_shift: float):
+    def __init__(
+        self, num_channels: int, flip_sin_to_cos: bool, downscale_freq_shift: float
+    ):
         super().__init__()
         self.num_channels = num_channels
         self.flip_sin_to_cos = flip_sin_to_cos
@@ -421,14 +456,22 @@ class ResnetBlock2D(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        self.norm1 = torch.nn.GroupNorm(num_groups=NORM_GROUPS, num_channels=in_channels, eps=NORM_EPS, affine=True)
+        self.norm1 = torch.nn.GroupNorm(
+            num_groups=NORM_GROUPS, num_channels=in_channels, eps=NORM_EPS, affine=True
+        )
 
-        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, stride=1, padding=1
+        )
 
         self.time_emb_proj = torch.nn.Linear(TIME_EMBED_DIM, out_channels)
 
-        self.norm2 = torch.nn.GroupNorm(num_groups=NORM_GROUPS, num_channels=out_channels, eps=NORM_EPS, affine=True)
-        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.norm2 = torch.nn.GroupNorm(
+            num_groups=NORM_GROUPS, num_channels=out_channels, eps=NORM_EPS, affine=True
+        )
+        self.conv2 = torch.nn.Conv2d(
+            out_channels, out_channels, kernel_size=3, stride=1, padding=1
+        )
 
         # if non_linearity == "swish":
         self.nonlinearity = lambda x: F.silu(x)
@@ -437,7 +480,9 @@ class ResnetBlock2D(nn.Module):
 
         self.conv_shortcut = None
         if self.use_in_shortcut:
-            self.conv_shortcut = torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+            self.conv_shortcut = torch.nn.Conv2d(
+                in_channels, out_channels, kernel_size=1, stride=1, padding=0
+            )
 
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
@@ -510,7 +555,9 @@ class DownBlock2D(nn.Module):
 
                     return custom_forward
 
-                hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(resnet), hidden_states, temb)
+                hidden_states = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(resnet), hidden_states, temb
+                )
             else:
                 hidden_states = resnet(hidden_states, temb)
 
@@ -552,7 +599,9 @@ class CrossAttention(nn.Module):
     ):
         super().__init__()
         inner_dim = dim_head * heads
-        cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
+        cross_attention_dim = (
+            cross_attention_dim if cross_attention_dim is not None else query_dim
+        )
         self.upcast_attention = upcast_attention
 
         self.scale = dim_head**-0.5
@@ -581,14 +630,18 @@ class CrossAttention(nn.Module):
         batch_size, seq_len, dim = tensor.shape
         head_size = self.heads
         tensor = tensor.reshape(batch_size, seq_len, head_size, dim // head_size)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size * head_size, seq_len, dim // head_size)
+        tensor = tensor.permute(0, 2, 1, 3).reshape(
+            batch_size * head_size, seq_len, dim // head_size
+        )
         return tensor
 
     def reshape_batch_dim_to_heads(self, tensor):
         batch_size, seq_len, dim = tensor.shape
         head_size = self.heads
         tensor = tensor.reshape(batch_size // head_size, head_size, seq_len, dim)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size // head_size, seq_len, dim * head_size)
+        tensor = tensor.permute(0, 2, 1, 3).reshape(
+            batch_size // head_size, seq_len, dim * head_size
+        )
         return tensor
 
     def forward(self, hidden_states, context=None, mask=None):
@@ -621,7 +674,13 @@ class CrossAttention(nn.Module):
             key = key.float()
 
         attention_scores = torch.baddbmm(
-            torch.empty(query.shape[0], query.shape[1], key.shape[1], dtype=query.dtype, device=query.device),
+            torch.empty(
+                query.shape[0],
+                query.shape[1],
+                key.shape[1],
+                dtype=query.dtype,
+                device=query.device,
+            ),
             query,
             key.transpose(-1, -2),
             beta=0,
@@ -650,13 +709,17 @@ class CrossAttention(nn.Module):
         k_in = self.to_k(context)
         v_in = self.to_v(context)
 
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b n h d", h=h), (q_in, k_in, v_in))
+        q, k, v = map(
+            lambda t: rearrange(t, "b n (h d) -> b n h d", h=h), (q_in, k_in, v_in)
+        )
         del q_in, k_in, v_in
 
         q = q.contiguous()
         k = k.contiguous()
         v = v.contiguous()
-        out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None)  # 最適なのを選んでくれる
+        out = xformers.ops.memory_efficient_attention(
+            q, k, v, attn_bias=None
+        )  # 最適なのを選んでくれる
 
         out = rearrange(out, "b n h d -> b n (h d)", h=h)
 
@@ -694,10 +757,14 @@ class CrossAttention(nn.Module):
         k_in = self.to_k(context)
         v_in = self.to_v(context)
 
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q_in, k_in, v_in))
+        q, k, v = map(
+            lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q_in, k_in, v_in)
+        )
         del q_in, k_in, v_in
 
-        out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False)
+        out = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False
+        )
 
         out = rearrange(out, "b h n d -> b n (h d)", h=h)
 
@@ -754,7 +821,12 @@ class FeedForward(nn.Module):
 
 class BasicTransformerBlock(nn.Module):
     def __init__(
-        self, dim: int, num_attention_heads: int, attention_head_dim: int, cross_attention_dim: int, upcast_attention: bool = False
+        self,
+        dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        cross_attention_dim: int,
+        upcast_attention: bool = False,
     ):
         super().__init__()
 
@@ -824,12 +896,19 @@ class Transformer2DModel(nn.Module):
         inner_dim = num_attention_heads * attention_head_dim
         self.use_linear_projection = use_linear_projection
 
-        self.norm = torch.nn.GroupNorm(num_groups=TRANSFORMER_NORM_NUM_GROUPS, num_channels=in_channels, eps=1e-6, affine=True)
+        self.norm = torch.nn.GroupNorm(
+            num_groups=TRANSFORMER_NORM_NUM_GROUPS,
+            num_channels=in_channels,
+            eps=1e-6,
+            affine=True,
+        )
 
         if use_linear_projection:
             self.proj_in = nn.Linear(in_channels, inner_dim)
         else:
-            self.proj_in = nn.Conv2d(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
+            self.proj_in = nn.Conv2d(
+                in_channels, inner_dim, kernel_size=1, stride=1, padding=0
+            )
 
         self.transformer_blocks = nn.ModuleList(
             [
@@ -846,7 +925,9 @@ class Transformer2DModel(nn.Module):
         if use_linear_projection:
             self.proj_out = nn.Linear(in_channels, inner_dim)
         else:
-            self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+            self.proj_out = nn.Conv2d(
+                inner_dim, in_channels, kernel_size=1, stride=1, padding=0
+            )
 
     def set_use_memory_efficient_attention(self, xformers, mem_eff):
         for transformer in self.transformer_blocks:
@@ -856,7 +937,13 @@ class Transformer2DModel(nn.Module):
         for transformer in self.transformer_blocks:
             transformer.set_use_sdpa(sdpa)
 
-    def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, return_dict: bool = True):
+    def forward(
+        self,
+        hidden_states,
+        encoder_hidden_states=None,
+        timestep=None,
+        return_dict: bool = True,
+    ):
         # 1. Input
         batch, _, height, weight = hidden_states.shape
         residual = hidden_states
@@ -865,23 +952,37 @@ class Transformer2DModel(nn.Module):
         if not self.use_linear_projection:
             hidden_states = self.proj_in(hidden_states)
             inner_dim = hidden_states.shape[1]
-            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * weight, inner_dim)
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(
+                batch, height * weight, inner_dim
+            )
         else:
             inner_dim = hidden_states.shape[1]
-            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * weight, inner_dim)
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(
+                batch, height * weight, inner_dim
+            )
             hidden_states = self.proj_in(hidden_states)
 
         # 2. Blocks
         for block in self.transformer_blocks:
-            hidden_states = block(hidden_states, context=encoder_hidden_states, timestep=timestep)
+            hidden_states = block(
+                hidden_states, context=encoder_hidden_states, timestep=timestep
+            )
 
         # 3. Output
         if not self.use_linear_projection:
-            hidden_states = hidden_states.reshape(batch, height, weight, inner_dim).permute(0, 3, 1, 2).contiguous()
+            hidden_states = (
+                hidden_states.reshape(batch, height, weight, inner_dim)
+                .permute(0, 3, 1, 2)
+                .contiguous()
+            )
             hidden_states = self.proj_out(hidden_states)
         else:
             hidden_states = self.proj_out(hidden_states)
-            hidden_states = hidden_states.reshape(batch, height, weight, inner_dim).permute(0, 3, 1, 2).contiguous()
+            hidden_states = (
+                hidden_states.reshape(batch, height, weight, inner_dim)
+                .permute(0, 3, 1, 2)
+                .contiguous()
+            )
 
         output = hidden_states + residual
 
@@ -912,7 +1013,9 @@ class CrossAttnDownBlock2D(nn.Module):
         for i in range(LAYERS_PER_BLOCK):
             in_channels = in_channels if i == 0 else out_channels
 
-            resnets.append(ResnetBlock2D(in_channels=in_channels, out_channels=out_channels))
+            resnets.append(
+                ResnetBlock2D(in_channels=in_channels, out_channels=out_channels)
+            )
             attentions.append(
                 Transformer2DModel(
                     attn_num_head_channels,
@@ -927,7 +1030,9 @@ class CrossAttnDownBlock2D(nn.Module):
         self.resnets = nn.ModuleList(resnets)
 
         if add_downsample:
-            self.downsamplers = nn.ModuleList([Downsample2D(out_channels, out_channels)])
+            self.downsamplers = nn.ModuleList(
+                [Downsample2D(out_channels, out_channels)]
+            )
         else:
             self.downsamplers = None
 
@@ -956,13 +1061,19 @@ class CrossAttnDownBlock2D(nn.Module):
 
                     return custom_forward
 
-                hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(resnet), hidden_states, temb)
                 hidden_states = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(attn, return_dict=False), hidden_states, encoder_hidden_states
+                    create_custom_forward(resnet), hidden_states, temb
+                )
+                hidden_states = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(attn, return_dict=False),
+                    hidden_states,
+                    encoder_hidden_states,
                 )[0]
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = attn(hidden_states, encoder_hidden_states=encoder_hidden_states).sample
+                hidden_states = attn(
+                    hidden_states, encoder_hidden_states=encoder_hidden_states
+                ).sample
 
             output_states += (hidden_states,)
 
@@ -1039,10 +1150,14 @@ class UNetMidBlock2DCrossAttn(nn.Module):
 
                 if attn is not None:
                     hidden_states = torch.utils.checkpoint.checkpoint(
-                        create_custom_forward(attn, return_dict=False), hidden_states, encoder_hidden_states
+                        create_custom_forward(attn, return_dict=False),
+                        hidden_states,
+                        encoder_hidden_states,
                     )[0]
 
-                hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(resnet), hidden_states, temb)
+                hidden_states = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(resnet), hidden_states, temb
+                )
             else:
                 if attn is not None:
                     hidden_states = attn(hidden_states, encoder_hidden_states).sample
@@ -1074,9 +1189,13 @@ class Upsample2D(nn.Module):
 
         # if `output_size` is passed we force the interpolation output size and do not make use of `scale_factor=2`
         if output_size is None:
-            hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest")
+            hidden_states = F.interpolate(
+                hidden_states, scale_factor=2.0, mode="nearest"
+            )
         else:
-            hidden_states = F.interpolate(hidden_states, size=output_size, mode="nearest")
+            hidden_states = F.interpolate(
+                hidden_states, size=output_size, mode="nearest"
+            )
 
         # If the input is bfloat16, we cast back to bfloat16
         if dtype == torch.bfloat16:
@@ -1101,7 +1220,9 @@ class UpBlock2D(nn.Module):
         resnets = []
 
         for i in range(LAYERS_PER_BLOCK_UP):
-            res_skip_channels = in_channels if (i == LAYERS_PER_BLOCK_UP - 1) else out_channels
+            res_skip_channels = (
+                in_channels if (i == LAYERS_PER_BLOCK_UP - 1) else out_channels
+            )
             resnet_in_channels = prev_output_channel if i == 0 else out_channels
 
             resnets.append(
@@ -1126,7 +1247,9 @@ class UpBlock2D(nn.Module):
     def set_use_sdpa(self, sdpa):
         pass
 
-    def forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None):
+    def forward(
+        self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None
+    ):
         for resnet in self.resnets:
             # pop res hidden states
             res_hidden_states = res_hidden_states_tuple[-1]
@@ -1141,7 +1264,9 @@ class UpBlock2D(nn.Module):
 
                     return custom_forward
 
-                hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(resnet), hidden_states, temb)
+                hidden_states = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(resnet), hidden_states, temb
+                )
             else:
                 hidden_states = resnet(hidden_states, temb)
 
@@ -1172,7 +1297,9 @@ class CrossAttnUpBlock2D(nn.Module):
         self.attn_num_head_channels = attn_num_head_channels
 
         for i in range(LAYERS_PER_BLOCK_UP):
-            res_skip_channels = in_channels if (i == LAYERS_PER_BLOCK_UP - 1) else out_channels
+            res_skip_channels = (
+                in_channels if (i == LAYERS_PER_BLOCK_UP - 1) else out_channels
+            )
             resnet_in_channels = prev_output_channel if i == 0 else out_channels
 
             resnets.append(
@@ -1235,13 +1362,19 @@ class CrossAttnUpBlock2D(nn.Module):
 
                     return custom_forward
 
-                hidden_states = torch.utils.checkpoint.checkpoint(create_custom_forward(resnet), hidden_states, temb)
                 hidden_states = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(attn, return_dict=False), hidden_states, encoder_hidden_states
+                    create_custom_forward(resnet), hidden_states, temb
+                )
+                hidden_states = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(attn, return_dict=False),
+                    hidden_states,
+                    encoder_hidden_states,
                 )[0]
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = attn(hidden_states, encoder_hidden_states=encoder_hidden_states).sample
+                hidden_states = attn(
+                    hidden_states, encoder_hidden_states=encoder_hidden_states
+                ).sample
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
@@ -1337,10 +1470,14 @@ class UNet2DConditionModel(nn.Module):
         # state_dictの書式が変わるのでmoduleの持ち方は変えられない
 
         # input
-        self.conv_in = nn.Conv2d(IN_CHANNELS, BLOCK_OUT_CHANNELS[0], kernel_size=3, padding=(1, 1))
+        self.conv_in = nn.Conv2d(
+            IN_CHANNELS, BLOCK_OUT_CHANNELS[0], kernel_size=3, padding=(1, 1)
+        )
 
         # time
-        self.time_proj = Timesteps(BLOCK_OUT_CHANNELS[0], TIME_EMBED_FLIP_SIN_TO_COS, TIME_EMBED_FREQ_SHIFT)
+        self.time_proj = Timesteps(
+            BLOCK_OUT_CHANNELS[0], TIME_EMBED_FLIP_SIN_TO_COS, TIME_EMBED_FREQ_SHIFT
+        )
 
         self.time_embedding = TimestepEmbedding(TIMESTEP_INPUT_DIM, TIME_EMBED_DIM)
 
@@ -1390,7 +1527,9 @@ class UNet2DConditionModel(nn.Module):
 
             prev_output_channel = output_channel
             output_channel = reversed_block_out_channels[i]
-            input_channel = reversed_block_out_channels[min(i + 1, len(BLOCK_OUT_CHANNELS) - 1)]
+            input_channel = reversed_block_out_channels[
+                min(i + 1, len(BLOCK_OUT_CHANNELS) - 1)
+            ]
 
             # add upsample block for all BUT final layer
             if not is_final_block:
@@ -1414,9 +1553,13 @@ class UNet2DConditionModel(nn.Module):
             prev_output_channel = output_channel
 
         # out
-        self.conv_norm_out = nn.GroupNorm(num_channels=BLOCK_OUT_CHANNELS[0], num_groups=NORM_GROUPS, eps=NORM_EPS)
+        self.conv_norm_out = nn.GroupNorm(
+            num_channels=BLOCK_OUT_CHANNELS[0], num_groups=NORM_GROUPS, eps=NORM_EPS
+        )
         self.conv_act = nn.SiLU()
-        self.conv_out = nn.Conv2d(BLOCK_OUT_CHANNELS[0], OUT_CHANNELS, kernel_size=3, padding=1)
+        self.conv_out = nn.Conv2d(
+            BLOCK_OUT_CHANNELS[0], OUT_CHANNELS, kernel_size=3, padding=1
+        )
 
     # region diffusers compatibility
     def prepare_config(self):
@@ -1436,7 +1579,10 @@ class UNet2DConditionModel(nn.Module):
         raise NotImplementedError("Attention slicing is not supported for this model.")
 
     def is_gradient_checkpointing(self) -> bool:
-        return any(hasattr(m, "gradient_checkpointing") and m.gradient_checkpointing for m in self.modules())
+        return any(
+            hasattr(m, "gradient_checkpointing") and m.gradient_checkpointing
+            for m in self.modules()
+        )
 
     def enable_gradient_checkpointing(self):
         self.set_gradient_checkpointing(value=True)
@@ -1544,7 +1690,9 @@ class UNet2DConditionModel(nn.Module):
             down_block_res_samples = tuple(down_block_res_samples)
 
         # 4. mid
-        sample = self.mid_block(sample, emb, encoder_hidden_states=encoder_hidden_states)
+        sample = self.mid_block(
+            sample, emb, encoder_hidden_states=encoder_hidden_states
+        )
 
         # ControlNetの出力を追加する
         if mid_block_additional_residual is not None:
@@ -1555,7 +1703,9 @@ class UNet2DConditionModel(nn.Module):
             is_final_block = i == len(self.up_blocks) - 1
 
             res_samples = down_block_res_samples[-len(upsample_block.resnets) :]
-            down_block_res_samples = down_block_res_samples[: -len(upsample_block.resnets)]  # skip connection
+            down_block_res_samples = down_block_res_samples[
+                : -len(upsample_block.resnets)
+            ]  # skip connection
 
             # if we have not reached the final block and need to forward the upsample size, we do it here
             # 前述のように最後のブロック以外ではupsample_sizeを伝える
@@ -1572,7 +1722,10 @@ class UNet2DConditionModel(nn.Module):
                 )
             else:
                 sample = upsample_block(
-                    hidden_states=sample, temb=emb, res_hidden_states_tuple=res_samples, upsample_size=upsample_size
+                    hidden_states=sample,
+                    temb=emb,
+                    res_hidden_states_tuple=res_samples,
+                    upsample_size=upsample_size,
                 )
 
         # 6. post-process

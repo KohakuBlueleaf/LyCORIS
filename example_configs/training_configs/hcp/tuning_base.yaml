@@ -1,0 +1,15 @@
+tokenizer_pt:
+  emb_dir: './'
+  replace: False
+  train: []
+  #train:
+  #  - {name: pt1, lr: 1e-3}
+
+unet: null
+lora_unet: null
+
+text_encoder: null
+lora_text_encoder: null
+
+plugin_unet: null
+plugin_TE: null

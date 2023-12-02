@@ -59,58 +59,93 @@ However, newer model types may not always be supported. If you encounter this is
 
 ### Training
 
-For the time being LyCORIS is mainly trained with [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section). Supports for other trainers are coming soon.
+There are three different ways to train LyCORIS models.
 
-A detilaed description of the network arguments is provided [here](docs/Network-Args.md).
+- With [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section)
+- With [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion)
+- With your own script by using LyCORIS as standalone wrappers for any pytorch modules.
+
+In any case, please install this package in the corresponding virtual environment. You can either install it
+- through pip
+    ```bash
+    pip install lycoris_lora
+    ```
+
+- or from source
+    ```bash
+    git clone https://github.com/KohakuBlueleaf/LyCORIS
+    cd LyCORIS
+    pip install .
+    ```
+
+A detilaed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
 
 #### kohya script
 
-1. Activate sd-scripts' venv with
+You can use this package's kohya module to run kohya's training script to train lycoris module for SD models
+
+- with command line arguments
     ```bash
-    source PATH_TO_SDSCRIPTS_VENV/Scripts/activate
+    accelerate launch train_network.py \
+      --network_module lycoris.kohya \
+      --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
+      --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
+      "dropout=DROPOUT_RATE" "algo=locon" \
     ```
-    or
-    ```powershell
-    PATH_TO_SDSCRIPTS_VENV\Scripts\Activate.ps1 # or .bat     for cmd
+
+- with `toml` files
+    ```bash
+    accelerate launch train_network.py \
+      --config_file example_configs/training_configs/kohya/loha_config.toml
     ```
-
-2. Install this package
-    * through pip
-        ```bash
-        pip install lycoris_lora
-        ```
-
-    * from source
-        ```bash
-        git clone https://github.com/KohakuBlueleaf/LyCORIS
-        cd LyCORIS
-        pip install .
-        ````
-
-3. Use this package's kohya module to run kohya's training script to train lycoris module for SD models
-
-    - with command line arguments
-        ```bash
-        python3 sd-scripts/train_network.py \
-          --network_module lycoris.kohya \
-          --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
-          --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
-          "dropout=DROPOUT_RATE" "algo=locon" \
-        ```
-
-    - with `toml` files
-        ```bash
-        python train_network.py --config_file XXX.toml
-        ```
-        For your convenience, some example `toml` files for LyCORIS training are provided in [example/training_configs](example_configs/training_configs).
+    For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
 
 
-* Tips:
-  * Use network_dim=0 or conv_dim=0 to disable linear/conv layer
-  * LoHa/LoKr/(IA)^3 doesn't support dropout yet.
+#### HCP-Diffusion
+
+You can use this package's hcp module to run HCP-Diffusion's training script to train lycoris module for SD models
+
+```bash
+accelerate launch -m hcpdiff.train_ac_single \
+  --cfg example_configs/training_configs/hcp/hcp_diag_oft.yaml
+```
+For your convenience, some example `yaml` files for HCP LyCORIS training are provided in [example/training_configs/hcp](example_configs/training_configs/hcp).
+
+For the moment being the outputs of HCP-Diffusion are not directly compatible with a1111/sdwebui.
+You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_convert.py).
+
+In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
 
 
-#### Graphical Interfaces and Colabs
+#### As standalone wrappers
+See `standalone_example.py` for full example.
+
+Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
+
+For example:
+```py
+from lycoris import create_lycoris, LycorisNetwork
+
+LycorisNetwork.apply_preset(
+    {"target_name": [".*attn.*"]}
+)
+lycoris_net = create_lycoris(
+    your_model, 
+    1.0, 
+    linear_dim=16, 
+    linear_alpha=2.0, 
+    algo="lokr"
+)
+lycoris_net.apply_to()
+
+# after apply_to(), your_model() will run with LyCORIS net
+lycoris_param = lycoris_net.parameters()
+forward_with_lyco = your_model(x)
+```
+
+You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
+
+#### Graphical Interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
 * [bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)
@@ -121,7 +156,7 @@ and colabs (please help us complete the list!)
 * [hollowstrawberry/kohya-colab](https://github.com/hollowstrawberry/kohya-colab)
 * [Linaqruf/kohya-trainer](https://github.com/Linaqruf/kohya-trainer)
 
-However, they are not guaranteed to be up-to-date. In particular, newer types may not be supported. Consider requesting the developpers for support or simply use the original kohya script in this case.
+However, they are not guaranteed to be up-to-date. In particular, newer types may not be supported. Consider requesting the developers for support or simply use the original kohya script in this case.
 
 
 ## Utilities
@@ -134,9 +169,10 @@ python3 extract_locon.py <settings> <base_model> <db_model> <output>
 Use --help to get more info
 ```
 $ python3 extract_locon.py --help
-usage: extract_locon.py [-h] [--is_v2] [--device DEVICE] [--mode MODE] [--safetensors] [--linear_dim LINEAR_DIM] [--conv_dim CONV_DIM]
-                        [--linear_threshold LINEAR_THRESHOLD] [--conv_threshold CONV_THRESHOLD] [--linear_ratio LINEAR_RATIO] [--conv_ratio CONV_RATIO]
-                        [--linear_percentile LINEAR_PERCENTILE] [--conv_percentile CONV_PERCENTILE]
+usage: extract_locon.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--mode MODE] [--safetensors] [--linear_dim LINEAR_DIM]
+                        [--conv_dim CONV_DIM] [--linear_threshold LINEAR_THRESHOLD] [--conv_threshold CONV_THRESHOLD]
+                        [--linear_ratio LINEAR_RATIO] [--conv_ratio CONV_RATIO] [--linear_quantile LINEAR_QUANTILE]
+                        [--conv_quantile CONV_QUANTILE] [--use_sparse_bias] [--sparsity SPARSITY] [--disable_cp]
                         base_model db_model output_name
 ```
 
@@ -148,7 +184,7 @@ python3 merge.py <settings> <base_model> <lycoris_model> <output>
 Use --help to get more info
 ```
 $ python3 merge.py --help
-usage: merge.py [-h] [--is_v2] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
+usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
 ```
 
 
@@ -156,15 +192,24 @@ usage: merge.py [-h] [--is_v2] [--device DEVICE] [--dtype DTYPE] [--weight WEIGH
 ## Change Log
 For full log, please see [Change.md](Change.md)
 
-### 2023/09/27 update to 1.9.0
-* Add norm modules (for training LayerNorm and GroupNorm, which should be good for style)
-* Add full modules (So you can "native fine-tune" with LyCORIS now, should be convenient to try different weight)
-* Add preset config system
-* Add custom config system
-* Merge script support norm and full modules
-* Fix errors with optional requirements
-* Fix errors with not necessary import
-* Fix wrong factorization behaviors
+
+## 2023/12/02 update to 2.0.0
+* Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
+  * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
+  * Add Pivotal tuning utilities
+  * Add hcp convert utilities
+  * Have no plan at this time to support full/lora and train_norms since HCP can do them natively
+* Add Diag-OFT modules
+* Add standalone usage support
+  * Can wrap any pytorch module which contains Linear/Conv2d/LayerNorm/GroupNorm modules
+  * Will support more module in the future
+* Add SDXL support in Merge script
+* Add SDXL support in Extract-locon
+* More efficient (speed/vram) implementation for full module
+* Better implementation of custom state_dict
+* Fix errors of dropouts
+* Fix errors of apply_max_norms
+* Fix errors of resume
 
 
 ## Todo list
