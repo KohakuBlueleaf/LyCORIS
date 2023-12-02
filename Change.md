@@ -5,7 +5,7 @@
   * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
   * Add Pivotal tuning utilities
   * Add hcp convert utilities
-  * Have no plan at this time to support full/lora and train_norms since they are built-in
+  * Have no plan at this time to support full/lora and train_norms since HCP can do them natively
 * Add Diag-OFT modules
 * Add standalone usage support
   * Can wrap any pytorch module which contains Linear/Conv2d/LayerNorm/GroupNorm modules
