@@ -118,8 +118,32 @@ In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundl
 
 
 #### As standalone wrappers
+See `standalone_example.py` for full example.
 
-TODO
+Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
+
+For example:
+```py
+from lycoris import create_lycoris, LycorisNetwork
+
+LycorisNetwork.apply_preset(
+    {"target_name": [".*attn.*"]}
+)
+lycoris_net = create_lycoris(
+    your_model, 
+    1.0, 
+    linear_dim=16, 
+    linear_alpha=2.0, 
+    algo="lokr"
+)
+lycoris_net.apply_to()
+
+# after apply_to(), your_model() will run with LyCORIS net
+lycoris_param = lycoris_net.parameters()
+forward_with_lyco = your_model(x)
+```
+
+You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
 #### Graphical Interfaces and Colabs (via kohya trainer)
 
