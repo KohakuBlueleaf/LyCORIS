@@ -8,7 +8,8 @@
   * Have no plan at this time to support full/lora and train_norms since they are built-in
 * Add Diag-OFT modules
 * Add standalone usage support
-  * Can wrap any pytorch module which contains Linear/Conv2d modules
+  * Can wrap any pytorch module which contains Linear/Conv2d/LayerNorm/GroupNorm modules
+  * Will support more module in the future
 * Add SDXL support in Merge script
 * Add SDXL support in Extract-locon
 * More efficient (speed/vram) implementation for full module
