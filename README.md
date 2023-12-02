@@ -191,15 +191,24 @@ usage: merge.py [-h] [--is_v2] [--device DEVICE] [--dtype DTYPE] [--weight WEIGH
 ## Change Log
 For full log, please see [Change.md](Change.md)
 
-### 2023/09/27 update to 1.9.0
-* Add norm modules (for training LayerNorm and GroupNorm, which should be good for style)
-* Add full modules (So you can "native fine-tune" with LyCORIS now, should be convenient to try different weight)
-* Add preset config system
-* Add custom config system
-* Merge script support norm and full modules
-* Fix errors with optional requirements
-* Fix errors with not necessary import
-* Fix wrong factorization behaviors
+
+## 2023/12/02 update to 2.0.0
+* Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
+  * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
+  * Add Pivotal tuning utilities
+  * Add hcp convert utilities
+  * Have no plan at this time to support full/lora and train_norms since they are built-in
+* Add Diag-OFT modules
+* Add standalone usage support
+  * Can wrap any pytorch module which contains Linear/Conv2d/LayerNorm/GroupNorm modules
+  * Will support more module in the future
+* Add SDXL support in Merge script
+* Add SDXL support in Extract-locon
+* More efficient (speed/vram) implementation for full module
+* Better implementation of custom state_dict
+* Fix errors of dropouts
+* Fix errors of apply_max_norms
+* Fix errors of resume
 
 
 ## Todo list

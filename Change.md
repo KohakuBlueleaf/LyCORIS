@@ -1,6 +1,6 @@
 # Change Log
 
-## 2023/xx/xx update to 2.0.0
+## 2023/12/02 update to 2.0.0
 * Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
   * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
   * Add Pivotal tuning utilities
