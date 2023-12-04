@@ -111,17 +111,15 @@ def extract_step(file_path):
 def gather_files_from_list(
     paths: List[str], extensions: List[str], recursive: bool
 ) -> List[str]:
-    """
-    Gather files from given paths based on specific extensions.
+    """Gather files from given paths based on specific extensions.
 
-    :param paths: A list of paths which can be files or directories.
-    :type paths: List[str]
-    :param extensions: A list of file extensions to filter by.
-    :type extensions: List[str]
-    :param recursive: If True, search for files recursively in directories.
-    :type recursive: bool
-    :return: A list of file paths that match the given extensions.
-    :rtype: List[str]
+    Args:
+        paths (List[str]): A list of paths which can be files or directories.
+        extensions (List[str]): A list of file extensions to filter by.
+        recursive (bool): If True, search for files recursively in directories.
+
+    Returns:
+        List[str]: A list of file paths that match the given extensions.
     """
     files = []
 
@@ -147,21 +145,21 @@ def gather_files_from_list(
 
 
 def get_lora_embs_step_correspondance(lora_files: List[str], emb_files: List[str]):
-    """
-    Associate LoRA model files with embedding files based on their step count.
+    """Associate LoRA model files with embedding files based on their step count.
 
     This function takes in lists of LoRA file paths and embedding file paths,
     extracts their step counts, and associates them based on matching steps.
-    If a file's step count cannot be determined, we use the key 'none'.
+    If a file's step count cannot be determined, it uses the key 'none'.
 
-    :param lora_files: A list of file paths to LoRA model files.
-    :type lora_files: List[str]
-    :param emb_files: A list of file paths to embedding files.
-    :type emb_files: List[str]
-    :return: A dictionary where keys are step counts (or 'none') and values
-             are dictionaries containing 'lora' (path to the LoRA model) and
-             'embs' (a list of paths to associated embedding files).
-    :rtype: Dict[str, Dict[str, Union[str, List[str]]]]
+    Args:
+        lora_files (List[str]): A list of file paths to LoRA model files.
+        emb_files (List[str]): A list of file paths to embedding files.
+
+    Returns:
+        Dict[str, Dict[str, Union[str, List[str]]]]: A dictionary where keys are
+        step counts (or 'none') and values are dictionaries containing 'lora'
+        (path to the LoRA model) and 'embs' (a list of paths to associated
+        embedding files).
     """
     lora_embs = defaultdict(lambda: {"lora": None, "embs": []})
     for lora_path in lora_files:
@@ -198,13 +196,18 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--lora_path",
-        default=[],
-        type=str,
         nargs="+",
-        help="Paths to LoRA model files.",
+        type=str,
+        default=[],
+        required=True,
+        help="Paths to LoRAs or folders containing LoRA models.",
     )
     parser.add_argument(
-        "--emb_path", default=[], type=str, nargs="+", help="Paths to embedding files."
+        "--emb_path",
+        nargs="+",
+        type=str,
+        default=[],
+        help="Paths to embedding files or folders containing embedding files.",
     )
     parser.add_argument(
         "--dst_dir",
