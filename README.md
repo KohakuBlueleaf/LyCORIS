@@ -193,6 +193,12 @@ usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--
 For full log, please see [Change.md](Change.md)
 
 
+## 2023/12/0x quick fixes of 2.0.1
+* Bugs in scaled weight norms of OFT.
+* Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.
+* Refactor the batch convert scripts for pivotal bundle and hcp.
+
+
 ## 2023/12/02 update to 2.0.0
 * Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
   * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
