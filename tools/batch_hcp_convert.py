@@ -28,15 +28,15 @@ class LoraConverter(object):
         "middle_block",
         "output_blocks",
     ]
-    com_name_TE = ["self_attn", "q_proj", "v_proj", "k_proj", "out_proj", "text_model"]
+    com_name_te = ["self_attn", "q_proj", "v_proj", "k_proj", "out_proj", "text_model"]
     prefix_unet = "lora_unet_"
-    prefix_TE = "lora_te_"
-    prefix_TE_xl_clip_B = "lora_te1_"
-    prefix_TE_xl_clip_bigG = "lora_te2_"
+    prefix_te = "lora_te_"
+    prefix_te_xl_clip_B = "lora_te1_"
+    prefix_te_xl_clip_bigG = "lora_te2_"
 
     def __init__(self, save_fp16=False):
         self.com_name_unet_tmp = [x.replace("_", "%") for x in self.com_name_unet]
-        self.com_name_TE_tmp = [x.replace("_", "%") for x in self.com_name_TE]
+        self.com_name_te_tmp = [x.replace("_", "%") for x in self.com_name_te]
         self.save_fp16 = save_fp16
 
     def convert_from_webui(
@@ -51,12 +51,12 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_TE = self.convert_from_webui_(
+            sd_te = self.convert_from_webui_(
                 state,
                 network_type=network_type,
-                prefix=self.prefix_TE,
-                com_name=self.com_name_TE,
-                com_name_tmp=self.com_name_TE_tmp,
+                prefix=self.prefix_te,
+                com_name=self.com_name_te,
+                com_name_tmp=self.com_name_te_tmp,
             )
         else:
             sd_unet = self.convert_from_webui_xl_unet_(
@@ -66,42 +66,42 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_TE = self.convert_from_webui_xl_te_(
+            sd_te = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
-                prefix=self.prefix_TE_xl_clip_B,
-                com_name=self.com_name_TE,
-                com_name_tmp=self.com_name_TE_tmp,
+                prefix=self.prefix_te_xl_clip_B,
+                com_name=self.com_name_te,
+                com_name_tmp=self.com_name_te_tmp,
             )
-            sd_TE2 = self.convert_from_webui_xl_te_(
+            sd_te2 = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
-                prefix=self.prefix_TE_xl_clip_bigG,
-                com_name=self.com_name_TE,
-                com_name_tmp=self.com_name_TE_tmp,
+                prefix=self.prefix_te_xl_clip_bigG,
+                com_name=self.com_name_te,
+                com_name_tmp=self.com_name_te_tmp,
             )
-            sd_TE.update(sd_TE2)
+            sd_te.update(sd_te2)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_from_webui(sd_unet)
-            sd_TE = self.alpha_scale_from_webui(sd_TE)
-        return {network_type: sd_unet}, {network_type: sd_TE}
+            sd_te = self.alpha_scale_from_webui(sd_te)
+        return {network_type: sd_unet}, {network_type: sd_te}
 
     def convert_to_webui(
-        self, sd_unet, sd_TE, network_type="lora", auto_scale_alpha=False, sdxl=False
+        self, sd_unet, sd_te, network_type="lora", auto_scale_alpha=False, sdxl=False
     ):
         assert network_type in ["lora", "plugin"]
         sd_unet = self.convert_to_webui_(
             sd_unet, network_type=network_type, prefix=self.prefix_unet
         )
         if sdxl:
-            sd_TE = self.convert_to_webui_xl_(
-                sd_TE, network_type=network_type, prefix=self.prefix_TE
+            sd_te = self.convert_to_webui_xl_(
+                sd_te, network_type=network_type, prefix=self.prefix_te
             )
         else:
-            sd_TE = self.convert_to_webui_(
-                sd_TE, network_type=network_type, prefix=self.prefix_TE
+            sd_te = self.convert_to_webui_(
+                sd_te, network_type=network_type, prefix=self.prefix_te
             )
-        sd_unet.update(sd_TE)
+        sd_unet.update(sd_te)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_to_webui(sd_unet)
         return sd_unet
@@ -294,7 +294,7 @@ class LoraConverter(object):
 
 class BaseConverter(object):
     prefix_unet = "lora_unet_"
-    prefix_TE = "lora_te_"
+    prefix_te = "lora_te_"
 
     def __init__(self, base_model_path, device, save_fp16=False, sdxl=False):
         self.save_fp16 = save_fp16
@@ -326,15 +326,15 @@ class BaseConverter(object):
     def convert_to_webui(
         self,
         sd_unet,
-        sd_TE,
+        sd_te,
     ):
         sd_unet = self.convert_to_webui_(
             sd_unet, base_state=self.unet_state_dict, prefix=self.prefix_unet
         )
-        sd_TE = self.convert_to_webui_(
-            sd_TE, base_state=self.text_enc_dict, prefix=self.prefix_TE
+        sd_te = self.convert_to_webui_(
+            sd_te, base_state=self.text_enc_dict, prefix=self.prefix_te
         )
-        sd_unet.update(sd_TE)
+        sd_unet.update(sd_te)
         return sd_unet
 
     def convert_to_webui_(self, ft_state, base_state, prefix):
@@ -435,10 +435,10 @@ def save_and_print_path(sd, path):
     print("Saved to:", path)
 
 
-def get_network_types(sd_unet, sd_TE):
+def get_network_types(sd_unet, sd_te):
     network_types = []
     for network_type in ["lora", "plugin", "base"]:
-        if network_type in sd_unet.keys() and network_type in sd_TE.keys():
+        if network_type in sd_unet.keys() and network_type in sd_te.keys():
             network_types.append(network_type)
     return network_types
 
@@ -522,16 +522,16 @@ if __name__ == "__main__":
                 raise NotImplementedError(
                     "Conversion from webui to base is not yet supported."
                 )
-            sd_unet, sd_TE = lora_converter.convert_from_webui(
+            sd_unet, sd_te = lora_converter.convert_from_webui(
                 state,
                 network_type=args.save_network_type,
                 auto_scale_alpha=args.auto_scale_alpha,
                 sdxl=args.sdxl,
             )
             filename = os.path.basename(file_path)
-            TE_path = os.path.join(args.dump_path, "text_encoder-" + filename)
+            te_path = os.path.join(args.dump_path, "text_encoder-" + filename)
             unet_path = os.path.join(args.dump_path, "unet-" + filename)
-            save_and_print_path(sd_TE, TE_path)
+            save_and_print_path(sd_te, te_path)
             save_and_print_path(sd_unet, unet_path)
 
     elif args.to_webui:
@@ -544,10 +544,10 @@ if __name__ == "__main__":
                 sd_unet = ckpt_manager.load_ckpt(
                     file_paths["unet"], map_location=args.device
                 )
-                sd_TE = ckpt_manager.load_ckpt(
+                sd_te = ckpt_manager.load_ckpt(
                     file_paths["TE"], map_location=args.device
                 )
-                network_types = get_network_types(sd_unet, sd_TE)
+                network_types = get_network_types(sd_unet, sd_te)
                 for network_type in network_types:
                     print(
                         f'Converting pair: {file_paths["TE"]} and {file_paths["unet"]}'
@@ -563,12 +563,12 @@ if __name__ == "__main__":
                             )
                         state = base_converter.convert_to_webui(
                             sd_unet[network_type],
-                            sd_TE[network_type],
+                            sd_te[network_type],
                         )
                     else:
                         state = lora_converter.convert_to_webui(
                             sd_unet[network_type],
-                            sd_TE[network_type],
+                            sd_te[network_type],
                             network_type=network_type,
                             auto_scale_alpha=args.auto_scale_alpha,
                             sdxl=args.sdxl,
