@@ -618,7 +618,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         ):
             if module.__class__.__name__ in target_replace_modules:
                 for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ not in {"Linear", "Conv2d"}:
+                    if child_module.__class__.__name__ not in {"Linear", "Conv2d", "GroupNorm", "LayerNorm"}:
                         continue
                     lora_name = prefix + "." + name + "." + child_name
                     lora_name = lora_name.replace(".", "_")
