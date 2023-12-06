@@ -15,6 +15,7 @@ class DemoNet(nn.Module):
     """
     A Simple Pytorch Module for demo
     """
+
     def __init__(self):
         super().__init__()
         self.test_1 = nn.Linear(784, 2048)

@@ -401,7 +401,7 @@ suffix_conversion = {
         "norm2": "out_layers_0",
         "time_emb_proj": "emb_layers_1",
         "conv_shortcut": "skip_connection",
-    }
+    },
 }
 
 
@@ -423,10 +423,10 @@ def convert_diffusers_name_to_compvis(key):
     m = []
 
     if match(m, r"lora_unet_conv_in(.*)"):
-        return f'lora_unet_input_blocks_0_0{m[0]}'
+        return f"lora_unet_input_blocks_0_0{m[0]}"
 
     if match(m, r"lora_unet_conv_out(.*)"):
-        return f'lora_unet_out_2{m[0]}'
+        return f"lora_unet_out_2{m[0]}"
 
     if match(m, r"lora_unet_time_embedding_linear_(\d+)(.*)"):
         return f"lora_unet_time_embed_{m[0] * 2 - 2}{m[1]}"
@@ -437,7 +437,9 @@ def convert_diffusers_name_to_compvis(key):
 
     if match(m, r"lora_unet_mid_block_(attentions|resnets)_(\d+)_(.+)"):
         suffix = suffix_conversion.get(m[0], {}).get(m[2], m[2])
-        return f"lora_unet_middle_block_{1 if m[0] == 'attentions' else m[1] * 2}_{suffix}"
+        return (
+            f"lora_unet_middle_block_{1 if m[0] == 'attentions' else m[1] * 2}_{suffix}"
+        )
 
     if match(m, r"lora_unet_up_blocks_(\d+)_(attentions|resnets)_(\d+)_(.+)"):
         suffix = suffix_conversion.get(m[1], {}).get(m[3], m[3])
@@ -618,7 +620,13 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         ):
             if module.__class__.__name__ in target_replace_modules:
                 for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ not in {"Linear", "Conv2d", "GroupNorm", "GroupNorm32", "LayerNorm"}:
+                    if child_module.__class__.__name__ not in {
+                        "Linear",
+                        "Conv2d",
+                        "GroupNorm",
+                        "GroupNorm32",
+                        "LayerNorm",
+                    }:
                         continue
                     lora_name = prefix + "." + name + "." + child_name
                     lora_name = lora_name.replace(".", "_")
@@ -656,13 +664,13 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
 
     key_dict = {}
     for k, v in tqdm(list(lyco_state_dict.items()), desc="Converting Dtype and Device"):
-        module, weight_key = k.split('.', 1)
+        module, weight_key = k.split(".", 1)
         convert_key = convert_diffusers_name_to_compvis(module)
-        if convert_key != module and len(tes)>1:
+        if convert_key != module and len(tes) > 1:
             # kohya's format for sdxl is as same as SGM, not diffusers
             del lyco_state_dict[k]
             key_dict[convert_key] = k
-            k = f'{convert_key}.{weight_key}'
+            k = f"{convert_key}.{weight_key}"
         else:
             key_dict[module] = k
         if device == "cpu":
@@ -674,8 +682,8 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
 
     for idx, te in enumerate(tes):
         if len(tes):
-            prefix = LORA_PREFIX_TEXT_ENCODER + str(idx+1)
-        else: 
+            prefix = LORA_PREFIX_TEXT_ENCODER + str(idx + 1)
+        else:
             prefix = LORA_PREFIX_TEXT_ENCODER
         merge_state_dict(
             prefix,
