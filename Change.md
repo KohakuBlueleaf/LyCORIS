@@ -5,7 +5,7 @@
 * Bugs in scaled weight norms of OFT.
 * Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.
 * Refactor the batch convert scripts for pivotal bundle and hcp.
-
+* Fix bugs in merge scripts for Norm module and LoKr module.
 
 ## 2023/12/02 update to 2.0.0
 * Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")

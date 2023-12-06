@@ -618,7 +618,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         ):
             if module.__class__.__name__ in target_replace_modules:
                 for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ not in {"Linear", "Conv2d", "GroupNorm", "LayerNorm"}:
+                    if child_module.__class__.__name__ not in {"Linear", "Conv2d", "GroupNorm", "GroupNorm32", "LayerNorm"}:
                         continue
                     lora_name = prefix + "." + name + "." + child_name
                     lora_name = lora_name.replace(".", "_")
@@ -636,8 +636,6 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
                         child_module.weight.copy_(result)
                     if result_b is not None:
                         child_module.bias.copy_(result_b)
-                    if result is None:
-                        print(lora_name)
             elif name in target_replace_names:
                 lora_name = prefix + "." + name
                 lora_name = lora_name.replace(".", "_")
@@ -655,8 +653,6 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
                     module.weight.copy_(result)
                 if result_b is not None:
                     module.bias.copy_(result_b)
-                if result is None:
-                    print(lora_name)
 
     key_dict = {}
     for k, v in tqdm(list(lyco_state_dict.items()), desc="Converting Dtype and Device"):
