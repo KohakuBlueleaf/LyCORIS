@@ -122,8 +122,7 @@ You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_con
 In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
 
 #### As standalone wrappers
-
-See `standalone_example.py` for full example.
+See [standalone_example.py](standalone_example.py) for full example.
 
 Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
 

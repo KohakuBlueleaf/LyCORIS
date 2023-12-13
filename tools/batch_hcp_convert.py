@@ -53,7 +53,7 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_te = self.convert_from_webui_(
+            sd_TE = self.convert_from_webui_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te,
@@ -68,28 +68,28 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_te = self.convert_from_webui_xl_te_(
+            sd_TE = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te_xl_clip_B,
                 com_name=self.com_name_te,
                 com_name_tmp=self.com_name_te_tmp,
             )
-            sd_te2 = self.convert_from_webui_xl_te_(
+            sd_TE2 = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te_xl_clip_bigG,
                 com_name=self.com_name_te,
                 com_name_tmp=self.com_name_te_tmp,
             )
-            sd_te.update(sd_te2)
+            sd_TE.update(sd_TE2)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_from_webui(sd_unet)
             sd_te = self.alpha_scale_from_webui(sd_te)
         return {network_type: sd_unet}, {network_type: sd_te}
 
     def convert_to_webui(
-        self, sd_unet, sd_te, network_type="lora", auto_scale_alpha=False, sdxl=False
+        self, sd_unet, sd_TE, network_type="lora", auto_scale_alpha=False, sdxl=False
     ):
         assert network_type in ["lora", "plugin"]
         sd_unet = self.convert_to_webui_(
@@ -103,7 +103,7 @@ class LoraConverter(object):
             sd_te = self.convert_to_webui_(
                 sd_te, network_type=network_type, prefix=self.prefix_te
             )
-        sd_unet.update(sd_te)
+        sd_unet.update(sd_TE)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_to_webui(sd_unet)
         return sd_unet
