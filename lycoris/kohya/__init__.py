@@ -287,6 +287,7 @@ class LycorisNetwork(torch.nn.Module):
         "time_embedding.linear_2",
     ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
+    TEXT_ENCODER_TARGET_REPLACE_NAME = []
     LORA_PREFIX_UNET = "lora_unet"
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
     MODULE_ALGO_MAP = {}
