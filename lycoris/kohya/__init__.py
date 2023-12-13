@@ -173,12 +173,24 @@ def create_network_from_weights(
         if lora_name in unet_loras:
             unet_loras[lora_name] = modules
 
-    for name, modules in text_encoder.named_modules():
-        lora_name = f"{LycorisNetwork.LORA_PREFIX_TEXT_ENCODER}_{name}".replace(
-            ".", "_"
-        )
-        if lora_name in te_loras:
-            te_loras[lora_name] = modules
+    if isinstance(text_encoder, list):
+        text_encoders = text_encoder
+        use_index = True
+    else:
+        text_encoders = [text_encoder]
+        use_index = False
+
+    for idx, te in enumerate(text_encoders):
+        if use_index:
+            prefix = f"{LycorisNetwork.LORA_PREFIX_TEXT_ENCODER}{idx+1}"
+        else:
+            prefix = LycorisNetwork.LORA_PREFIX_TEXT_ENCODER
+        for name, modules in te.named_modules():
+            lora_name = f"{prefix}_{name}".replace(
+                ".", "_"
+            )
+            if lora_name in te_loras:
+                te_loras[lora_name] = modules
 
     network = LycorisNetwork(text_encoder, unet)
     network.unet_loras = []
