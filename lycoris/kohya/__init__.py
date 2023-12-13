@@ -82,7 +82,7 @@ def create_network(
     else:
         preset = PRESET[preset]
     assert preset is not None
-    LycorisNetwork.apply_preset(preset)
+    LycorisNetworkKohya.apply_preset(preset)
 
     print(f"Using rank adaptation algo: {algo}")
 
@@ -108,7 +108,7 @@ def create_network(
             multiplier=multiplier,
         )
     else:
-        network = LycorisNetwork(
+        network = LycorisNetworkKohya(
             text_encoder,
             unet,
             multiplier=multiplier,
@@ -163,13 +163,13 @@ def create_network_from_weights(
             continue
 
         lora_name = key.split(".")[0]
-        if lora_name.startswith(LycorisNetwork.LORA_PREFIX_UNET):
+        if lora_name.startswith(LycorisNetworkKohya.LORA_PREFIX_UNET):
             unet_loras[lora_name] = None
-        elif lora_name.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
+        elif lora_name.startswith(LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER):
             te_loras[lora_name] = None
 
     for name, modules in unet.named_modules():
-        lora_name = f"{LycorisNetwork.LORA_PREFIX_UNET}_{name}".replace(".", "_")
+        lora_name = f"{LycorisNetworkKohya.LORA_PREFIX_UNET}_{name}".replace(".", "_")
         if lora_name in unet_loras:
             unet_loras[lora_name] = modules
 
@@ -182,9 +182,9 @@ def create_network_from_weights(
 
     for idx, te in enumerate(text_encoders):
         if use_index:
-            prefix = f"{LycorisNetwork.LORA_PREFIX_TEXT_ENCODER}{idx+1}"
+            prefix = f"{LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER}{idx+1}"
         else:
-            prefix = LycorisNetwork.LORA_PREFIX_TEXT_ENCODER
+            prefix = LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
         for name, modules in te.named_modules():
             lora_name = f"{prefix}_{name}".replace(
                 ".", "_"
@@ -192,7 +192,7 @@ def create_network_from_weights(
             if lora_name in te_loras:
                 te_loras[lora_name] = modules
 
-    network = LycorisNetwork(text_encoder, unet)
+    network = LycorisNetworkKohya(text_encoder, unet)
     network.unet_loras = []
     network.text_encoder_loras = []
 
@@ -279,7 +279,7 @@ def create_hypernetwork(
     )
 
 
-class LycorisNetwork(torch.nn.Module):
+class LycorisNetworkKohya(torch.nn.Module):
     """
     LoRA + LoCon
     """
@@ -503,11 +503,11 @@ class LycorisNetwork(torch.nn.Module):
         if network_module == GLoRAModule:
             print("GLoRA enabled, only train transformer")
             # only train transformer (for GLoRA)
-            LycorisNetwork.UNET_TARGET_REPLACE_MODULE = [
+            LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE = [
                 "Transformer2DModel",
                 "Attention",
             ]
-            LycorisNetwork.UNET_TARGET_REPLACE_NAME = []
+            LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME = []
 
         if isinstance(text_encoder, list):
             text_encoders = text_encoder
@@ -520,11 +520,11 @@ class LycorisNetwork(torch.nn.Module):
         for i, te in enumerate(text_encoders):
             self.text_encoder_loras.extend(
                 create_modules(
-                    LycorisNetwork.LORA_PREFIX_TEXT_ENCODER
+                    LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
                     + (f"{i+1}" if use_index else ""),
                     te,
-                    LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE,
-                    LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_NAME,
+                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
                 )
             )
         print(
@@ -532,10 +532,10 @@ class LycorisNetwork(torch.nn.Module):
         )
 
         self.unet_loras = create_modules(
-            LycorisNetwork.LORA_PREFIX_UNET,
+            LycorisNetworkKohya.LORA_PREFIX_UNET,
             unet,
-            LycorisNetwork.UNET_TARGET_REPLACE_MODULE,
-            LycorisNetwork.UNET_TARGET_REPLACE_NAME,
+            LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
+            LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME,
         )
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
@@ -842,10 +842,10 @@ class HyperDreamNetwork(torch.nn.Module):
         for i, te in enumerate(text_encoders):
             self.text_encoder_loras.extend(
                 create_modules(
-                    LycorisNetwork.LORA_PREFIX_TEXT_ENCODER
+                    LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
                     + (f"{i+1}" if use_index else ""),
                     te,
-                    LycorisNetwork.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
                 )
             )
         print(
@@ -853,9 +853,9 @@ class HyperDreamNetwork(torch.nn.Module):
         )
 
         self.unet_loras = create_modules(
-            LycorisNetwork.LORA_PREFIX_UNET,
+            LycorisNetworkKohya.LORA_PREFIX_UNET,
             unet,
-            LycorisNetwork.UNET_TARGET_REPLACE_MODULE,
+            LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
         )
         print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
@@ -959,9 +959,9 @@ class HyperDreamNetwork(torch.nn.Module):
         if self.weights_sd:
             weights_has_text_encoder = weights_has_unet = False
             for key in self.weights_sd.keys():
-                if key.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
+                if key.startswith(LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER):
                     weights_has_text_encoder = True
-                elif key.startswith(LycorisNetwork.LORA_PREFIX_UNET):
+                elif key.startswith(LycorisNetworkKohya.LORA_PREFIX_UNET):
                     weights_has_unet = True
 
             if apply_text_encoder is None:
@@ -1229,9 +1229,9 @@ class IA3Network(torch.nn.Module):
         if self.weights_sd:
             weights_has_text_encoder = weights_has_unet = False
             for key in self.weights_sd.keys():
-                if key.startswith(LycorisNetwork.LORA_PREFIX_TEXT_ENCODER):
+                if key.startswith(LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER):
                     weights_has_text_encoder = True
-                elif key.startswith(LycorisNetwork.LORA_PREFIX_UNET):
+                elif key.startswith(LycorisNetworkKohya.LORA_PREFIX_UNET):
                     weights_has_unet = True
 
             if apply_text_encoder is None:
