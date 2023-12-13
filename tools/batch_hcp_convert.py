@@ -34,6 +34,8 @@ class LoraConverter(object):
     prefix_te_xl_clip_B = "lora_te1_"
     prefix_te_xl_clip_bigG = "lora_te2_"
 
+    lora_w_map = {"lora_down.weight": "W_down", "lora_up.weight": "W_up"}
+
     def __init__(self, save_fp16=False):
         self.com_name_unet_tmp = [x.replace("_", "%") for x in self.com_name_unet]
         self.com_name_te_tmp = [x.replace("_", "%") for x in self.com_name_te]
@@ -122,17 +124,27 @@ class LoraConverter(object):
             if lora_k == "alpha" or network_type == "plugin":
                 sd_covert[f"{model_k}.___.{lora_k}"] = v
             else:
-                sd_covert[f"{model_k}.___.layer.{lora_k}"] = v
+                # This converts to the version after commit 9fdce2d
+                sd_covert[f"{model_k}.___.layer.{self.lora_w_map[lora_k]}"] = v
         return sd_covert
 
     def convert_to_webui_(self, state, network_type, prefix):
         sd_covert = {}
         for k, v in state.items():
+            separator = ".___."
             if network_type == "plugin" or "alpha" in k or "scale" in k:
-                separator = ".___."
+                model_k, lora_k = k.split(separator, 1)
+            # LoRA version after commit 9fdce2d
+            elif k.endswith("W_down"):
+                model_k, _ = k.split(separator, 1)
+                lora_k = "lora_down.weight"
+            elif k.endswith("W_up"):
+                model_k, _ = k.split(separator, 1)
+                lora_k = "lora_up.weight"
+            # LoRA version before commit 9fdce2d
             else:
                 separator = ".___.layer."
-            model_k, lora_k = k.split(separator, 1)
+                model_k, lora_k = k.split(separator, 1)
             if self.save_fp16:
                 v = v.half()
             sd_covert[f"{prefix}{model_k.replace('.', '_')}.{lora_k}"] = v
@@ -141,10 +153,20 @@ class LoraConverter(object):
     def convert_to_webui_xl_(self, state, network_type, prefix):
         sd_convert = {}
         for k, v in state.items():
+            separator = ".___."
             if network_type == "plugin" or "alpha" in k or "scale" in k:
-                separator = ".___."
+                model_k, lora_k = k.split(separator, 1)
+            # LoRA version after commit 9fdce2d
+            elif k.endswith("W_down"):
+                model_k, _ = k.split(separator, 1)
+                lora_k = "lora_down.weight"
+            elif k.endswith("W_up"):
+                model_k, _ = k.split(separator, 1)
+                lora_k = "lora_up.weight"
+            # LoRA version before commit 9fdce2d
             else:
                 separator = ".___.layer."
+                model_k, lora_k = k.split(separator, 1)
             model_k, lora_k = k.split(separator, 1)
             new_k = f"{prefix}{model_k.replace('.', '_')}.{lora_k}"
             if "clip" in new_k:
@@ -183,7 +205,8 @@ class LoraConverter(object):
             if lora_k == "alpha" or network_type == "plugin":
                 sd_covert[f"{model_k}.___.{lora_k}"] = v
             else:
-                sd_covert[f"{model_k}.___.layer.{lora_k}"] = v
+                # This converts to the version after commit 9fdce2d
+                sd_covert[f"{model_k}.___.layer.{self.lora_w_map[lora_k]}"] = v
         return sd_covert
 
     def convert_from_webui_xl_unet_(
@@ -276,9 +299,9 @@ class LoraConverter(object):
     def alpha_scale_from_webui(state):
         # Apply to "lora_down" and "lora_up" respectively to prevent overflow
         for k, v in state.items():
-            if "lora_up" in k:
+            if "lora_up" in k or "W_up" in k:
                 state[k] = v * math.sqrt(v.shape[1])
-            elif "lora_down" in k:
+            elif "lora_down" in k or "W_down" in k:
                 state[k] = v * math.sqrt(v.shape[0])
         return state
 
@@ -429,7 +452,11 @@ def get_unet_te_pairs(files: List[str]) -> Dict[str, Dict[str, str]]:
 
 
 def save_and_print_path(sd, path):
-    ckpt_manager = auto_manager(path)()
+    try:
+        # Old HCP
+        ckpt_manager = auto_manager(path)()
+    except TypeError:
+        ckpt_manager = auto_manager(path)
     os.makedirs(args.dump_path, exist_ok=True)
     ckpt_manager._save_ckpt(sd, save_path=path)
     print("Saved to:", path)
@@ -515,7 +542,11 @@ if __name__ == "__main__":
 
     if args.from_webui:
         for file_path in lora_files:
-            ckpt_manager = auto_manager(file_path)()
+            try:
+                # Old HCP
+                ckpt_manager = auto_manager(file_path)()
+            except TypeError:
+                ckpt_manager = auto_manager(file_path)
             print(f"Converting {file_path}")
             state = ckpt_manager.load_ckpt(file_path, map_location=args.device)
             if args.save_network_type == "base":
@@ -540,7 +571,11 @@ if __name__ == "__main__":
         for name, file_paths in file_pairs.items():
             if file_paths["TE"] and file_paths["unet"]:
                 # Assume here that unet and TE have the same extension
-                ckpt_manager = auto_manager(file_paths["TE"])()
+                try:
+                    # Old HCP
+                    ckpt_manager = auto_manager(file_paths["TE"])()
+                except TypeError:
+                    ckpt_manager = auto_manager(file_paths["TE"])
                 sd_unet = ckpt_manager.load_ckpt(
                     file_paths["unet"], map_location=args.device
                 )
