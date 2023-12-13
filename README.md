@@ -22,17 +22,17 @@ A simple comparison of some of these methods are provided below (to be taken wit
 
 |                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
-| Fidelity              | ★    | ●    | ▲    | ◉               | ▲                |
-| Flexibility $^*$      | ★    | ●    | ◉    | ▲               | ● $^†$           |
-| Diversity             | ▲    | ◉    | ★    | ●               | ★                |
-| Size                  | ▲    | ●    | ●    | ●               | ★                |
-| Training Speed Linear | ★    | ●    | ●    | ★               | ★                |
-| Training Speed Conv   | ●    | ★    | ▲    | ●               | ●                |
+| Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
+| Flexibility$^*$     | ★   | ●   | ◉   | ▲              | ●$^†$        |
+| Diversity             | ▲   | ◉   | ★   | ●              | ★               |
+| Size                  | ▲   | ●   | ●   | ●              | ★               |
+| Training Speed Linear | ★   | ●   | ●   | ★              | ★               |
+| Training Speed Conv   | ●   | ★   | ▲   | ●              | ●               |
 
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
-$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not  
+$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not
 $^†$ It may become more difficult to switch base model or combine multiple concepts in this situation
 
 ## Usage
@@ -40,6 +40,7 @@ $^†$ It may become more difficult to switch base model or combine multiple con
 ### Image Generation
 
 #### [a1111/sd-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
+
 After sd-webui 1.5.0, LyCORIS models are officially supported by the built-in LoRA system. You can put them in either `models/Lora` or `models/LyCORIS` and use the default syntax `<lora:filename:multiplier>` to trigger it.
 
 When we add new model types, we will always make sure they can be used with the newest version of sd-webui.
@@ -52,7 +53,7 @@ As far as we are aware, LyCORIS models are also supported in the following inter
 
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - [InvokeAI](https://github.com/invoke-ai/InvokeAI)
-- [CivitAI](https://civitai.com/) 
+- [CivitAI](https://civitai.com/)
 - [Tensor.Art](https://tensor.art/)
 
 However, newer model types may not always be supported. If you encounter this issue, consider requesting the developers of the corresponding interface or website to include support for the new type.
@@ -66,17 +67,19 @@ There are three different ways to train LyCORIS models.
 - With your own script by using LyCORIS as standalone wrappers for any pytorch modules.
 
 In any case, please install this package in the corresponding virtual environment. You can either install it
-- through pip
-    ```bash
-    pip install lycoris_lora
-    ```
 
+- through pip
+
+  ```bash
+  pip install lycoris_lora
+  ```
 - or from source
-    ```bash
-    git clone https://github.com/KohakuBlueleaf/LyCORIS
-    cd LyCORIS
-    pip install .
-    ```
+
+  ```bash
+  git clone https://github.com/KohakuBlueleaf/LyCORIS
+  cd LyCORIS
+  pip install .
+  ```
 
 A detilaed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
 
@@ -85,21 +88,22 @@ A detilaed description of the network arguments is provided in [docs/Network-Arg
 You can use this package's kohya module to run kohya's training script to train lycoris module for SD models
 
 - with command line arguments
-    ```bash
-    accelerate launch train_network.py \
-      --network_module lycoris.kohya \
-      --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
-      --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
-      "dropout=DROPOUT_RATE" "algo=locon" \
-    ```
 
+  ```bash
+  accelerate launch train_network.py \
+    --network_module lycoris.kohya \
+    --network_dim "DIM_FOR_LINEAR" --network_alpha "ALPHA_FOR_LINEAR"\
+    --network_args "conv_dim=DIM_FOR_CONV" "conv_alpha=ALPHA_FOR_CONV" \
+    "dropout=DROPOUT_RATE" "algo=locon" \
+  ```
 - with `toml` files
-    ```bash
-    accelerate launch train_network.py \
-      --config_file example_configs/training_configs/kohya/loha_config.toml
-    ```
-    For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
 
+  ```bash
+  accelerate launch train_network.py \
+    --config_file example_configs/training_configs/kohya/loha_config.toml
+  ```
+
+  For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
 
 #### HCP-Diffusion
 
@@ -109,6 +113,7 @@ You can use this package's hcp module to run HCP-Diffusion's training script to 
 accelerate launch -m hcpdiff.train_ac_single \
   --cfg example_configs/training_configs/hcp/hcp_diag_oft.yaml
 ```
+
 For your convenience, some example `yaml` files for HCP LyCORIS training are provided in [example/training_configs/hcp](example_configs/training_configs/hcp).
 
 For the moment being the outputs of HCP-Diffusion are not directly compatible with a1111/sdwebui.
@@ -116,13 +121,14 @@ You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_con
 
 In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
 
-
 #### As standalone wrappers
+
 See `standalone_example.py` for full example.
 
 Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
 
 For example:
+
 ```py
 from lycoris import create_lycoris, LycorisNetwork
 
@@ -148,25 +154,30 @@ You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to
 #### Graphical Interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
+
 * [bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)
 * [derrian-distro/LoRA_Easy_Training_Scripts](https://github.com/derrian-distro/LoRA_Easy_Training_Scripts)
 * [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)
 
 and colabs (please help us complete the list!)
+
 * [hollowstrawberry/kohya-colab](https://github.com/hollowstrawberry/kohya-colab)
 * [Linaqruf/kohya-trainer](https://github.com/Linaqruf/kohya-trainer)
 
 However, they are not guaranteed to be up-to-date. In particular, newer types may not be supported. Consider requesting the developers for support or simply use the original kohya script in this case.
 
-
 ## Utilities
 
 ### Extract LoCon
+
 You can extract LoCon from a dreambooth model with its base model.
+
 ```bash
 python3 extract_locon.py <settings> <base_model> <db_model> <output>
 ```
+
 Use --help to get more info
+
 ```
 $ python3 extract_locon.py --help
 usage: extract_locon.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--mode MODE] [--safetensors] [--linear_dim LINEAR_DIM]
@@ -177,30 +188,38 @@ usage: extract_locon.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--mode MOD
 ```
 
 ### Merge LyCORIS back to model
+
 You can merge your LyCORIS model back to your checkpoint(base model)
+
 ```bash
 python3 merge.py <settings> <base_model> <lycoris_model> <output>
 ```
+
 Use --help to get more info
+
 ```
 $ python3 merge.py --help
 usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
 ```
 
-
-
 ## Change Log
+
 For full log, please see [Change.md](Change.md)
 
+## 2023/12/14 quick fixes of 2.0.1
 
-## 2023/12/0x quick fixes of 2.0.1
-* Bugs in scaled weight norms of OFT.
 * Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.
+  * Can be found in LECO or other similar projects.
 * Refactor the batch convert scripts for pivotal bundle and hcp.
+* Change the class name `lycoris.kohya.LycorisNetwork` to `lycoris.kohya.LycorisNetworkKohya` to avoid confusion.
 * Fix bugs in merge scripts for Norm module and LoKr module.
-
+* Fix bugs in scaled weight norms of OFT.
+* Fix bugs in extract scripts for SDXL.
+* Fix bugs in full module which consume 2x vram.
+* Fix bugs in `create_network_from_weights` which caused bugs in "resume" feature for SDXL.
 
 ## 2023/12/02 update to 2.0.0
+
 * Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
   * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
   * Add Pivotal tuning utilities
@@ -218,20 +237,19 @@ For full log, please see [Change.md](Change.md)
 * Fix errors of apply_max_norms
 * Fix errors of resume
 
-
 ## Todo list
+
 - [ ] Module and Document for using LyCORIS in any other model, Not only SD.
-- [x] Proposition3 in [FedPara](https://arxiv.org/abs/2108.06098)
+- [X] Proposition3 in [FedPara](https://arxiv.org/abs/2108.06098)
   * also need custom backward to save the vram
 - [ ] Low rank + sparse representation
-  - [x] For extraction
+  - [X] For extraction
   - [ ] For training
 - [ ] Support more operation, not only linear and conv2d.
-- [x] Configure varying ranks or dimensions for specific modules as needed.
+- [X] Configure varying ranks or dimensions for specific modules as needed.
 - [ ] Automatically selecting an algorithm based on the specific rank requirement.
 - [ ] Explore other low-rank representations or parameter-efficient methods to fine-tune either the entire model or specific parts of it.
 - [ ] More experiments for different task, not only diffusion models.
-
 
 ## Citation
 
