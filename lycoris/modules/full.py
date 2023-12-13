@@ -54,16 +54,29 @@ class FullModule(ModuleCustomSD):
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
         self.weight.data.copy_(self.org_module[0].weight.data)
+        self.org_weight = [self.org_module[0].weight.data.cpu().clone()]
+        delattr(self.org_module[0], "weight")
         if self.org_module[0].bias is not None:
             self.bias.data.copy_(self.org_module[0].bias.data)
+            self.org_bias = [self.org_module[0].bias.data.cpu().clone()]
+            delattr(self.org_module[0], "bias")
+        else:
+            self.org_bias = None
 
     def custom_state_dict(self):
-        sd = {"diff": self.weight.data.cpu() - self.org_module[0].weight.data.cpu()}
+        sd = {"diff": self.weight.data.cpu() - self.org_weight[0]}
         if self.bias is not None:
-            sd["diff_b"] = self.bias.data.cpu() - self.org_module[0].bias.data.cpu()
+            sd["diff_b"] = self.bias.data.cpu() - self.org_bias[0]
         return sd
 
-    def make_weight(self, scale=1, device=None):
+    def make_weight(self, scale=1, device=None, original=False):
+        if original:
+            weight = self.org_weight[0].to(device, dtype=self.weight.dtype)
+            if self.org_bias is not None:
+                bias = self.org_bias[0].to(device, dtype=self.bias.dtype)
+            else:
+                bias = None
+            return weight, bias
         drop = (
             torch.rand(self.dim, device=device) > self.rank_dropout
             if self.rank_dropout and self.training
@@ -82,11 +95,16 @@ class FullModule(ModuleCustomSD):
             bias = self.bias
         return weight, bias
 
-    def forward(self, x):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
+    def forward(self, x: torch.Tensor):
+        if (
+            self.module_dropout
+            and self.training
+            and torch.rand(1) < self.module_dropout
+        ):
+            original = True
+        else:
+            original = False
         scale = self.multiplier
-        weight, bias = self.make_weight(scale)
+        weight, bias = self.make_weight(scale, x.device, original=original)
         kw_dict = self.kw_dict | {"weight": weight, "bias": bias}
         return self.op(x, **kw_dict)

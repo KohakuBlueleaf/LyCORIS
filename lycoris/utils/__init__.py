@@ -1,4 +1,5 @@
 from typing import *
+import re
 
 import numpy as np
 
@@ -372,9 +373,13 @@ def extract_diff(
         return loras
 
     all_loras = {}
-    for te1, te2 in zip(base_tes, db_tes):
+    for idx, te1, te2 in enumerate(zip(base_tes, db_tes)):
+        if len(base_tes) > 1:
+            prefix = f"{LORA_PREFIX_TEXT_ENCODER}{idx+1}"
+        else:
+            prefix = LORA_PREFIX_TEXT_ENCODER
         all_loras |= make_state_dict(
-            LORA_PREFIX_TEXT_ENCODER, te1, te2, TEXT_ENCODER_TARGET_REPLACE_MODULE
+            prefix, te1, te2, TEXT_ENCODER_TARGET_REPLACE_MODULE
         )
 
     all_loras |= make_state_dict(
@@ -386,6 +391,70 @@ def extract_diff(
     )
     print(len(all_loras))
     return all_loras
+
+
+re_digits = re.compile(r"\d+")
+re_compiled = {}
+
+suffix_conversion = {
+    "attentions": {},
+    "resnets": {
+        "conv1": "in_layers_2",
+        "conv2": "out_layers_3",
+        "norm1": "in_layers_0",
+        "norm2": "out_layers_0",
+        "time_emb_proj": "emb_layers_1",
+        "conv_shortcut": "skip_connection",
+    },
+}
+
+
+def convert_diffusers_name_to_compvis(key):
+    def match(match_list, regex_text):
+        regex = re_compiled.get(regex_text)
+        if regex is None:
+            regex = re.compile(regex_text)
+            re_compiled[regex_text] = regex
+
+        r = re.match(regex, key)
+        if not r:
+            return False
+
+        match_list.clear()
+        match_list.extend([int(x) if re.match(re_digits, x) else x for x in r.groups()])
+        return True
+
+    m = []
+
+    if match(m, r"lora_unet_conv_in(.*)"):
+        return f"lora_unet_input_blocks_0_0{m[0]}"
+
+    if match(m, r"lora_unet_conv_out(.*)"):
+        return f"lora_unet_out_2{m[0]}"
+
+    if match(m, r"lora_unet_time_embedding_linear_(\d+)(.*)"):
+        return f"lora_unet_time_embed_{m[0] * 2 - 2}{m[1]}"
+
+    if match(m, r"lora_unet_down_blocks_(\d+)_(attentions|resnets)_(\d+)_(.+)"):
+        suffix = suffix_conversion.get(m[1], {}).get(m[3], m[3])
+        return f"lora_unet_input_blocks_{1 + m[0] * 3 + m[2]}_{1 if m[1] == 'attentions' else 0}_{suffix}"
+
+    if match(m, r"lora_unet_mid_block_(attentions|resnets)_(\d+)_(.+)"):
+        suffix = suffix_conversion.get(m[0], {}).get(m[2], m[2])
+        return (
+            f"lora_unet_middle_block_{1 if m[0] == 'attentions' else m[1] * 2}_{suffix}"
+        )
+
+    if match(m, r"lora_unet_up_blocks_(\d+)_(attentions|resnets)_(\d+)_(.+)"):
+        suffix = suffix_conversion.get(m[1], {}).get(m[3], m[3])
+        return f"lora_unet_output_blocks_{m[0] * 3 + m[2]}_{1 if m[1] == 'attentions' else 0}_{suffix}"
+
+    if match(m, r"lora_unet_down_blocks_(\d+)_downsamplers_0_conv"):
+        return f"lora_unet_input_blocks_{3 + m[0] * 3}_0_op"
+
+    if match(m, r"lora_unet_up_blocks_(\d+)_upsamplers_0_conv"):
+        return f"lora_unet_output_blocks_{2 + m[0] * 3}_2_conv"
+    return key
 
 
 def get_module(lyco_state_dict: Dict, lora_name):
@@ -448,7 +517,7 @@ def cp_weight(wa, wb, t):
 @torch.no_grad()
 def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
     if orig_weight is None:
-        return orig_weight, orig_bias
+        return None, None
     merged = orig_weight
     merged_bias = orig_bias
     if module_type == "locon":
@@ -487,12 +556,12 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
         if alpha is not None and (w1b is not None or w2b is not None):
             scale *= alpha / (w1b.size(0) if w1b else w2b.size(0))
         if w1a is not None and w1b is not None:
-            if t1:
+            if t1 is not None:
                 w1 = cp_weight(w1a, w1b, t1)
             else:
                 w1 = w1a @ w1b
         if w2a is not None and w2b is not None:
-            if t2:
+            if t2 is not None:
                 w2 = cp_weight(w2a, w2b, t2)
             else:
                 w2 = w2a @ w2b
@@ -517,8 +586,7 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
         merged = orig_weight + rebuild * scale
         merged_bias = orig_bias + rebuild_b * scale
     else:
-        merged = orig_weight
-        merged_bias = orig_bias
+        return None, None
 
     return merged, merged_bias
 
@@ -556,7 +624,13 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         ):
             if module.__class__.__name__ in target_replace_modules:
                 for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ not in {"Linear", "Conv2d"}:
+                    if child_module.__class__.__name__ not in {
+                        "Linear",
+                        "Conv2d",
+                        "GroupNorm",
+                        "GroupNorm32",
+                        "LayerNorm",
+                    }:
                         continue
                     lora_name = prefix + "." + name + "." + child_name
                     lora_name = lora_name.replace(".", "_")
@@ -568,6 +642,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
                         scale,
                     )
                     if result is not None:
+                        key_dict.pop(lora_name)
                         merged += 1
                         child_module.requires_grad_(False)
                         child_module.weight.copy_(result)
@@ -584,13 +659,24 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
                     scale,
                 )
                 if result is not None:
+                    key_dict.pop(lora_name)
                     merged += 1
                     module.requires_grad_(False)
                     module.weight.copy_(result)
                 if result_b is not None:
                     module.bias.copy_(result_b)
 
+    key_dict = {}
     for k, v in tqdm(list(lyco_state_dict.items()), desc="Converting Dtype and Device"):
+        module, weight_key = k.split(".", 1)
+        convert_key = convert_diffusers_name_to_compvis(module)
+        if convert_key != module and len(tes) > 1:
+            # kohya's format for sdxl is as same as SGM, not diffusers
+            del lyco_state_dict[k]
+            key_dict[convert_key] = k
+            k = f"{convert_key}.{weight_key}"
+        else:
+            key_dict[module] = k
         if device == "cpu":
             lyco_state_dict[k] = v.float().cpu()
         else:
@@ -598,9 +684,13 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
                 device, dtype=tes[0].parameters().__next__().dtype
             )
 
-    for te in tes:
+    for idx, te in enumerate(tes):
+        if len(tes):
+            prefix = LORA_PREFIX_TEXT_ENCODER + str(idx + 1)
+        else:
+            prefix = LORA_PREFIX_TEXT_ENCODER
         merge_state_dict(
-            LORA_PREFIX_TEXT_ENCODER,
+            prefix,
             te.to(device),
             lyco_state_dict,
             TEXT_ENCODER_TARGET_REPLACE_MODULE,
@@ -613,4 +703,5 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         UNET_TARGET_REPLACE_MODULE,
         UNET_TARGET_REPLACE_NAME,
     )
+    print(f"Unused state dict key: {key_dict}")
     print(f"{merged} Modules been merged")
