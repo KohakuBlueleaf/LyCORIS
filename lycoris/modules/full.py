@@ -53,6 +53,7 @@ class FullModule(ModuleCustomSD):
 
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
+        self.org_module[0].forward = self.forward
         self.weight.data.copy_(self.org_module[0].weight.data)
         self.org_weight = [self.org_module[0].weight.data.cpu().clone()]
         delattr(self.org_module[0], "weight")
