@@ -1,5 +1,13 @@
 # Change Log
 
+## 2023/12/15 quick fixes of 2.0.2
+
+* Fix bugs in full module.
+* Add `merge_to` to all module expect IA^3.
+* Add `restore` to all module.
+* Standalone usage support merge now.
+  * Merge for kohya's inference script is WIP.
+
 ## 2023/12/14 quick fixes of 2.0.1
 
 * Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.
