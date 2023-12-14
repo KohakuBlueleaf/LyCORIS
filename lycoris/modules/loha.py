@@ -189,6 +189,7 @@ class LohaModule(ModuleCustomSD):
 
         self.multiplier = multiplier
         self.org_module = [org_module]  # remove in applying
+        self.org_forward = self.org_module[0].forward
         self.grad_ckpt = False
         self.register_load_state_dict_post_hook(self.load_weight_hook)
 
@@ -197,6 +198,13 @@ class LohaModule(ModuleCustomSD):
 
     def apply_to(self):
         self.org_module[0].forward = self.forward
+
+    def restore(self):
+        self.org_module[0].forward = self.org_forward
+
+    def merge_to(self, multiplier=1.0):
+        weight = self.get_weight(self.org_module[0].weight)
+        self.org_module[0].weight.data.add_(weight * multiplier)
 
     def get_weight(self, orig_weight=None):
         if self.tucker:

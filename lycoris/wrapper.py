@@ -414,6 +414,14 @@ class LycorisNetwork(torch.nn.Module):
             info = self.load_state_dict(self.weights_sd, False)
             print(f"weights are loaded: {info}")
 
+    def restore(self):
+        for lora in self.loras:
+            lora.restore()
+
+    def merge_to(self, weight=1.0):
+        for lora in self.loras:
+            lora.merge_to(weight)
+
     def apply_max_norm_regularization(self, max_norm_value, device):
         key_scaled = 0
         norms = []

@@ -53,6 +53,7 @@ class FullModule(ModuleCustomSD):
 
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
+        self.org_module[0].forward = self.forward
         self.weight.data.copy_(self.org_module[0].weight.data)
         self.org_weight = [self.org_module[0].weight.data.cpu().clone()]
         delattr(self.org_module[0], "weight")
@@ -62,6 +63,12 @@ class FullModule(ModuleCustomSD):
             delattr(self.org_module[0], "bias")
         else:
             self.org_bias = None
+
+    def merge_to(self, multiplier=1.0):
+        weight, bias = self.make_weight(scale=multiplier)
+        self.org_module[0].weight.data.copy_(weight)
+        if bias is not None:
+            self.org_module[0].bias.data.copy_(bias)
 
     def custom_state_dict(self):
         sd = {"diff": self.weight.data.cpu() - self.org_weight[0]}

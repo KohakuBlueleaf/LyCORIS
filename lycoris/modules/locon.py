@@ -95,6 +95,7 @@ class LoConModule(ModuleCustomSD):
 
         self.multiplier = multiplier
         self.org_module = [org_module]
+        self.org_forward = self.org_module[0].forward
         self.register_load_state_dict_post_hook(self.load_weight_hook)
 
     def load_weight_hook(self, *args, **kwargs):
@@ -106,6 +107,13 @@ class LoConModule(ModuleCustomSD):
             self.org_module[0].forward = self.hypernet_forward
         else:
             self.org_module[0].forward = self.forward
+
+    def restore(self):
+        self.org_module[0].forward = self.org_forward
+
+    def merge_to(self, multiplier=1.0):
+        weight = self.make_weight() * self.scale * multiplier
+        self.org_module[0].weight.data.add_(weight)
 
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
