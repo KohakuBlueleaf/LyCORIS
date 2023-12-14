@@ -23,7 +23,7 @@ A simple comparison of some of these methods are provided below (to be taken wit
 |                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
 | Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
-| Flexibility$^*$     | ★   | ●   | ◉   | ▲              | ●$^†$        |
+| Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$        |
 | Diversity             | ▲   | ◉   | ★   | ●              | ★               |
 | Size                  | ▲   | ●   | ●   | ●              | ★               |
 | Training Speed Linear | ★   | ●   | ●   | ★              | ★               |
