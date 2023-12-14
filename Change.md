@@ -1,5 +1,11 @@
 # Change Log
 
+## 2023/12/15 quick fixes of 2.0.2
+
+* Fix bugs in full module.
+* Related: Fix bugs in `stable-diffusion-webui/extensions-builtin/Lora`
+  * The [PR](https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/14300)
+
 ## 2023/12/14 quick fixes of 2.0.1
 
 * Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.

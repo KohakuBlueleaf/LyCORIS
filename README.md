@@ -122,6 +122,7 @@ You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_con
 In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
 
 #### As standalone wrappers
+
 See [standalone_example.py](standalone_example.py) for full example.
 
 Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
@@ -204,6 +205,12 @@ usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--
 ## Change Log
 
 For full log, please see [Change.md](Change.md)
+
+## 2023/12/15 quick fixes of 2.0.2
+
+* Fix bugs in full module.
+* Related: Fix bugs in `stable-diffusion-webui/extensions-builtin/Lora`
+  * The [PR](https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/14300)
 
 ## 2023/12/14 quick fixes of 2.0.1
 
