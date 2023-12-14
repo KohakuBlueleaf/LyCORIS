@@ -209,10 +209,8 @@ For full log, please see [Change.md](Change.md)
 ## 2023/12/15 quick fixes of 2.0.2
 
 * Fix bugs in full module.
-* Add `merge_to` to all module expect IA^3.
-* Add `restore` to all module.
-* Standalone usage support merge now.
-  * Merge for kohya's inference script is WIP.
+* Related: Fix bugs in `stable-diffusion-webui/extensions-builtin/Lora`
+  * The [PR](https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/14300)
 
 ## 2023/12/14 quick fixes of 2.0.1
 
