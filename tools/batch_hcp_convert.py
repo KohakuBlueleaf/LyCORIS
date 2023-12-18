@@ -53,7 +53,7 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_TE = self.convert_from_webui_(
+            sd_te = self.convert_from_webui_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te,
@@ -68,28 +68,28 @@ class LoraConverter(object):
                 com_name=self.com_name_unet,
                 com_name_tmp=self.com_name_unet_tmp,
             )
-            sd_TE = self.convert_from_webui_xl_te_(
+            sd_te = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te_xl_clip_B,
                 com_name=self.com_name_te,
                 com_name_tmp=self.com_name_te_tmp,
             )
-            sd_TE2 = self.convert_from_webui_xl_te_(
+            sd_te2 = self.convert_from_webui_xl_te_(
                 state,
                 network_type=network_type,
                 prefix=self.prefix_te_xl_clip_bigG,
                 com_name=self.com_name_te,
                 com_name_tmp=self.com_name_te_tmp,
             )
-            sd_TE.update(sd_TE2)
+            sd_te.update(sd_te2)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_from_webui(sd_unet)
             sd_te = self.alpha_scale_from_webui(sd_te)
         return {network_type: sd_unet}, {network_type: sd_te}
 
     def convert_to_webui(
-        self, sd_unet, sd_TE, network_type="lora", auto_scale_alpha=False, sdxl=False
+        self, sd_unet, sd_te, network_type="lora", auto_scale_alpha=False, sdxl=False
     ):
         assert network_type in ["lora", "plugin"]
         sd_unet = self.convert_to_webui_(
@@ -103,7 +103,7 @@ class LoraConverter(object):
             sd_te = self.convert_to_webui_(
                 sd_te, network_type=network_type, prefix=self.prefix_te
             )
-        sd_unet.update(sd_TE)
+        sd_unet.update(sd_te)
         if auto_scale_alpha and network_type == "lora":
             sd_unet = self.alpha_scale_to_webui(sd_unet)
         return sd_unet
@@ -465,7 +465,7 @@ def save_and_print_path(sd, path):
 def get_network_types(sd_unet, sd_te):
     network_types = []
     for network_type in ["lora", "plugin", "base"]:
-        if network_type in sd_unet.keys() and network_type in sd_te.keys():
+        if network_type in sd_unet.keys() or network_type in sd_te.keys():
             network_types.append(network_type)
     return network_types
 
@@ -569,18 +569,23 @@ if __name__ == "__main__":
         file_pairs = get_unet_te_pairs(lora_files)
 
         for name, file_paths in file_pairs.items():
-            if file_paths["TE"] and file_paths["unet"]:
+            if file_paths["TE"] or file_paths["unet"]:
+                file_path = file_paths["TE"] or file_paths["unet"]
                 # Assume here that unet and TE have the same extension
                 try:
                     # Old HCP
-                    ckpt_manager = auto_manager(file_paths["TE"])()
+                    ckpt_manager = auto_manager(file_path)()
                 except TypeError:
-                    ckpt_manager = auto_manager(file_paths["TE"])
-                sd_unet = ckpt_manager.load_ckpt(
-                    file_paths["unet"], map_location=args.device
+                    ckpt_manager = auto_manager(file_path)
+                sd_unet = (
+                    ckpt_manager.load_ckpt(file_paths["unet"], map_location=args.device)
+                    if file_paths["unet"]
+                    else dict()
                 )
-                sd_te = ckpt_manager.load_ckpt(
-                    file_paths["TE"], map_location=args.device
+                sd_te = (
+                    ckpt_manager.load_ckpt(file_paths["TE"], map_location=args.device)
+                    if file_paths["TE"]
+                    else dict()
                 )
                 network_types = get_network_types(sd_unet, sd_te)
                 for network_type in network_types:
@@ -597,13 +602,13 @@ if __name__ == "__main__":
                                 sdxl=args.sdxl,
                             )
                         state = base_converter.convert_to_webui(
-                            sd_unet[network_type],
-                            sd_te[network_type],
+                            sd_unet.get(network_type, dict()),
+                            sd_te.get(network_type, dict()),
                         )
                     else:
                         state = lora_converter.convert_to_webui(
-                            sd_unet[network_type],
-                            sd_te[network_type],
+                            sd_unet.get(network_type, dict()),
+                            sd_te.get(network_type, dict()),
                             network_type=network_type,
                             auto_scale_alpha=args.auto_scale_alpha,
                             sdxl=args.sdxl,
