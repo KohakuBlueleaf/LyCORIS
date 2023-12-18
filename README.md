@@ -101,7 +101,7 @@ You can use this package's kohya module to run kohya's training script to train 
   ```bash
   accelerate launch train_network.py \
     --config_file example_configs/training_configs/kohya/loha_config.toml \
-    --dataset_config example_configs/training_confics/kohya/dataset_config.toml
+    --dataset_config example_configs/training_configs/kohya/dataset_config.toml
   ```
 
   For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
