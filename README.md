@@ -152,7 +152,7 @@ forward_with_lyco = your_model(x)
 
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
-#### Graphical Interfaces and Colabs (via kohya trainer)
+#### Graphical interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
 
@@ -208,7 +208,7 @@ usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--
 This script allows you to use the LyCORIS models trained with HCP-Diffusion in sd-webui.
 
 ```bash
-python batch_hcp_convert.py \
+python3 batch_hcp_convert.py \
 --network_path /path/to/ckpts \
 --dst_dir /path/to/stable-diffusion-webui/models/Lora \
 --output_prefix something \
@@ -223,7 +223,7 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 This script is particularly useful in the case of pivotal tuning.
 
 ```bash
-python batch_bundle_convert.py \
+python3 batch_bundle_convert.py \
 --network_path /path/to/sd-webui-ssd/models/Lora  \
 --emb_path /path/to/ckpts \
 --dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
