@@ -4,6 +4,7 @@ import os
 import sys
 import math
 import argparse
+import warnings
 from typing import List, Dict
 from collections import defaultdict
 
@@ -457,7 +458,7 @@ def save_and_print_path(sd, path):
         ckpt_manager = auto_manager(path)()
     except TypeError:
         ckpt_manager = auto_manager(path)
-    os.makedirs(args.dump_path, exist_ok=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     ckpt_manager._save_ckpt(sd, save_path=path)
     print("Saved to:", path)
 
@@ -473,14 +474,13 @@ def get_network_types(sd_unet, sd_te):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert LoRA models.")
     parser.add_argument(
-        "--lora_path",
+        "--network_path",
         nargs="+",
         type=str,
         default=[],
-        required=True,
         help=(
-            "Paths to LoRAs or folders containing LoRA models. "
-            "Both unet and text encoder paths should be provided here in case of "
+            "Paths to network checkpoints or folders containing such models. "
+            "Both unet and text encoder paths are to be provided here in case of "
             "conversion to webui format."
         ),
     )
@@ -491,10 +491,10 @@ if __name__ == "__main__":
         help="Path to base model path. Used for full model conversion.",
     )
     parser.add_argument(
-        "--dump_path",
-        required=True,
+        "--dst_dir",
+        default=None,
         type=str,
-        help="Path to save the converted state dict.",
+        help="Destination directory for output files.",
     )
     parser.add_argument(
         "--from_webui", action="store_true", help="Convert from webui format."
@@ -514,11 +514,11 @@ if __name__ == "__main__":
         "--output_prefix", default="", type=str, help="Prefix for output filenames."
     )
     parser.add_argument(
-        "--lora_ext",
+        "--network_ext",
+        nargs="+",
         default=[".safetensors"],
         type=str,
-        nargs="+",
-        help="Extensions for LoRA files.",
+        help="Extensions for network files.",
     )
     parser.add_argument(
         "--recursive",
@@ -533,12 +533,69 @@ if __name__ == "__main__":
     )
     parser.add_argument("--save_fp16", action="store_true", help="Save in FP16 format.")
     parser.add_argument("--sdxl", action="store_true", help="Enable SDXL conversion.")
+
+    # Deprecated
+    parser.add_argument(
+        "--dump_path",
+        default=None,
+        type=str,
+        help="Deprecated. Please use --dst_dir instead.",
+    )
+    parser.add_argument(
+        "--lora_path",
+        nargs="*",
+        type=str,
+        default=None,
+        help="Deprecated. Please use --network_path instead.",
+    )
+    parser.add_argument(
+        "--lora_ext",
+        nargs="*",
+        default=None,
+        type=str,
+        help="Deprecated. Please use --network_ext instead.",
+    )
+
     args = parser.parse_args()
+
+    # Deprecation warnings
+    if args.dump_path is not None:
+        warnings.warn(
+            "The --dump_path argument is deprecated and will be removed in the future. "
+            "Please use --dst_dir instead.",
+            DeprecationWarning,
+        )
+        args.dst_dir = args.dump_path
+    if args.lora_path is not None:
+        warnings.warn(
+            "The --lora_path argument is deprecated and will be removed in the future. "
+            "Please use --network_path instead.",
+            DeprecationWarning,
+        )
+        args.network_path = args.lora_path
+    if args.lora_ext is not None:
+        warnings.warn(
+            "The --lora_ext argument is deprecated and will be removed in the future. "
+            "Please use --network_ext instead.",
+            DeprecationWarning,
+        )
+        args.network_ext = args.lora_ext
+
+    # Throw warning if dst_dir is not given
+    if args.dst_dir is None:
+        warnings.warn(
+            "The --dst_dir argument is required. "
+            "Please provide a destination directory for output files.",
+            UserWarning,
+        )
+        args.dst_dir = "converted"
 
     lora_converter = LoraConverter(save_fp16=args.save_fp16)
     base_converter = None
 
-    lora_files = gather_files_from_list(args.lora_path, args.lora_ext, args.recursive)
+    lora_files = gather_files_from_list(
+        args.network_path, args.network_ext, args.recursive
+    )
 
     if args.from_webui:
         for file_path in lora_files:
@@ -560,8 +617,8 @@ if __name__ == "__main__":
                 sdxl=args.sdxl,
             )
             filename = os.path.basename(file_path)
-            te_path = os.path.join(args.dump_path, "text_encoder-" + filename)
-            unet_path = os.path.join(args.dump_path, "unet-" + filename)
+            te_path = os.path.join(args.dst_dir, "text_encoder-" + filename)
+            unet_path = os.path.join(args.dst_dir, "unet-" + filename)
             save_and_print_path(sd_te, te_path)
             save_and_print_path(sd_unet, unet_path)
 
@@ -620,7 +677,7 @@ if __name__ == "__main__":
                         suffix = ""
 
                     output_path = os.path.join(
-                        args.dump_path,
+                        args.dst_dir,
                         f"{args.output_prefix}-{name}{suffix}.safetensors",
                     )
                     save_and_print_path(state, output_path)
