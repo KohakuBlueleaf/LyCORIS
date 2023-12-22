@@ -211,7 +211,7 @@ This script allows you to use the LyCORIS models trained with HCP-Diffusion in s
 python batch_hcp_convert.py \
 --network_path /path/to/ckpts \
 --dst_dir /path/to/stable-diffusion-webui/models/Lora \
---output_prefix my_favorite_anime \
+--output_prefix something \
 --auto_scale_alpha --to_webui
 ```
 
