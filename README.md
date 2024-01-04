@@ -100,7 +100,8 @@ You can use this package's kohya module to run kohya's training script to train 
 
   ```bash
   accelerate launch train_network.py \
-    --config_file example_configs/training_configs/kohya/loha_config.toml
+    --config_file example_configs/training_configs/kohya/loha_config.toml \
+    --dataset_config example_configs/training_configs/kohya/dataset_config.toml
   ```
 
   For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
@@ -120,6 +121,7 @@ For the moment being the outputs of HCP-Diffusion are not directly compatible wi
 You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_convert.py).
 
 In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
+Check [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
 
 #### As standalone wrappers
 
@@ -151,7 +153,7 @@ forward_with_lyco = your_model(x)
 
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
-#### Graphical Interfaces and Colabs (via kohya trainer)
+#### Graphical interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
 
@@ -189,7 +191,7 @@ usage: extract_locon.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--mode MOD
 
 ### Merge LyCORIS back to model
 
-You can merge your LyCORIS model back to your checkpoint(base model)
+You can merge your LyCORIS model back to your checkpoint (base model).
 
 ```bash
 python3 merge.py <settings> <base_model> <lycoris_model> <output>
@@ -201,6 +203,36 @@ Use --help to get more info
 $ python3 merge.py --help
 usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
 ```
+
+### Conversion of LoRA, LyCORIS and full models between HCP and sd-webui format
+
+This script allows you to use the LyCORIS models trained with HCP-Diffusion in sd-webui.
+
+```bash
+python3 batch_hcp_convert.py \
+--network_path /path/to/ckpts \
+--dst_dir /path/to/stable-diffusion-webui/models/Lora \
+--output_prefix something \
+--auto_scale_alpha --to_webui
+```
+
+See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information. 
+
+
+### Conversion from and to bundle format
+
+This script is particularly useful in the case of pivotal tuning.
+
+```bash
+python3 batch_bundle_convert.py \
+--network_path /path/to/sd-webui-ssd/models/Lora  \
+--emb_path /path/to/ckpts \
+--dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
+--to_bundle --verbose 2 
+```
+
+See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information. 
+
 
 ## Change Log
 
