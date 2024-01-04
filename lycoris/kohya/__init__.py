@@ -849,7 +849,8 @@ class HyperDreamNetwork(torch.nn.Module):
                 )
             )
         print(
-            f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
+            f"create LyCORIS for Text Encoder: "
+            f"{len(self.text_encoder_loras)} modules."
         )
 
         self.unet_loras = create_modules(

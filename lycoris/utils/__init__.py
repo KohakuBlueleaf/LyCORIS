@@ -685,7 +685,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
             )
 
     for idx, te in enumerate(tes):
-        if len(tes):
+        if len(tes)>1:
             prefix = LORA_PREFIX_TEXT_ENCODER + str(idx + 1)
         else:
             prefix = LORA_PREFIX_TEXT_ENCODER
