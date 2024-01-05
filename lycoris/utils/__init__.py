@@ -373,7 +373,7 @@ def extract_diff(
         return loras
 
     all_loras = {}
-    for idx, te1, te2 in enumerate(zip(base_tes, db_tes)):
+    for idx, (te1, te2) in enumerate(zip(base_tes, db_tes)):
         if len(base_tes) > 1:
             prefix = f"{LORA_PREFIX_TEXT_ENCODER}{idx+1}"
         else:
