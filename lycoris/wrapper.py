@@ -146,7 +146,8 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         if lora_name in loras:
             loras[lora_name] = modules
 
-    network = LycorisNetwork(module)
+    network = LycorisNetwork(module, init_only=True)
+    network.multiplier = multiplier
     network.loras = []
 
     for lora_name, orig_modules in loras.items():
@@ -156,6 +157,9 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         module = make_module(lyco_type, params, lora_name, orig_modules)
         if module is not None:
             network.loras.append(module)
+            network.algo_table[module.__class__.__name__] = (
+                network.algo_table.get(module.__class__.__name__, 0) + 1
+            )
 
     for lora in network.loras:
         lora.multiplier = multiplier
@@ -200,10 +204,24 @@ class LycorisNetwork(torch.nn.Module):
         network_module: str = "locon",
         norm_modules=NormModule,
         train_norm=False,
+        init_only=False,
         **kwargs,
     ) -> None:
         super().__init__()
         root_kwargs = kwargs
+        if init_only:
+            self.multiplier = 1
+            self.lora_dim = 0
+            self.alpha = 1
+            self.conv_lora_dim = 0
+            self.conv_alpha = 1
+            self.dropout = 0
+            self.rank_dropout = 0
+            self.module_dropout = 0
+            self.use_tucker = False
+            self.loras = []
+            self.algo_table = {}
+            return
         self.multiplier = multiplier
         self.lora_dim = lora_dim
 
