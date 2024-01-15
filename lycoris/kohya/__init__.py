@@ -15,6 +15,7 @@ import torch
 import torch.utils.checkpoint as checkpoint
 
 from .utils import *
+from ..wrapper import LycorisNetwork
 from ..modules.locon import LoConModule
 from ..modules.loha import LohaModule
 from ..modules.ia3 import IA3Module
@@ -277,7 +278,7 @@ def create_hypernetwork(
     )
 
 
-class LycorisNetworkKohya(torch.nn.Module):
+class LycorisNetworkKohya(LycorisNetwork):
     """
     LoRA + LoCon
     """
@@ -341,7 +342,7 @@ class LycorisNetworkKohya(torch.nn.Module):
         train_norm=False,
         **kwargs,
     ) -> None:
-        super().__init__()
+        torch.nn.Module.__init__(self)
         root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
@@ -546,18 +547,14 @@ class LycorisNetworkKohya(torch.nn.Module):
 
         self.weights_sd = None
 
+        self.loras = self.text_encoder_loras + self.unet_loras
         # assertion
         names = set()
-        for lora in self.text_encoder_loras + self.unet_loras:
+        for lora in self.loras:
             assert (
                 lora.lora_name not in names
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
-
-    def set_multiplier(self, multiplier):
-        self.multiplier = multiplier
-        for lora in self.text_encoder_loras + self.unet_loras:
-            lora.multiplier = self.multiplier
 
     def load_weights(self, file):
         if os.path.splitext(file)[1] == ".safetensors":
@@ -598,34 +595,27 @@ class LycorisNetworkKohya(torch.nn.Module):
             info = self.load_state_dict(self.weights_sd, False)
             print(f"weights are loaded: {info}")
 
-    def apply_max_norm_regularization(self, max_norm_value, device):
-        key_scaled = 0
-        norms = []
-        for model in self.unet_loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+    # TODO refactor to common function with apply_to
+    def merge_to(self, text_encoder, unet, weights_sd, dtype, device):
+        apply_text_encoder = apply_unet = False
+        for key in weights_sd.keys():
+            if key.startswith(LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER):
+                apply_text_encoder = True
+            elif key.startswith(LycorisNetworkKohya.LORA_PREFIX_UNET):
+                apply_unet = True
 
-        for model in self.text_encoder_loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+        if apply_text_encoder:
+            print("enable LoRA for text encoder")
+        else:
+            self.text_encoder_loras = []
 
-        if key_scaled == 0:
-            return key_scaled, 0, 0
+        if apply_unet:
+            print("enable LoRA for U-Net")
+        else:
+            self.unet_loras = []
 
-        return key_scaled, sum(norms) / len(norms), max(norms)
-
-    def enable_gradient_checkpointing(self):
-        # not supported
-        def make_ckpt(module):
-            if isinstance(module, torch.nn.Module):
-                module.grad_ckpt = True
-
-        self.apply(make_ckpt)
-        pass
+        self.loras = self.text_encoder_loras + self.unet_loras
+        super().merge_to(1)
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
@@ -650,15 +640,6 @@ class LycorisNetworkKohya(torch.nn.Module):
             all_params.append(param_data)
 
         return all_params
-
-    def prepare_grad_etc(self, text_encoder, unet):
-        self.requires_grad_(True)
-
-    def on_epoch_start(self, text_encoder, unet):
-        self.train()
-
-    def get_trainable_params(self):
-        return self.parameters()
 
     def save_weights(self, file, dtype, metadata):
         if metadata is not None and len(metadata) == 0:

@@ -241,8 +241,8 @@ def extract_diff(
                     )
                     del extract_c
             else:
-                module = module.to('cpu')
-                weights = weights.to('cpu')
+                module = module.to("cpu")
+                weights = weights.to("cpu")
                 continue
 
             if decompose_mode == "low rank":
@@ -283,8 +283,8 @@ def extract_diff(
                     )
             else:
                 raise NotImplementedError
-            module = module.to('cpu')
-            weights = weights.to('cpu')
+            module = module.to("cpu")
+            weights = weights.to("cpu")
         return loras
 
     all_loras = {}

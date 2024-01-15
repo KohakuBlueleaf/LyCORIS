@@ -432,6 +432,9 @@ class LycorisNetwork(torch.nn.Module):
             info = self.load_state_dict(self.weights_sd, False)
             print(f"weights are loaded: {info}")
 
+    def is_mergeable(self):
+        return True
+
     def restore(self):
         for lora in self.loras:
             lora.restore()
@@ -479,13 +482,13 @@ class LycorisNetwork(torch.nn.Module):
         all_params.append(param_data)
         return all_params
 
-    def prepare_grad_etc(self):
+    def prepare_grad_etc(self, *args):
         self.requires_grad_(True)
 
-    def on_epoch_start(self):
+    def on_epoch_start(self, *args):
         self.train()
 
-    def get_trainable_params(self):
+    def get_trainable_params(self, *args):
         return self.parameters()
 
     def save_weights(self, file, dtype, metadata):
