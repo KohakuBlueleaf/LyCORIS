@@ -186,9 +186,7 @@ def create_network_from_weights(
         else:
             prefix = LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
         for name, modules in te.named_modules():
-            lora_name = f"{prefix}_{name}".replace(
-                ".", "_"
-            )
+            lora_name = f"{prefix}_{name}".replace(".", "_")
             if lora_name in te_loras:
                 te_loras[lora_name] = modules
 

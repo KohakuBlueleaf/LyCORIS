@@ -103,9 +103,7 @@ class DyLoraModule(ModuleCustomSD):
         self.org_module[0].forward = self.org_forward
 
     def merge_to(self, multiplier=1.0):
-        up = torch.concat(
-            list(self.up_list), dim=1
-        )
+        up = torch.concat(list(self.up_list), dim=1)
         down = torch.concat(list(self.down_list))
         diff_weight = up @ down * self.scale * multiplier / up.size(1)
         self.org_module[0].weight.data.add_(diff_weight)
