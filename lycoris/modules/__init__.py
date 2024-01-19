@@ -99,7 +99,8 @@ def make_module(lyco_type, params, lora_name, orig_module):
             1,
         )
         module.w_norm.copy_(w_norm)
-        module.b_norm.copy_(b_norm)
+        if b_norm is not None:
+            module.b_norm.copy_(b_norm)
     elif lyco_type == "full":
         diff, diff_b = params
         module = FullModule(

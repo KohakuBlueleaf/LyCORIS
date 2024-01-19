@@ -147,6 +147,7 @@ def extract_diff(
         "GroupNorm32",
     ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = [
+        "Embedding",
         "Linear",
         "Conv2d",
         "LayerNorm",
@@ -312,7 +313,11 @@ def extract_diff(
         )
         del te1, te2
 
-    print(len(all_loras))
+    all_lora_name = set()
+    for k in all_loras:
+        lora_name, weight = k.rsplit(".", 1)
+        all_lora_name.add(lora_name)
+    print(len(all_lora_name))
     return all_loras
 
 
@@ -420,7 +425,7 @@ def get_module(lyco_state_dict: Dict, lora_name):
         return "full", (diff, diff_b)
     elif f"{lora_name}.w_norm" in lyco_state_dict:
         w_norm = lyco_state_dict[f"{lora_name}.w_norm"]
-        b_norm = lyco_state_dict.get(f"{lora_name}.b_norm")
+        b_norm = lyco_state_dict.get(f"{lora_name}.b_norm", None)
         return "norm", (w_norm, b_norm)
     else:
         return "None", ()
@@ -517,19 +522,20 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
 @torch.no_grad()
 def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
     UNET_TARGET_REPLACE_MODULE = [
-        "Transformer2DModel",
-        "Attention",
-        "ResnetBlock2D",
-        "Downsample2D",
-        "Upsample2D",
+        "Linear",
+        "Conv2d",
+        "LayerNorm",
+        "GroupNorm",
+        "GroupNorm32",
     ]
-    UNET_TARGET_REPLACE_NAME = [
-        "conv_in",
-        "conv_out",
-        "time_embedding.linear_1",
-        "time_embedding.linear_2",
+    TEXT_ENCODER_TARGET_REPLACE_MODULE = [
+        "Embedding",
+        "Linear",
+        "Conv2d",
+        "LayerNorm",
+        "GroupNorm",
+        "GroupNorm32",
     ]
-    TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
     LORA_PREFIX_UNET = "lora_unet"
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
     merged = 0
@@ -539,55 +545,28 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         root_module: torch.nn.Module,
         lyco_state_dict: Dict[str, torch.Tensor],
         target_replace_modules,
-        target_replace_names=[],
     ):
         nonlocal merged
-        for name, module in tqdm(
+        for child_name, child_module in tqdm(
             list(root_module.named_modules()), desc=f"Merging {prefix}"
         ):
-            if module.__class__.__name__ in target_replace_modules:
-                for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ not in {
-                        "Linear",
-                        "Conv2d",
-                        "GroupNorm",
-                        "GroupNorm32",
-                        "LayerNorm",
-                    }:
-                        continue
-                    lora_name = prefix + "." + name + "." + child_name
-                    lora_name = lora_name.replace(".", "_")
-
-                    result, result_b = rebuild_weight(
-                        *get_module(lyco_state_dict, lora_name),
-                        getattr(child_module, "weight"),
-                        getattr(child_module, "bias", None),
-                        scale,
-                    )
-                    if result is not None:
-                        key_dict.pop(lora_name)
-                        merged += 1
-                        child_module.requires_grad_(False)
-                        child_module.weight.copy_(result)
-                    if result_b is not None:
-                        child_module.bias.copy_(result_b)
-            elif name in target_replace_names:
-                lora_name = prefix + "." + name
+            if child_module.__class__.__name__ in target_replace_modules:
+                lora_name = prefix + "." + child_name
                 lora_name = lora_name.replace(".", "_")
 
                 result, result_b = rebuild_weight(
                     *get_module(lyco_state_dict, lora_name),
-                    getattr(module, "weight"),
-                    getattr(module, "bias", None),
+                    getattr(child_module, "weight"),
+                    getattr(child_module, "bias", None),
                     scale,
                 )
                 if result is not None:
                     key_dict.pop(lora_name)
                     merged += 1
-                    module.requires_grad_(False)
-                    module.weight.copy_(result)
+                    child_module.requires_grad_(False)
+                    child_module.weight.copy_(result)
                 if result_b is not None:
-                    module.bias.copy_(result_b)
+                    child_module.bias.copy_(result_b)
 
     key_dict = {}
     for k, v in tqdm(list(lyco_state_dict.items()), desc="Converting Dtype and Device"):
@@ -596,10 +575,10 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         if convert_key != module and len(tes) > 1:
             # kohya's format for sdxl is as same as SGM, not diffusers
             del lyco_state_dict[k]
-            key_dict[convert_key] = k
+            key_dict[convert_key] = key_dict.get(convert_key, []) + [k]
             k = f"{convert_key}.{weight_key}"
         else:
-            key_dict[module] = k
+            key_dict[module] = key_dict.get(module, []) + [k]
         if device == "cpu":
             lyco_state_dict[k] = v.float().cpu()
         else:
@@ -617,14 +596,12 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
             te.to(device),
             lyco_state_dict,
             TEXT_ENCODER_TARGET_REPLACE_MODULE,
-            UNET_TARGET_REPLACE_NAME,
         )
     merge_state_dict(
         LORA_PREFIX_UNET,
         unet.to(device),
         lyco_state_dict,
         UNET_TARGET_REPLACE_MODULE,
-        UNET_TARGET_REPLACE_NAME,
     )
     print(f"Unused state dict key: {key_dict}")
     print(f"{merged} Modules been merged")
