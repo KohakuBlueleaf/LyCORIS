@@ -191,9 +191,11 @@ class LohaModule(ModuleCustomSD):
         self.org_module = [org_module]  # remove in applying
         self.org_forward = self.org_module[0].forward
         self.grad_ckpt = False
-        self.register_load_state_dict_post_hook(self.load_weight_hook)
 
-    def load_weight_hook(self, *args, **kwargs):
+    def load_weight_hook(self, module: nn.Module, incompatible_keys):
+        unexpected_keys = incompatible_keys.unexpected_keys
+        if "scalar" in unexpected_keys:
+            del unexpected_keys[unexpected_keys.index("scalar")]
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self):

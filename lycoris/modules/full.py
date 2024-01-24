@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules import Module
 
 from .base import ModuleCustomSD
 
@@ -54,11 +55,11 @@ class FullModule(ModuleCustomSD):
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
-        self.weight.data.copy_(self.org_module[0].weight.data)
+        self.weight.data.add_(self.org_module[0].weight.data)
         self.org_weight = [self.org_module[0].weight.data.cpu().clone()]
         delattr(self.org_module[0], "weight")
         if self.org_module[0].bias is not None:
-            self.bias.data.copy_(self.org_module[0].bias.data)
+            self.bias.data.add_(self.org_module[0].bias.data)
             self.org_bias = [self.org_module[0].bias.data.cpu().clone()]
             delattr(self.org_module[0], "bias")
         else:
@@ -75,6 +76,22 @@ class FullModule(ModuleCustomSD):
         if self.bias is not None:
             sd["diff_b"] = self.bias.data.cpu() - self.org_bias[0]
         return sd
+
+    def load_weight_prehook(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        diff_weight = state_dict["diff"]
+        self.weight.data.add_(diff_weight)
+        if "diff_b" in state_dict:
+            diff_bias = state_dict["diff_b"]
+            self.bias.data.add_(diff_bias)
 
     def make_weight(self, scale=1, device=None, original=False):
         if original:
