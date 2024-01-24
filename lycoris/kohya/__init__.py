@@ -586,7 +586,9 @@ class LycorisNetworkKohya(LycorisNetwork):
         else:
             self.unet_loras = []
 
-        for lora in self.text_encoder_loras + self.unet_loras:
+        self.loras = self.text_encoder_loras + self.unet_loras
+
+        for lora in self.loras:
             lora.apply_to()
             self.add_module(lora.lora_name, lora)
 
