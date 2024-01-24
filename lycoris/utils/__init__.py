@@ -184,6 +184,7 @@ def extract_diff(
                 "LayerNorm",
                 "GroupNorm",
                 "GroupNorm32",
+                "Embedding",
             }:
                 root_weight = module.weight
                 if torch.allclose(root_weight, weights.weight):
@@ -277,7 +278,7 @@ def extract_diff(
                 loras[f"{lora_name}.{w_key}"] = (
                     weight_diff.detach().cpu().contiguous().half()
                 )
-                if weights.bias is not None:
+                if getattr(weights, "bias", None) is not None:
                     bias_diff = module.bias - weights.bias
                     loras[f"{lora_name}.{b_key}"] = (
                         bias_diff.detach().cpu().contiguous().half()
@@ -316,6 +317,7 @@ def extract_diff(
     all_lora_name = set()
     for k in all_loras:
         lora_name, weight = k.rsplit(".", 1)
+        print(lora_name)
         all_lora_name.add(lora_name)
     print(len(all_lora_name))
     return all_loras
@@ -535,6 +537,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         "LayerNorm",
         "GroupNorm",
         "GroupNorm32",
+        "Embedding",
     ]
     LORA_PREFIX_UNET = "lora_unet"
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
