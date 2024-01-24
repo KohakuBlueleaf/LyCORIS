@@ -317,7 +317,6 @@ def extract_diff(
     all_lora_name = set()
     for k in all_loras:
         lora_name, weight = k.rsplit(".", 1)
-        print(lora_name)
         all_lora_name.add(lora_name)
     print(len(all_lora_name))
     return all_loras
