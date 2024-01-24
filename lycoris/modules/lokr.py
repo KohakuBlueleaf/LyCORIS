@@ -236,9 +236,12 @@ class LokrModule(ModuleCustomSD):
             torch.tensor(self.multiplier * self.scale),
         )
         assert torch.sum(torch.isnan(weight)) == 0, "weight is nan"
-        self.register_load_state_dict_post_hook(self.load_weight_hook)
 
-    def load_weight_hook(self, *args, **kwargs):
+    def load_weight_hook(self, module: nn.Module, incompatible_keys):
+        missing_keys = incompatible_keys.missing_keys
+        for key in missing_keys:
+            if "scalar" in key:
+                del missing_keys[missing_keys.index(key)]
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     # Same as locon.py

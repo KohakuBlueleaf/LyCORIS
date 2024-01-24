@@ -194,8 +194,9 @@ class LohaModule(ModuleCustomSD):
 
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
-        if "scalar" in missing_keys:
-            del missing_keys[missing_keys.index("scalar")]
+        for key in missing_keys:
+            if "scalar" in key:
+                del missing_keys[missing_keys.index(key)]
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self):
