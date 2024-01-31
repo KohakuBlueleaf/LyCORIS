@@ -230,12 +230,14 @@ def extract_diff(
                         extract_c.detach().cpu().contiguous().half()
                     )
                     diff = (
-                        root_weight
-                        - torch.einsum(
-                            "i j k l, j r, p i -> p r k l",
-                            extract_c,
-                            extract_a.flatten(1, -1),
-                            extract_b.flatten(1, -1),
+                        (
+                            root_weight
+                            - torch.einsum(
+                                "i j k l, j r, p i -> p r k l",
+                                extract_c,
+                                extract_a.flatten(1, -1),
+                                extract_b.flatten(1, -1),
+                            )
                         )
                         .detach()
                         .cpu()
