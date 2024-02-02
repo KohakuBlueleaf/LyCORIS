@@ -4,13 +4,14 @@
 # https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
 # https://github.com/kohya-ss/sd-scripts/blob/main/networks/lora.py
 
-import math
-from warnings import warn
 import os
+import re
 import sys
+from warnings import warn
+from typing import List
 
 sys.setrecursionlimit(10000)
-from typing import List
+
 import torch
 import torch.utils.checkpoint as checkpoint
 
@@ -482,7 +483,9 @@ class LycorisNetworkKohya(LycorisNetwork):
                         ]
                     )
                     next_config = {}
-                elif name in target_replace_names:
+                elif name in target_replace_names or any(
+                    re.match(t, name) for t in target_replace_names
+                ):
                     if name in self.NAME_ALGO_MAP:
                         next_config = self.NAME_ALGO_MAP[name]
                         algo = next_config.get("algo", network_module)
