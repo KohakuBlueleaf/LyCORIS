@@ -19,6 +19,7 @@ from .modules.glora import GLoRAModule
 from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
+from .modules.boft import ButterflyOFTModule
 from .modules import make_module
 
 from .config import PRESET
@@ -36,6 +37,7 @@ network_module_dict = {
     "glora": GLoRAModule,
     "full": FullModule,
     "diag-oft": DiagOFTModule,
+    "boft": ButterflyOFTModule,
 }
 
 
