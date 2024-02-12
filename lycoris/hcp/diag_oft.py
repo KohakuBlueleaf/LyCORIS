@@ -25,7 +25,7 @@ class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
             torch.zeros(self.block_num, self.block_size, self.block_size)
         )
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
+            self.rescale = nn.Parameter(torch.ones(out_dim))
 
     def forward(self, orig_weight, org_bias, new_weight, new_bias, *args, **kwargs):
         device = self.oft_blocks.device
@@ -50,5 +50,7 @@ class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
             org_weight,
         )
         weight = rearrange(weight, "k m ... -> (k m) ...")
+        if self.rescaled:
+            weight = self.rescale.to(weight) * weight
         # disable update weight for replace the weight directly
         return weight, None, None, False, False
