@@ -93,7 +93,7 @@ class ButterflyOFTModule(ModuleCustomSD):
         b, m_exp = butterfly_factor(out_dim, lora_dim)
         self.block_size = b
         self.block_num = m_exp
-        #BOFT(m, b)
+        # BOFT(m, b)
         self.boft_b = b
         self.boft_m = sum(int(i) for i in f"{m_exp-1:b}") + 1
         # block_num > block_size
@@ -159,9 +159,9 @@ class ButterflyOFTModule(ModuleCustomSD):
         r_b = b // 2
         r = self.get_r()
         inp = self.org_module[0].weight.to(device, dtype=r.dtype)
-        
+
         for i in range(m):
-            bi = r[i] # b_num, b_size, b_size
+            bi = r[i]  # b_num, b_size, b_size
             if i == 0:
                 # Apply multiplier/scale and rescale into first weight
                 bi = bi * scale + (1 - scale) * self.I
@@ -172,9 +172,9 @@ class ButterflyOFTModule(ModuleCustomSD):
             inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
             inp = rearrange(inp, "d b ... -> (d b) ...")
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
-        
+
         weight = inp
-        return weight*drop
+        return weight * drop
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
@@ -200,12 +200,12 @@ class ButterflyOFTModule(ModuleCustomSD):
         return self.op(x, **kw_dict)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     dim = 320
     test_layer = nn.Linear(dim, dim)
     test_layer.weight = nn.Parameter(torch.eye(dim))
-    test_boft = ButterflyOFTModule('test', test_layer, lora_dim=16)
+    test_boft = ButterflyOFTModule("test", test_layer, lora_dim=16)
     test_boft.oft_blocks = nn.Parameter(torch.randn_like(test_boft.oft_blocks))
-    
-    print(test_boft.make_weight(1, 'cpu').shape)
-    print(torch.count_nonzero(test_boft.make_weight(1, 'cpu')), dim*dim)
+
+    print(test_boft.make_weight(1, "cpu").shape)
+    print(torch.count_nonzero(test_boft.make_weight(1, "cpu")), dim * dim)
