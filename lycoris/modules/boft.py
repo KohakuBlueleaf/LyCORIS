@@ -103,7 +103,7 @@ class ButterflyOFTModule(ModuleCustomSD):
             torch.zeros(self.boft_m, self.block_num, self.block_size, self.block_size)
         )
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
+            self.rescale = nn.Parameter(torch.ones(out_dim))
 
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -127,9 +127,6 @@ class ButterflyOFTModule(ModuleCustomSD):
     def merge_to(self, multiplier=1.0):
         weight = self.make_weight(scale=multiplier)
         self.org_module[0].weight.data.copy_(weight)
-
-    def custom_state_dict(self):
-        return {"oft_diag": self.get_r()}
 
     def get_r(self):
         I = self.I
@@ -174,6 +171,8 @@ class ButterflyOFTModule(ModuleCustomSD):
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
 
         weight = inp
+        if self.rescaled:
+            weight = self.rescale * weight
         return weight * drop
 
     @torch.no_grad()

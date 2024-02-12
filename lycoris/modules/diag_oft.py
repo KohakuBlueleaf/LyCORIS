@@ -1,3 +1,5 @@
+from functools import cache
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,6 +8,16 @@ from einops import rearrange
 
 from .base import ModuleCustomSD
 from .lokr import factorization
+from ..logging import logger
+
+
+@cache
+def log_oft_factorize(dim, factor, num, bdim):
+    logger.info(
+        f"Use OFT(block num: {num}, blcok dim: {bdim})"
+        f" (equivalent to lora_dim={num}) "
+        f"for {dim=} and lora_dim={factor=}"
+    )
 
 
 class DiagOFTModule(ModuleCustomSD):
@@ -59,7 +71,14 @@ class DiagOFTModule(ModuleCustomSD):
             torch.zeros(self.block_num, self.block_size, self.block_size)
         )
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(self.block_num, self.block_size, 1))
+            self.rescale = nn.Parameter(torch.ones(out_dim))
+
+        log_oft_factorize(
+            dim=out_dim,
+            factor=lora_dim,
+            num=self.block_num,
+            bdim=self.block_size,
+        )
 
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -84,9 +103,6 @@ class DiagOFTModule(ModuleCustomSD):
         weight = self.make_weight(scale=multiplier)
         self.org_module[0].weight.data.copy_(weight)
 
-    def custom_state_dict(self):
-        return {"oft_diag": self.get_r()}
-
     def get_r(self):
         I = self.I
         # for Q = -Q^T
@@ -98,10 +114,6 @@ class DiagOFTModule(ModuleCustomSD):
                 normed_q = q * self.constrain / q_norm
         # use float() to prevent unsupported type
         r = (I + normed_q) @ (I - normed_q).float().inverse()
-
-        if self.rescaled:
-            # Noted: not implemented in Kohya
-            r = self.rescale * r
         return r
 
     def make_weight(self, scale=1, device=None):
@@ -128,6 +140,8 @@ class DiagOFTModule(ModuleCustomSD):
             org_weight,
         )
         weight = rearrange(weight, "k m ... -> (k m) ...")
+        if self.rescaled:
+            weight = self.rescale * weight
         return weight
 
     @torch.no_grad()
