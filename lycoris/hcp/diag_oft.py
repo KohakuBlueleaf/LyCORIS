@@ -6,7 +6,7 @@ from einops import rearrange
 
 from .base import LycorisPluginBlock
 from ..modules.lokr import factorization
-from ..modules.diag_oft import DiagOFTModule
+from ..modules.diag_oft import DiagOFTModule, log_oft_factorize
 
 
 class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
@@ -26,6 +26,12 @@ class DiagOFTBlock(DiagOFTModule, LycorisPluginBlock):
         )
         if rescaled:
             self.rescale = nn.Parameter(torch.ones(out_dim))
+        log_oft_factorize(
+            dim=out_dim,
+            factor=self.dim,
+            num=self.block_num,
+            bdim=self.block_size,
+        )
 
     def forward(self, orig_weight, org_bias, new_weight, new_bias, *args, **kwargs):
         device = self.oft_blocks.device
