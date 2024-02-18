@@ -216,8 +216,7 @@ python3 batch_hcp_convert.py \
 --auto_scale_alpha --to_webui
 ```
 
-See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information. 
-
+See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
 
 ### Conversion from and to bundle format
 
@@ -231,53 +230,40 @@ python3 batch_bundle_convert.py \
 --to_bundle --verbose 2 
 ```
 
-See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information. 
-
+See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
 
 ## Change Log
 
 For full log, please see [Change.md](Change.md)
 
-## 2023/12/15 quick fixes of 2.0.2
+## 2024/02/18 update to 2.1.0
 
-* Fix bugs in full module.
-* Related: Fix bugs in `stable-diffusion-webui/extensions-builtin/Lora`
-  * The [PR](https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/14300)
+#### New Algo
 
-## 2023/12/14 quick fixes of 2.0.1
+* [BOFT (Butterfly OFT)](https://arxiv.org/abs/2311.06243)
 
-* Support merge sdxl loras which trained on plain diffusers with Kohya's LoRA implementation.
-  * Can be found in LECO or other similar projects.
-* Refactor the batch convert scripts for pivotal bundle and hcp.
-* Change the class name `lycoris.kohya.LycorisNetwork` to `lycoris.kohya.LycorisNetworkKohya` to avoid confusion.
-* Fix bugs in merge scripts for Norm module and LoKr module.
-* Fix bugs in scaled weight norms of OFT.
-* Fix bugs in extract scripts for SDXL.
-* Fix bugs in full module which consume 2x vram.
-* Fix bugs in `create_network_from_weights` which caused bugs in "resume" feature for SDXL.
+#### Improvements
 
-## 2023/12/02 update to 2.0.0
+* Faster, better extract script
+* support kohya-ss/sd-scripts image gen
+* support regex name in kohya-ss/sd-scripts
+* support resume on:
+  * full
+  * loha
+  * oft
+  * boft
+* Add logger into LyCORIS
 
-* Start supporting [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion) (The reason to name this version "2.0.0")
-  * Now LyCORIS support LoHa/LoKr/Diag-OFT algorithm in HCP-Diffusion
-  * Add Pivotal tuning utilities
-  * Add hcp convert utilities
-  * Have no plan at this time to support full/lora and train_norms since HCP can do them natively
-* Add Diag-OFT modules
-* Add standalone usage support
-  * Can wrap any pytorch module which contains Linear/Conv2d/LayerNorm/GroupNorm modules
-  * Will support more module in the future
-* Add SDXL support in Merge script
-* Add SDXL support in Extract-locon
-* More efficient (speed/vram) implementation for full module
-* Better implementation of custom state_dict
-* Fix errors of dropouts
-* Fix errors of apply_max_norms
-* Fix errors of resume
+#### Fixes, slight changes
+
+* Update HCP convert for the case where only UNet or TE is trained.
+* Change arg names for conversion scripts.
+* Fix wrong TE prefix in merge scripts.
+* Fix warnings and confusing logging.
 
 ## Todo list
 
-- [ ] Module and Document for using LyCORIS in any other model, Not only SD.
+- [X] Module and Document for using LyCORIS in any other model, Not only SD.
 - [X] Proposition3 in [FedPara](https://arxiv.org/abs/2108.06098)
   * also need custom backward to save the vram
 - [ ] Low rank + sparse representation
@@ -292,11 +278,12 @@ For full log, please see [Change.md](Change.md)
 ## Citation
 
 ```bibtex
-@misc{LyCORIS,
-      title={Navigating Text-To-Image Customization: From LyCORIS Fine-Tuning to Model Evaluation}, 
-      author={Shin-Ying Yeh and Yu-Guan Hsieh and Zhidong Gao and Bernard B W Yang and Giyeong Oh and Yanmin Gong},
-      year={2023},
-      eprint={2309.14859},
-      archivePrefix={arXiv}
+@inproceedings{
+  yeh2024navigating,
+  title={Navigating Text-To-Image Customization: From Ly{CORIS} Fine-Tuning to Model Evaluation},
+  author={SHIH-YING YEH and Yu-Guan Hsieh and Zhidong Gao and Bernard B W Yang and Giyeong Oh and Yanmin Gong},
+  booktitle={The Twelfth International Conference on Learning Representations},
+  year={2024},
+  url={https://openreview.net/forum?id=wfzXa8e783}
 }
 ```

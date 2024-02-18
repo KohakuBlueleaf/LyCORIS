@@ -1,5 +1,30 @@
 # Change Log
 
+## 2024/02/18 update to 2.1.0
+
+#### New Algo
+
+* [BOFT (Butterfly OFT)](https://arxiv.org/abs/2311.06243)
+
+#### Improvements
+
+* Faster, better extract script
+* support kohya-ss/sd-scripts image gen
+* support regex name in kohya-ss/sd-scripts
+* support resume on:
+  * full
+  * loha
+  * oft
+  * boft
+* Add logger into LyCORIS
+
+#### Fixes, slight changes
+
+* Update HCP convert for the case where only UNet or TE is trained.
+* Change arg names for conversion scripts.
+* Fix wrong TE prefix in merge scripts.
+* Fix warnings and confusing logging.
+
 ## 2023/12/15 quick fixes of 2.0.2
 
 * Fix bugs in full module.
