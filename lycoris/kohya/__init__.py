@@ -75,6 +75,7 @@ def create_network(
     train_norm = str_bool(kwargs.get("train_norm", False))
     constrain = float(kwargs.get("constrain", 0) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
+    weight_decompose = str_bool(kwargs.get("dora_wd", False))
 
     if algo == "glora" and conv_dim > 0:
         conv_dim = 0
@@ -130,6 +131,7 @@ def create_network(
             block_size=block_size,
             constrain=constrain,
             rescaled=rescaled,
+            weight_decompose=weight_decompose,
         )
 
     if algo == "dylora":
