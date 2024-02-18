@@ -161,8 +161,11 @@ class LohaModule(ModuleCustomSD):
 
         self.wd = weight_decompose
         if self.wd:
-            org_weight = org_module.weight
-            self.dora_scale = nn.Parameter(torch.mean(org_weight, dim=0, keepdim=True))
+            org_weight: nn.Parameter = org_module.weight
+            self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+            self.dora_scale = nn.Parameter(
+                torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
+            )
 
         self.dropout = dropout
         if dropout:
@@ -244,9 +247,16 @@ class LohaModule(ModuleCustomSD):
             weight *= drop
         return weight
 
+    def apply_weight_decompose(self, weight):
+        return (
+            weight / weight.mean(dim=self.dora_mean_dim, keepdim=True) * self.dora_scale
+        )
+
     def custom_state_dict(self):
         destination = {}
         destination["alpha"] = self.alpha
+        if self.wd:
+            destination["dora_scale"] = self.dora_scale
         destination["hada_w1_a"] = self.hada_w1_a * self.scalar
         destination["hada_w1_b"] = self.hada_w1_b
         destination["hada_w2_a"] = self.hada_w2_a
@@ -289,4 +299,7 @@ class LohaModule(ModuleCustomSD):
             * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
+
+        if self.wd:
+            weight = self.apply_weight_decompose(weight)
         return self.op(x, weight.view(self.shape), bias, **self.extra_args)

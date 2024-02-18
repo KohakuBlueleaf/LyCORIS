@@ -88,6 +88,7 @@ class LokrModule(ModuleCustomSD):
         decompose_both=False,
         factor: int = -1,  # factorization factor
         rank_dropout_scale=False,
+        weight_decompose=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -179,6 +180,14 @@ class LokrModule(ModuleCustomSD):
 
             self.op = F.linear
             self.extra_args = {}
+
+        self.wd = weight_decompose
+        if self.wd:
+            org_weight: nn.Parameter = org_module.weight
+            self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+            self.dora_scale = nn.Parameter(
+                torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
+            )
 
         self.dropout = dropout
         if dropout:
@@ -282,9 +291,16 @@ class LokrModule(ModuleCustomSD):
             weight *= drop
         return weight
 
+    def apply_weight_decompose(self, weight):
+        return (
+            weight / weight.mean(dim=self.dora_mean_dim, keepdim=True) * self.dora_scale
+        )
+
     def custom_state_dict(self):
         destination = {}
         destination["alpha"] = self.alpha
+        if self.wd:
+            destination["dora_scale"] = self.dora_scale
         if self.use_w1:
             destination["lokr_w1"] = self.lokr_w1 * self.scalar
         else:
@@ -345,4 +361,18 @@ class LokrModule(ModuleCustomSD):
             * self.multiplier
         )
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
+
+        if self.wd:
+            weight = self.apply_weight_decompose(weight)
         return self.op(x, weight.view(self.shape), bias, **self.extra_args)
+
+
+if __name__ == "__main__":
+    base = nn.Linear(128, 128)
+    lokr = LokrModule(
+        "test", base, 1, 4, 1, weight_decompose=True
+    )
+    print(lokr)
+    test_input = torch.randn(1, 128)
+    test_output = lokr(test_input)
+    print(test_output.shape)
