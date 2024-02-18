@@ -103,7 +103,9 @@ class ButterflyOFTModule(ModuleCustomSD):
             torch.zeros(self.boft_m, self.block_num, self.block_size, self.block_size)
         )
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(out_dim))
+            self.rescale = nn.Parameter(
+                torch.ones(out_dim, *(1 for _ in range(org_module.weight.dim() - 1)))
+            )
 
         self.rank_dropout = rank_dropout
         self.rank_dropout_scale = rank_dropout_scale
@@ -172,7 +174,7 @@ class ButterflyOFTModule(ModuleCustomSD):
 
         weight = inp
         if self.rescaled:
-            weight = self.rescale[:, *(None for _ in weight.shape[1:])] * weight
+            weight = self.rescale * weight
         return weight * drop
 
     @torch.no_grad()

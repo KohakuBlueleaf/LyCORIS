@@ -15,7 +15,9 @@ VAE_SCALE_FACTOR = 0.13025
 MODEL_VERSION_SDXL_BASE_V0_9 = "sdxl_base_v0-9"
 
 # Diffusersの設定を読み込むための参照モデル
-DIFFUSERS_REF_MODEL_ID_SDXL = "stabilityai/stable-diffusion-xl-base-0.9"  # アクセス権が必要
+DIFFUSERS_REF_MODEL_ID_SDXL = (
+    "stabilityai/stable-diffusion-xl-base-0.9"  # アクセス権が必要
+)
 
 DIFFUSERS_SDXL_UNET_CONFIG = {
     "act_fn": "silu",
@@ -235,9 +237,9 @@ def load_models_from_sdxl_checkpoint(model_version, ckpt_path, map_location):
     te2_sd = {}
     for k in list(state_dict.keys()):
         if k.startswith("conditioner.embedders.0.transformer."):
-            te1_sd[
-                k.replace("conditioner.embedders.0.transformer.", "")
-            ] = state_dict.pop(k)
+            te1_sd[k.replace("conditioner.embedders.0.transformer.", "")] = (
+                state_dict.pop(k)
+            )
         elif k.startswith("conditioner.embedders.1.model."):
             te2_sd[k] = state_dict.pop(k)
 

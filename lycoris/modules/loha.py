@@ -99,6 +99,7 @@ class LohaModule(ModuleCustomSD):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
+        weight_decompose=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -157,6 +158,11 @@ class LohaModule(ModuleCustomSD):
 
             self.hada_w2_a = nn.Parameter(torch.empty(shape[0], lora_dim))
             self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1]))
+
+        self.wd = weight_decompose
+        if self.wd:
+            org_weight = org_module.weight
+            self.dora_scale = nn.Parameter(torch.mean(org_weight, dim=0, keepdim=True))
 
         self.dropout = dropout
         if dropout:
@@ -270,9 +276,11 @@ class LohaModule(ModuleCustomSD):
                 return self.op(
                     x,
                     self.org_module[0].weight.data,
-                    None
-                    if self.org_module[0].bias is None
-                    else self.org_module[0].bias.data,
+                    (
+                        None
+                        if self.org_module[0].bias is None
+                        else self.org_module[0].bias.data
+                    ),
                 )
         weight = (
             self.org_module[0].weight.data.to(x.device, dtype=self.hada_w1_a.dtype)

@@ -97,9 +97,11 @@ class LokrBlock(LycorisPluginBlock):
             (
                 self.lokr_w2
                 if self.use_w2
-                else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
-                if self.cp
-                else self.lokr_w2_a @ self.lokr_w2_b
+                else (
+                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    if self.cp
+                    else self.lokr_w2_a @ self.lokr_w2_b
+                )
             ),
             torch.tensor(self.scale),
         )
@@ -111,9 +113,11 @@ class LokrBlock(LycorisPluginBlock):
             (
                 self.lokr_w2
                 if self.use_w2
-                else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
-                if self.tucker
-                else self.lokr_w2_a @ self.lokr_w2_b
+                else (
+                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    if self.tucker
+                    else self.lokr_w2_a @ self.lokr_w2_b
+                )
             ),
             torch.tensor(self.scale),
         )

@@ -236,9 +236,11 @@ class LokrModule(ModuleCustomSD):
             (
                 self.lokr_w2
                 if self.use_w2
-                else make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
-                if self.tucker
-                else self.lokr_w2_a @ self.lokr_w2_b
+                else (
+                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    if self.tucker
+                    else self.lokr_w2_a @ self.lokr_w2_b
+                )
             ),
             torch.tensor(self.scale),
         )
@@ -284,9 +286,11 @@ class LokrModule(ModuleCustomSD):
                 return self.op(
                     x,
                     self.org_module[0].weight.data,
-                    None
-                    if self.org_module[0].bias is None
-                    else self.org_module[0].bias.data,
+                    (
+                        None
+                        if self.org_module[0].bias is None
+                        else self.org_module[0].bias.data
+                    ),
                 )
         weight = (
             self.org_module[0].weight.data
