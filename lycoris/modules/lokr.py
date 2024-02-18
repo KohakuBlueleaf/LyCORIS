@@ -369,9 +369,7 @@ class LokrModule(ModuleCustomSD):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128)
-    lokr = LokrModule(
-        "test", base, 1, 4, 1, weight_decompose=True
-    )
+    lokr = LokrModule("test", base, 1, 4, 1, weight_decompose=True)
     print(lokr)
     test_input = torch.randn(1, 128)
     test_output = lokr(test_input)
