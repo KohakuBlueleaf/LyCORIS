@@ -357,12 +357,12 @@ def convert_ldm_unet_checkpoint(v2, checkpoint, config):
         attentions = [key for key in input_blocks[i] if f"input_blocks.{i}.1" in key]
 
         if f"input_blocks.{i}.0.op.weight" in unet_state_dict:
-            new_checkpoint[
-                f"down_blocks.{block_id}.downsamplers.0.conv.weight"
-            ] = unet_state_dict.pop(f"input_blocks.{i}.0.op.weight")
-            new_checkpoint[
-                f"down_blocks.{block_id}.downsamplers.0.conv.bias"
-            ] = unet_state_dict.pop(f"input_blocks.{i}.0.op.bias")
+            new_checkpoint[f"down_blocks.{block_id}.downsamplers.0.conv.weight"] = (
+                unet_state_dict.pop(f"input_blocks.{i}.0.op.weight")
+            )
+            new_checkpoint[f"down_blocks.{block_id}.downsamplers.0.conv.bias"] = (
+                unet_state_dict.pop(f"input_blocks.{i}.0.op.bias")
+            )
 
         paths = renew_resnet_paths(resnets)
         meta_path = {
@@ -457,12 +457,12 @@ def convert_ldm_unet_checkpoint(v2, checkpoint, config):
                 index = list(output_block_list.values()).index(
                     ["conv.bias", "conv.weight"]
                 )
-                new_checkpoint[
-                    f"up_blocks.{block_id}.upsamplers.0.conv.bias"
-                ] = unet_state_dict[f"output_blocks.{i}.{index}.conv.bias"]
-                new_checkpoint[
-                    f"up_blocks.{block_id}.upsamplers.0.conv.weight"
-                ] = unet_state_dict[f"output_blocks.{i}.{index}.conv.weight"]
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.bias"] = (
+                    unet_state_dict[f"output_blocks.{i}.{index}.conv.bias"]
+                )
+                new_checkpoint[f"up_blocks.{block_id}.upsamplers.0.conv.weight"] = (
+                    unet_state_dict[f"output_blocks.{i}.{index}.conv.weight"]
+                )
 
                 # Clear attentions as they have been attributed above.
                 if len(attentions) == 2:
@@ -586,12 +586,12 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
         ]
 
         if f"encoder.down.{i}.downsample.conv.weight" in vae_state_dict:
-            new_checkpoint[
-                f"encoder.down_blocks.{i}.downsamplers.0.conv.weight"
-            ] = vae_state_dict.pop(f"encoder.down.{i}.downsample.conv.weight")
-            new_checkpoint[
-                f"encoder.down_blocks.{i}.downsamplers.0.conv.bias"
-            ] = vae_state_dict.pop(f"encoder.down.{i}.downsample.conv.bias")
+            new_checkpoint[f"encoder.down_blocks.{i}.downsamplers.0.conv.weight"] = (
+                vae_state_dict.pop(f"encoder.down.{i}.downsample.conv.weight")
+            )
+            new_checkpoint[f"encoder.down_blocks.{i}.downsamplers.0.conv.bias"] = (
+                vae_state_dict.pop(f"encoder.down.{i}.downsample.conv.bias")
+            )
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"down.{i}.block", "new": f"down_blocks.{i}.resnets"}
@@ -639,12 +639,12 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
         ]
 
         if f"decoder.up.{block_id}.upsample.conv.weight" in vae_state_dict:
-            new_checkpoint[
-                f"decoder.up_blocks.{i}.upsamplers.0.conv.weight"
-            ] = vae_state_dict[f"decoder.up.{block_id}.upsample.conv.weight"]
-            new_checkpoint[
-                f"decoder.up_blocks.{i}.upsamplers.0.conv.bias"
-            ] = vae_state_dict[f"decoder.up.{block_id}.upsample.conv.bias"]
+            new_checkpoint[f"decoder.up_blocks.{i}.upsamplers.0.conv.weight"] = (
+                vae_state_dict[f"decoder.up.{block_id}.upsample.conv.weight"]
+            )
+            new_checkpoint[f"decoder.up_blocks.{i}.upsamplers.0.conv.bias"] = (
+                vae_state_dict[f"decoder.up.{block_id}.upsample.conv.bias"]
+            )
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"up.{block_id}.block", "new": f"up_blocks.{i}.resnets"}
@@ -725,12 +725,12 @@ def create_unet_diffusers_config(v2, use_linear_projection_in_v2=False):
         up_block_types=tuple(up_block_types),
         block_out_channels=tuple(block_out_channels),
         layers_per_block=UNET_PARAMS_NUM_RES_BLOCKS,
-        cross_attention_dim=UNET_PARAMS_CONTEXT_DIM
-        if not v2
-        else V2_UNET_PARAMS_CONTEXT_DIM,
-        attention_head_dim=UNET_PARAMS_NUM_HEADS
-        if not v2
-        else V2_UNET_PARAMS_ATTENTION_HEAD_DIM,
+        cross_attention_dim=(
+            UNET_PARAMS_CONTEXT_DIM if not v2 else V2_UNET_PARAMS_CONTEXT_DIM
+        ),
+        attention_head_dim=(
+            UNET_PARAMS_NUM_HEADS if not v2 else V2_UNET_PARAMS_ATTENTION_HEAD_DIM
+        ),
         # use_linear_projection=UNET_PARAMS_USE_LINEAR_PROJECTION if not v2 else V2_UNET_PARAMS_USE_LINEAR_PROJECTION,
     )
     if v2 and use_linear_projection_in_v2:

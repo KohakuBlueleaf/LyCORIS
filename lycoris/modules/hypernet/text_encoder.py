@@ -2,7 +2,6 @@
 https://github.com/Stability-AI/stablediffusion/blob/main/ldm/modules/encoders/modules.py
 """
 
-
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
