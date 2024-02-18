@@ -172,7 +172,7 @@ class ButterflyOFTModule(ModuleCustomSD):
 
         weight = inp
         if self.rescaled:
-            weight = self.rescale * weight
+            weight = self.rescale[:, *(None for _ in weight.shape[1:])] * weight
         return weight * drop
 
     @torch.no_grad()
