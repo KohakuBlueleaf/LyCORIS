@@ -29,7 +29,7 @@ $^§$ For more details please refer to the tables at the end of the guideline
 
 ### Short version
 
-1. If you are looking for the “best” model, then you should stick to native training and curate your dataset. Note you can perform native training with LyCORIS by setting `algo=full` in `network_args`  (only available in the `dev` branch for the moment). By so doing, you can use the full model as a LoRA!
+1. If you are looking for the “best” model, then you should stick to native training and curate your dataset. Note you can perform native training with LyCORIS by setting `algo=full` in `network_args`. By so doing, you can use the full model as a LoRA!
 2. If space is a more a concern than quality, you probably want to use LoRA. In this case, if you find your model “does not learn well enough” (for example, if some intricate details are not correctly captured), you can try LoKr with low factors (like 4 to 8) and full dimension (by setting dimension to arbitrarily large numbers like 100000).
 3. On the contrary, if you find your model “learns too well” (for example, if some unwanted style from training images get leaked or it becomes hard to change pose), your can try LoHa, LoKr with large factors, lower dimension, or even IA3 if you want some fun.
 4. Other formats such as DyLoRA and GLoRA are not studied in this experiment, so no recommendations here.

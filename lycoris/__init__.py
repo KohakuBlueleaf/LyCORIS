@@ -19,3 +19,5 @@ from .wrapper import (
     create_lycoris,
     create_lycoris_from_weights,
 )
+
+from .logging import logger

@@ -4,17 +4,18 @@
 # https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
 # https://github.com/kohya-ss/sd-scripts/blob/main/networks/lora.py
 
-import math
-from warnings import warn
 import os
+import re
 import sys
+from typing import List
 
 sys.setrecursionlimit(10000)
-from typing import List
+
 import torch
 import torch.utils.checkpoint as checkpoint
 
 from .utils import *
+from ..wrapper import LycorisNetwork
 from ..modules.locon import LoConModule
 from ..modules.loha import LohaModule
 from ..modules.ia3 import IA3Module
@@ -24,11 +25,13 @@ from ..modules.glora import GLoRAModule
 from ..modules.norms import NormModule
 from ..modules.full import FullModule
 from ..modules.diag_oft import DiagOFTModule
+from ..modules.boft import ButterflyOFTModule
 from ..modules import make_module
 
 from ..config import PRESET
 from ..utils.preset import read_preset
 from ..utils import get_module, str_bool
+from ..logging import logger
 
 
 network_module_dict = {
@@ -41,6 +44,7 @@ network_module_dict = {
     "glora": GLoRAModule,
     "full": FullModule,
     "diag-oft": DiagOFTModule,
+    "boft": ButterflyOFTModule,
 }
 
 
@@ -62,7 +66,7 @@ def create_network(
         or kwargs.get("use_tucker", False)
     )
     if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        warn(
+        logger.warning(
             "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
             stacklevel=2,
         )
@@ -74,7 +78,7 @@ def create_network(
 
     if algo == "glora" and conv_dim > 0:
         conv_dim = 0
-        print("Disable conv layer for GLoRA")
+        logger.info("Disable conv layer for GLoRA")
 
     preset = kwargs.get("preset", "full")
     if preset not in PRESET:
@@ -84,22 +88,20 @@ def create_network(
     assert preset is not None
     LycorisNetworkKohya.apply_preset(preset)
 
-    print(f"Using rank adaptation algo: {algo}")
+    logger.info(f"Using rank adaptation algo: {algo}")
 
     if (
         (algo == "loha")
         and not kwargs.get("no_dim_warn", False)
         and (network_dim > 64 or conv_dim > 64)
     ):
-        print("=" * 20 + "WARNING" + "=" * 20)
         warning_type = {"loha": "Hadamard Product representation"}
         warning_msg = f"""You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n
             in {warning_type[algo]}!\n
             Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n
             If you just want to use high dim {algo}, please consider use lower lr.
         """
-        warn(warning_msg, stacklevel=2)
-        print("=" * 20 + "WARNING" + "=" * 20)
+        logger.warning(warning_msg, stacklevel=2)
 
     if algo == "ia3":
         network = IA3Network(
@@ -186,9 +188,7 @@ def create_network_from_weights(
         else:
             prefix = LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
         for name, modules in te.named_modules():
-            lora_name = f"{prefix}_{name}".replace(
-                ".", "_"
-            )
+            lora_name = f"{prefix}_{name}".replace(".", "_")
             if lora_name in te_loras:
                 te_loras[lora_name] = modules
 
@@ -241,7 +241,7 @@ def create_hypernetwork(
         or kwargs.get("use_tucker", False)
     )
     if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        warn(
+        logger.warning(
             "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
             stacklevel=2,
         )
@@ -255,7 +255,7 @@ def create_hypernetwork(
         "locon": LoConModule,
     }[algo]
 
-    print(f"Using rank adaptation algo: {algo}")
+    logger.info(f"Using rank adaptation algo: {algo}")
 
     return HyperDreamNetwork(
         text_encoder,
@@ -279,7 +279,7 @@ def create_hypernetwork(
     )
 
 
-class LycorisNetworkKohya(torch.nn.Module):
+class LycorisNetworkKohya(LycorisNetwork):
     """
     LoRA + LoCon
     """
@@ -343,7 +343,7 @@ class LycorisNetworkKohya(torch.nn.Module):
         train_norm=False,
         **kwargs,
     ) -> None:
-        super().__init__()
+        torch.nn.Module.__init__(self)
         root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
@@ -353,19 +353,19 @@ class LycorisNetworkKohya(torch.nn.Module):
 
         self.conv_lora_dim = int(conv_lora_dim)
         if self.conv_lora_dim and self.conv_lora_dim != self.lora_dim:
-            print("Apply different lora dim for conv layer")
-            print(f"Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}")
+            logger.info("Apply different lora dim for conv layer")
+            logger.info(f"Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}")
         elif self.conv_lora_dim == 0:
-            print("Disable conv layer")
+            logger.info("Disable conv layer")
 
         self.alpha = alpha
         self.conv_alpha = float(conv_alpha)
         if self.conv_lora_dim and self.alpha != self.conv_alpha:
-            print("Apply different alpha value for conv layer")
-            print(f"Conv alpha: {conv_alpha}, Linear alpha: {alpha}")
+            logger.info("Apply different alpha value for conv layer")
+            logger.info(f"Conv alpha: {conv_alpha}, Linear alpha: {alpha}")
 
         if 1 >= dropout >= 0:
-            print(f"Use Dropout value: {dropout}")
+            logger.info(f"Use Dropout value: {dropout}")
         self.dropout = dropout
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
@@ -466,7 +466,7 @@ class LycorisNetworkKohya(torch.nn.Module):
             target_replace_modules,
             target_replace_names=[],
         ) -> List:
-            print("Create LyCORIS Module")
+            logger.info("Create LyCORIS Module")
             loras = []
             next_config = {}
             for name, module in root_module.named_modules():
@@ -483,7 +483,9 @@ class LycorisNetworkKohya(torch.nn.Module):
                         ]
                     )
                     next_config = {}
-                elif name in target_replace_names:
+                elif name in target_replace_names or any(
+                    re.match(t, name) for t in target_replace_names
+                ):
                     if name in self.NAME_ALGO_MAP:
                         next_config = self.NAME_ALGO_MAP[name]
                         algo = next_config.get("algo", network_module)
@@ -501,7 +503,7 @@ class LycorisNetworkKohya(torch.nn.Module):
             return loras
 
         if network_module == GLoRAModule:
-            print("GLoRA enabled, only train transformer")
+            logger.info("GLoRA enabled, only train transformer")
             # only train transformer (for GLoRA)
             LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE = [
                 "Transformer2DModel",
@@ -527,7 +529,7 @@ class LycorisNetworkKohya(torch.nn.Module):
                     LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
                 )
             )
-        print(
+        logger.info(
             f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
         )
 
@@ -537,29 +539,25 @@ class LycorisNetworkKohya(torch.nn.Module):
             LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME,
         )
-        print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        logger.info(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
         algo_table = {}
         for lora in self.text_encoder_loras + self.unet_loras:
             algo_table[lora.__class__.__name__] = (
                 algo_table.get(lora.__class__.__name__, 0) + 1
             )
-        print(f"module type table: {algo_table}")
+        logger.info(f"module type table: {algo_table}")
 
         self.weights_sd = None
 
+        self.loras = self.text_encoder_loras + self.unet_loras
         # assertion
         names = set()
-        for lora in self.text_encoder_loras + self.unet_loras:
+        for lora in self.loras:
             assert (
                 lora.lora_name not in names
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
-
-    def set_multiplier(self, multiplier):
-        self.multiplier = multiplier
-        for lora in self.text_encoder_loras + self.unet_loras:
-            lora.multiplier = self.multiplier
 
     def load_weights(self, file):
         if os.path.splitext(file)[1] == ".safetensors":
@@ -582,52 +580,47 @@ class LycorisNetworkKohya(torch.nn.Module):
         ), f"internal error: flag not set"
 
         if apply_text_encoder:
-            print("enable LyCORIS for text encoder")
+            logger.info("enable LyCORIS for text encoder")
         else:
             self.text_encoder_loras = []
 
         if apply_unet:
-            print("enable LyCORIS for U-Net")
+            logger.info("enable LyCORIS for U-Net")
         else:
             self.unet_loras = []
 
-        for lora in self.text_encoder_loras + self.unet_loras:
+        self.loras = self.text_encoder_loras + self.unet_loras
+
+        for lora in self.loras:
             lora.apply_to()
             self.add_module(lora.lora_name, lora)
 
         if self.weights_sd:
             # if some weights are not in state dict, it is ok because initial LoRA does nothing (lora_up is initialized by zeros)
             info = self.load_state_dict(self.weights_sd, False)
-            print(f"weights are loaded: {info}")
+            logger.info(f"weights are loaded: {info}")
 
-    def apply_max_norm_regularization(self, max_norm_value, device):
-        key_scaled = 0
-        norms = []
-        for model in self.unet_loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+    # TODO refactor to common function with apply_to
+    def merge_to(self, text_encoder, unet, weights_sd, dtype, device):
+        apply_text_encoder = apply_unet = False
+        for key in weights_sd.keys():
+            if key.startswith(LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER):
+                apply_text_encoder = True
+            elif key.startswith(LycorisNetworkKohya.LORA_PREFIX_UNET):
+                apply_unet = True
 
-        for model in self.text_encoder_loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+        if apply_text_encoder:
+            logger.info("enable LoRA for text encoder")
+        else:
+            self.text_encoder_loras = []
 
-        if key_scaled == 0:
-            return key_scaled, 0, 0
+        if apply_unet:
+            logger.info("enable LoRA for U-Net")
+        else:
+            self.unet_loras = []
 
-        return key_scaled, sum(norms) / len(norms), max(norms)
-
-    def enable_gradient_checkpointing(self):
-        # not supported
-        def make_ckpt(module):
-            if isinstance(module, torch.nn.Module):
-                module.grad_ckpt = True
-
-        self.apply(make_ckpt)
-        pass
+        self.loras = self.text_encoder_loras + self.unet_loras
+        super().merge_to(1)
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
@@ -652,15 +645,6 @@ class LycorisNetworkKohya(torch.nn.Module):
             all_params.append(param_data)
 
         return all_params
-
-    def prepare_grad_etc(self, text_encoder, unet):
-        self.requires_grad_(True)
-
-    def on_epoch_start(self, text_encoder, unet):
-        self.train()
-
-    def get_trainable_params(self):
-        return self.parameters()
 
     def save_weights(self, file, dtype, metadata):
         if metadata is not None and len(metadata) == 0:
@@ -733,12 +717,12 @@ class HyperDreamNetwork(torch.nn.Module):
         self.alpha = alpha
 
         if 1 >= dropout >= 0:
-            print(f"Use Dropout value: {dropout}")
+            logger.info(f"Use Dropout value: {dropout}")
         if network_module != LoConModule:
-            print("HyperDreamBooth only support LoRA at this time")
+            logger.info("HyperDreamBooth only support LoRA at this time")
             raise NotImplementedError
         if lora_dim * (down_dim + up_dim) > 4096:
-            print(
+            logger.info(
                 "weight elements > 4096 (dim * (down_dim + up_dim)) is not recommended!"
             )
 
@@ -753,7 +737,7 @@ class HyperDreamNetwork(torch.nn.Module):
             target_replace_modules,
             target_replace_names=[],
         ) -> List[network_module]:
-            print("Create LyCORIS Module")
+            logger.info("Create LyCORIS Module")
             loras = []
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
@@ -848,8 +832,9 @@ class HyperDreamNetwork(torch.nn.Module):
                     LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
                 )
             )
-        print(
-            f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
+        logger.info(
+            f"create LyCORIS for Text Encoder: "
+            f"{len(self.text_encoder_loras)} modules."
         )
 
         self.unet_loras = create_modules(
@@ -857,7 +842,7 @@ class HyperDreamNetwork(torch.nn.Module):
             unet,
             LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
         )
-        print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        logger.info(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
         self.loras: list[LoConModule] = self.text_encoder_loras + self.unet_loras
         self.img_weight_generater = ImgWeightGenerator(
@@ -983,12 +968,12 @@ class HyperDreamNetwork(torch.nn.Module):
             ), f"internal error: flag not set"
 
         if apply_text_encoder:
-            print("enable LyCORIS for text encoder")
+            logger.info("enable LyCORIS for text encoder")
         else:
             self.text_encoder_loras = []
 
         if apply_unet:
-            print("enable LyCORIS for U-Net")
+            logger.info("enable LyCORIS for U-Net")
         else:
             self.unet_loras = []
 
@@ -1140,7 +1125,7 @@ class IA3Network(torch.nn.Module):
             target_replace_names=[],
             target_train_input=[],
         ) -> List[IA3Module]:
-            print("Create LyCORIS Module")
+            logger.info("Create LyCORIS Module")
             loras = []
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
@@ -1189,7 +1174,7 @@ class IA3Network(torch.nn.Module):
                     IA3Network.TRAIN_INPUT,
                 )
             )
-        print(
+        logger.info(
             f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
         )
 
@@ -1200,7 +1185,7 @@ class IA3Network(torch.nn.Module):
             IA3Network.UNET_TARGET_REPLACE_NAME,
             IA3Network.TRAIN_INPUT,
         )
-        print(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+        logger.info(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
 
         self.weights_sd = None
 
@@ -1253,12 +1238,12 @@ class IA3Network(torch.nn.Module):
             ), f"internal error: flag not set"
 
         if apply_text_encoder:
-            print("enable LyCORIS for text encoder")
+            logger.info("enable LyCORIS for text encoder")
         else:
             self.text_encoder_loras = []
 
         if apply_unet:
-            print("enable LyCORIS for U-Net")
+            logger.info("enable LyCORIS for U-Net")
         else:
             self.unet_loras = []
 
@@ -1269,7 +1254,7 @@ class IA3Network(torch.nn.Module):
         if self.weights_sd:
             # if some weights are not in state dict, it is ok because initial LoRA does nothing (lora_up is initialized by zeros)
             info = self.load_state_dict(self.weights_sd, False)
-            print(f"weights are loaded: {info}")
+            logger.info(f"weights are loaded: {info}")
 
     def enable_gradient_checkpointing(self):
         # not supported

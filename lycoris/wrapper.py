@@ -7,7 +7,6 @@ import sys
 
 sys.setrecursionlimit(10000)
 from typing import List
-from warnings import warn
 
 import torch
 
@@ -20,11 +19,13 @@ from .modules.glora import GLoRAModule
 from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
+from .modules.boft import ButterflyOFTModule
 from .modules import make_module
 
 from .config import PRESET
 from .utils.preset import read_preset
 from .utils import get_module, str_bool
+from .logging import logger
 
 
 network_module_dict = {
@@ -36,6 +37,7 @@ network_module_dict = {
     "glora": GLoRAModule,
     "full": FullModule,
     "diag-oft": DiagOFTModule,
+    "boft": ButterflyOFTModule,
 }
 
 
@@ -55,7 +57,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         or kwargs.get("use_tucker", False)
     )
     if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        warn(
+        logger.warning(
             "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
             stacklevel=2,
         )
@@ -67,7 +69,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
 
     if algo == "glora" and conv_dim > 0:
         conv_dim = 0
-        print("Disable conv layer for GLoRA")
+        logger.info("Disable conv layer for GLoRA")
 
     preset = kwargs.get("preset", "full")
     if preset not in PRESET:
@@ -77,14 +79,13 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     assert preset is not None
     LycorisNetwork.apply_preset(preset)
 
-    print(f"Using rank adaptation algo: {algo}")
+    logger.info(f"Using rank adaptation algo: {algo}")
 
     if (
         (algo == "loha")
         and not kwargs.get("no_dim_warn", False)
         and (linear_dim > 64 or conv_dim > 64)
     ):
-        print("=" * 20 + "WARNING" + "=" * 20)
         warning_type = {"loha": "Hadamard Product representation"}
         warning_msg = (
             "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n"
@@ -92,8 +93,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
             "Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n"
             f"If you just want to use high dim {algo}, please consider use lower lr."
         )
-        warn(warning_msg, stacklevel=2)
-        print("=" * 20 + "WARNING" + "=" * 20)
+        logger.warning(warning_msg, stacklevel=2)
 
     network = LycorisNetwork(
         module,
@@ -146,7 +146,8 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         if lora_name in loras:
             loras[lora_name] = modules
 
-    network = LycorisNetwork(module)
+    network = LycorisNetwork(module, init_only=True)
+    network.multiplier = multiplier
     network.loras = []
 
     for lora_name, orig_modules in loras.items():
@@ -156,6 +157,9 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         module = make_module(lyco_type, params, lora_name, orig_modules)
         if module is not None:
             network.loras.append(module)
+            network.algo_table[module.__class__.__name__] = (
+                network.algo_table.get(module.__class__.__name__, 0) + 1
+            )
 
     for lora in network.loras:
         lora.multiplier = multiplier
@@ -200,10 +204,24 @@ class LycorisNetwork(torch.nn.Module):
         network_module: str = "locon",
         norm_modules=NormModule,
         train_norm=False,
+        init_only=False,
         **kwargs,
     ) -> None:
         super().__init__()
         root_kwargs = kwargs
+        if init_only:
+            self.multiplier = 1
+            self.lora_dim = 0
+            self.alpha = 1
+            self.conv_lora_dim = 0
+            self.conv_alpha = 1
+            self.dropout = 0
+            self.rank_dropout = 0
+            self.module_dropout = 0
+            self.use_tucker = False
+            self.loras = []
+            self.algo_table = {}
+            return
         self.multiplier = multiplier
         self.lora_dim = lora_dim
 
@@ -212,19 +230,19 @@ class LycorisNetwork(torch.nn.Module):
 
         self.conv_lora_dim = int(conv_lora_dim)
         if self.conv_lora_dim and self.conv_lora_dim != self.lora_dim:
-            print("Apply different lora dim for conv layer")
-            print(f"Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}")
+            logger.info("Apply different lora dim for conv layer")
+            logger.info(f"Conv Dim: {conv_lora_dim}, Linear Dim: {lora_dim}")
         elif self.conv_lora_dim == 0:
-            print("Disable conv layer")
+            logger.info("Disable conv layer")
 
         self.alpha = alpha
         self.conv_alpha = float(conv_alpha)
         if self.conv_lora_dim and self.alpha != self.conv_alpha:
-            print("Apply different alpha value for conv layer")
-            print(f"Conv alpha: {conv_alpha}, Linear alpha: {alpha}")
+            logger.info("Apply different alpha value for conv layer")
+            logger.info(f"Conv alpha: {conv_alpha}, Linear alpha: {alpha}")
 
         if 1 >= dropout >= 0:
-            print(f"Use Dropout value: {dropout}")
+            logger.info(f"Use Dropout value: {dropout}")
         self.dropout = dropout
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
@@ -323,7 +341,7 @@ class LycorisNetwork(torch.nn.Module):
             target_replace_modules,
             target_replace_names=[],
         ) -> List:
-            print("Create LyCORIS Module")
+            logger.info("Create LyCORIS Module")
             loras = []
             next_config = {}
             for name, module in root_module.named_modules():
@@ -365,14 +383,14 @@ class LycorisNetwork(torch.nn.Module):
             LycorisNetwork.TARGET_REPLACE_MODULE,
             LycorisNetwork.TARGET_REPLACE_NAME,
         )
-        print(f"create LyCORIS: {len(self.loras)} modules.")
+        logger.info(f"create LyCORIS: {len(self.loras)} modules.")
 
         algo_table = {}
         for lora in self.loras:
             algo_table[lora.__class__.__name__] = (
                 algo_table.get(lora.__class__.__name__, 0) + 1
             )
-        print(f"module type table: {algo_table}")
+        logger.info(f"module type table: {algo_table}")
 
         self.weights_sd = None
 
@@ -412,7 +430,18 @@ class LycorisNetwork(torch.nn.Module):
         if self.weights_sd:
             # if some weights are not in state dict, it is ok because initial LoRA does nothing (lora_up is initialized by zeros)
             info = self.load_state_dict(self.weights_sd, False)
-            print(f"weights are loaded: {info}")
+            logger.info(f"weights are loaded: {info}")
+
+    def is_mergeable(self):
+        return True
+
+    def restore(self):
+        for lora in self.loras:
+            lora.restore()
+
+    def merge_to(self, weight=1.0):
+        for lora in self.loras:
+            lora.merge_to(weight)
 
     def apply_max_norm_regularization(self, max_norm_value, device):
         key_scaled = 0
@@ -453,13 +482,13 @@ class LycorisNetwork(torch.nn.Module):
         all_params.append(param_data)
         return all_params
 
-    def prepare_grad_etc(self):
+    def prepare_grad_etc(self, *args):
         self.requires_grad_(True)
 
-    def on_epoch_start(self):
+    def on_epoch_start(self, *args):
         self.train()
 
-    def get_trainable_params(self):
+    def get_trainable_params(self, *args):
         return self.parameters()
 
     def save_weights(self, file, dtype, metadata):

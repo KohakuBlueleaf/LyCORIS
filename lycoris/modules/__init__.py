@@ -18,7 +18,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             orig_module,
             1,
             down.size(0),
-            torch.tensor(alpha).item(),
+            float(alpha),
             use_cp=mid is not None,
         )
         module.lora_up.weight.data.copy_(up)
@@ -28,7 +28,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
     elif lyco_type == "hada":
         w1a, w1b, w2a, w2b, t1, t2, alpha = params
         module = LohaModule(
-            lora_name, orig_module, 1, w1b.size(0), alpha.item(), use_cp=t1 is not None
+            lora_name, orig_module, 1, w1b.size(0), float(alpha), use_cp=t1 is not None
         )
         module.hada_w1_a.copy_(w1a)
         module.hada_w1_b.copy_(w1b)
@@ -74,7 +74,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             orig_module,
             1,
             lora_dim,
-            torch.tensor(alpha).item(),
+            float(alpha),
             use_cp=t2 is not None,
             decompose_both=w1 is None and w2 is None,
             factor=factor,
@@ -99,7 +99,8 @@ def make_module(lyco_type, params, lora_name, orig_module):
             1,
         )
         module.w_norm.copy_(w_norm)
-        module.b_norm.copy_(b_norm)
+        if b_norm is not None:
+            module.b_norm.copy_(b_norm)
     elif lyco_type == "full":
         diff, diff_b = params
         module = FullModule(

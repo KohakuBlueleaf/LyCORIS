@@ -1,10 +1,31 @@
 from collections import OrderedDict
+from typing import Any, Mapping
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class ModuleCustomSD(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self._register_load_state_dict_pre_hook(self.load_weight_prehook)
+        self.register_load_state_dict_post_hook(self.load_weight_hook)
+
+    def load_weight_prehook(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        pass
+
+    def load_weight_hook(self, module, incompatible_keys):
+        pass
+
     def custom_state_dict(self):
         return None
 

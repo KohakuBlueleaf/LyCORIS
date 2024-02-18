@@ -82,3 +82,19 @@ for i, (x, t) in enumerate(test_loader):
     total_correct += (pred == t).sum().item()
     total_num += len(t)
 print(total_correct / total_num)
+
+
+# Inference Demo
+lycoris_net1.restore()
+lycoris_net2.restore()
+lycoris_net1.merge_to(1.0)
+lycoris_net2.merge_to(1.0)
+
+total_correct = 0
+total_num = 0
+for i, (x, t) in enumerate(test_loader):
+    y = net(x)
+    pred = y.argmax(dim=1)
+    total_correct += (pred == t).sum().item()
+    total_num += len(t)
+print(total_correct / total_num)

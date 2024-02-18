@@ -51,10 +51,19 @@ class NormModule(ModuleCustomSD):
 
         self.multiplier = multiplier
         self.org_module = [org_module]
+        self.org_forward = self.org_module[0].forward
 
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
+
+    def restore(self):
+        self.org_module[0].forward = self.org_forward
+
+    def merge_to(self, multiplier=1.0):
+        weight, bias = self.make_weight(scale=multiplier)
+        self.org_module[0].weight.data.copy_(weight)
+        self.org_module[0].bias.data.copy_(bias)
 
     def make_weight(self, scale=1, device=None):
         org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)

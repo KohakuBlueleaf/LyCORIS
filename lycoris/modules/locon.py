@@ -95,9 +95,13 @@ class LoConModule(ModuleCustomSD):
 
         self.multiplier = multiplier
         self.org_module = [org_module]
-        self.register_load_state_dict_post_hook(self.load_weight_hook)
+        self.org_forward = self.org_module[0].forward
 
-    def load_weight_hook(self, *args, **kwargs):
+    def load_weight_hook(self, module: nn.Module, incompatible_keys):
+        missing_keys = incompatible_keys.missing_keys
+        for key in missing_keys:
+            if "scalar" in key:
+                del missing_keys[missing_keys.index(key)]
         self.scalar = nn.Parameter(torch.ones_like(self.scalar))
 
     def apply_to(self, is_hypernet=False, **kwargs):
@@ -106,6 +110,13 @@ class LoConModule(ModuleCustomSD):
             self.org_module[0].forward = self.hypernet_forward
         else:
             self.org_module[0].forward = self.forward
+
+    def restore(self):
+        self.org_module[0].forward = self.org_forward
+
+    def merge_to(self, multiplier=1.0):
+        weight = self.make_weight() * self.scale * multiplier
+        self.org_module[0].weight.data.add_(weight)
 
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)

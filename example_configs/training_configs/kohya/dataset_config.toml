@@ -1,0 +1,11 @@
+[[datasets]]
+keep_tokens = 1
+
+        [[datasets.subsets]]
+        image_dir = ''
+        class_tokens = ''
+        num_repeats = 1
+
+[general]
+resolution = 512
+

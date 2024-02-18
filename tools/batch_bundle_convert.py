@@ -1,5 +1,6 @@
 import os
 import argparse
+import warnings
 from typing import List
 from collections import defaultdict
 
@@ -144,7 +145,7 @@ def gather_files_from_list(
     return files
 
 
-def get_lora_embs_step_correspondance(lora_files: List[str], emb_files: List[str]):
+def get_lora_embs_step_correspondence(lora_files: List[str], emb_files: List[str]):
     """Associate LoRA model files with embedding files based on their step count.
 
     This function takes in lists of LoRA file paths and embedding file paths,
@@ -162,13 +163,13 @@ def get_lora_embs_step_correspondance(lora_files: List[str], emb_files: List[str
         embedding files).
     """
     lora_embs = defaultdict(lambda: {"lora": None, "embs": []})
-    for lora_path in lora_files:
-        _, step = extract_step(lora_path)
+    for network_path in lora_files:
+        _, step = extract_step(network_path)
         if step in lora_embs:
             raise ValueError(
                 "Find two Lora files with the same" f" step count {step}, abort"
             )
-        lora_embs[step]["lora"] = lora_path
+        lora_embs[step]["lora"] = network_path
     for emb_path in emb_files:
         _, step = extract_step(emb_path)
         if step in lora_embs:
@@ -178,15 +179,17 @@ def get_lora_embs_step_correspondance(lora_files: List[str], emb_files: List[str
     return lora_embs
 
 
-def convert_lora_name(lora_path, dst_dir, to_bundle):
-    name, step = extract_step(lora_path)
+def convert_lora_name(network_path, dst_dir, to_bundle):
+    name, step = extract_step(network_path)
     if step != "":
         step = "-" + str(step)
     if to_bundle:
         name = name + "-bundle"
     elif name.endswith("-bundle"):
         name = name[:-7]
-    lora_save_path = os.path.join(dst_dir, name + step + os.path.splitext(lora_path)[1])
+    lora_save_path = os.path.join(
+        dst_dir, name + step + os.path.splitext(network_path)[1]
+    )
     return lora_save_path
 
 
@@ -195,11 +198,10 @@ if __name__ == "__main__":
         description="Tool for packing and unpacking LoRA and embeddings."
     )
     parser.add_argument(
-        "--lora_path",
+        "--network_path",
         nargs="+",
         type=str,
         default=[],
-        required=True,
         help="Paths to LoRAs or folders containing LoRA models.",
     )
     parser.add_argument(
@@ -220,17 +222,17 @@ if __name__ == "__main__":
     )
     parser.add_argument("--to_bundle", action="store_true", help="Pack to bundle.")
     parser.add_argument(
-        "--lora_ext",
-        default=[".safetensors"],
-        type=str,
+        "--network_ext",
         nargs="+",
+        type=str,
+        default=[".safetensors"],
         help="Extensions for LoRA files.",
     )
     parser.add_argument(
         "--emb_ext",
-        default=[".pt"],
-        type=str,
         nargs="+",
+        type=str,
+        default=[".pt"],
         help="Extensions for embedding files.",
     )
     parser.add_argument(
@@ -243,51 +245,86 @@ if __name__ == "__main__":
         action="store_true",
         help=(
             "Pack all embeddings to all LoRA files"
-            " instead of using step correspondance."
+            " instead of using step correspondence."
         ),
     )
     parser.add_argument("--verbose", default=1, type=int, help="Verbosity level.")
+
+    # Deprecated
+    parser.add_argument(
+        "--lora_path",
+        nargs="*",
+        type=str,
+        default=None,
+        help="Deprecated. Please use --network_path instead.",
+    )
+    parser.add_argument(
+        "--lora_ext",
+        nargs="*",
+        default=None,
+        type=str,
+        help="Deprecated. Please use --network_ext instead.",
+    )
+
     args = parser.parse_args()
 
-    lora_paths = gather_files_from_list(args.lora_path, args.lora_ext, args.recursive)
+    # Deprecation warnings
+    if args.lora_path is not None:
+        warnings.warn(
+            "The --lora_path argument is deprecated and will be removed in the future. "
+            "Please use --network_path instead.",
+            DeprecationWarning,
+        )
+        args.network_path = args.lora_path
+    if args.lora_ext is not None:
+        warnings.warn(
+            "The --lora_ext argument is deprecated and will be removed in the future. "
+            "Please use --network_ext instead.",
+            DeprecationWarning,
+        )
+        args.network_ext = args.lora_ext
+
+    network_paths = gather_files_from_list(
+        args.network_path, args.network_ext, args.recursive
+    )
 
     if args.from_bundle:
         dst_dir = "bundles_unpack" if args.dst_dir is None else args.dst_dir
         os.makedirs(dst_dir, exist_ok=True)
-        for lora_path in lora_paths:
+        for network_path in network_paths:
             if args.verbose >= 1:
-                print(f"Unpacking {lora_path}")
-            lora = load_state_dict(lora_path)
-            _, step = extract_step(lora_path)
+                print(f"Unpacking {network_path}")
+            lora = load_state_dict(network_path)
+            _, step = extract_step(network_path)
             lora, emb_dict = unpack_bundle(
                 lora, args.verbose >= 2, step=step, emb_format=args.emb_ext[0]
             )
-            lora_save_path = convert_lora_name(lora_path, dst_dir, to_bundle=False)
+            lora_save_path = convert_lora_name(network_path, dst_dir, to_bundle=False)
             save_state_dict(lora, lora_save_path)
             for emb, emb_sd in emb_dict.items():
                 emb_save_path = os.path.join(dst_dir, emb + args.emb_ext[0])
                 save_state_dict(emb_sd, emb_save_path)
     elif args.to_bundle:
         if args.emb_path == []:
-            args.emb_path = args.lora_path
+            args.emb_path = args.network_path
         emb_paths = gather_files_from_list(args.emb_path, args.emb_ext, args.recursive)
         dst_dir = "bundles" if args.dst_dir is None else args.dst_dir
         os.makedirs(dst_dir, exist_ok=True)
         lora_embs_dict = {}
         if args.pack_all_embeddings:
-            for i, lora_path in enumerate(lora_paths):
-                lora_embs_dict[i] = {"lora": lora_path, "embs": emb_paths}
+            for i, network_path in enumerate(network_paths):
+                lora_embs_dict[i] = {"lora": network_path, "embs": emb_paths}
         else:
-            lora_embs_dict = get_lora_embs_step_correspondance(lora_paths, emb_paths)
+            lora_embs_dict = get_lora_embs_step_correspondence(network_paths, emb_paths)
         for _, lora_embs_pair in lora_embs_dict.items():
-            lora_path = lora_embs_pair["lora"]
+            network_path = lora_embs_pair["lora"]
             if args.verbose >= 1:
-                print(f"Packing {lora_path}")
-            lora = load_state_dict(lora_path)
+                print(f"Packing {network_path}")
+            lora = load_state_dict(network_path)
             emb_dict = {}
             for emb_path in lora_embs_pair["embs"]:
                 name, _ = extract_step(emb_path)
                 emb_dict[name] = load_state_dict(emb_path)
             bundle = pack_bundle(lora, emb_dict, args.verbose >= 2)
-            lora_save_path = convert_lora_name(lora_path, dst_dir, to_bundle=True)
+            lora_save_path = convert_lora_name(network_path, dst_dir, to_bundle=True)
             save_state_dict(bundle, lora_save_path)
