@@ -71,7 +71,9 @@ class DiagOFTModule(ModuleCustomSD):
             torch.zeros(self.block_num, self.block_size, self.block_size)
         )
         if rescaled:
-            self.rescale = nn.Parameter(torch.ones(out_dim))
+            self.rescale = nn.Parameter(
+                torch.ones(out_dim, *(1 for _ in range(org_module.weight.dim() - 1)))
+            )
 
         log_oft_factorize(
             dim=out_dim,
@@ -141,7 +143,7 @@ class DiagOFTModule(ModuleCustomSD):
         )
         weight = rearrange(weight, "k m ... -> (k m) ...")
         if self.rescaled:
-            weight = self.rescale[:, *(None for _ in weight.shape[1:])] * weight
+            weight = self.rescale * weight
         return weight
 
     @torch.no_grad()
