@@ -1,10 +1,20 @@
 import math
+from functools import cache
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import ModuleCustomSD
+from ..logging import logger
+
+
+@cache
+def log_wd():
+    return logger.warning(
+        "Using weight_decompose=True with LoRA (DoRA) will ignore network_dropout."
+        "Only rank dropout and module dropout will be applied"
+    )
 
 
 class LoConModule(ModuleCustomSD):
@@ -25,6 +35,7 @@ class LoConModule(ModuleCustomSD):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
+        weight_decompose=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -32,6 +43,24 @@ class LoConModule(ModuleCustomSD):
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
+
+        if org_module.__class__.__name__ == "Conv2d":
+            in_dim = org_module.in_channels
+            k_size = org_module.kernel_size
+            out_dim = org_module.out_channels
+            self.tucker = use_tucker and k_size != (1, 1)
+            self.op = F.conv2d
+            self.extra_args = {
+                "stride": org_module.stride,
+                "padding": org_module.padding,
+                "dilation": org_module.dilation,
+                "groups": org_module.groups,
+            }
+        else:
+            in_dim = org_module.in_features
+            out_dim = org_module.out_features
+            self.op = F.linear
+            self.extra_args = {}
 
         if isinstance(org_module, nn.Conv2d):
             self.isconv = True
@@ -66,8 +95,18 @@ class LoConModule(ModuleCustomSD):
             raise NotImplementedError
         self.shape = org_module.weight.shape
 
+        self.wd = weight_decompose
+        if self.wd:
+            org_weight: nn.Parameter = org_module.weight
+            self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+            self.dora_scale = nn.Parameter(
+                torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
+            )
+
         if dropout:
             self.dropout = nn.Dropout(dropout)
+            if self.wd:
+                log_wd()
         else:
             self.dropout = nn.Identity()
         self.rank_dropout = rank_dropout
@@ -121,9 +160,28 @@ class LoConModule(ModuleCustomSD):
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
         wb = self.lora_down.weight.to(device)
-        return (wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)).view(
-            self.shape
-        ) * self.scalar
+        if self.tucker:
+            t = self.lora_mid.weight.to(device)
+            wa = wa.squeeze(-1, -2)
+            wb = wb.squeeze(-1, -2)
+            weight = torch.einsum("i j k l, p i, j r -> p r k l", t, wa, wb)
+        else:
+            weight = wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)
+
+        weight = weight.view(self.shape)
+        if self.training and self.rank_dropout:
+            drop = (torch.rand(weight.size(0)) > self.rank_dropout).to(weight.dtype)
+            drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+            weight *= drop
+
+        return weight * self.scalar
+
+    def apply_weight_decompose(self, weight):
+        return (
+            weight / weight.mean(dim=self.dora_mean_dim, keepdim=True) * self.dora_scale
+        )
 
     def custom_state_dict(self):
         destination = {}
@@ -265,23 +323,55 @@ class LoConModule(ModuleCustomSD):
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
         scale = self.scale * self.multiplier
-        if self.tucker:
-            mid = self.lora_mid(self.lora_down(x))
+
+        if self.wd:
+            weight = (
+                self.org_module[0].weight.data.to(self.scalar)
+                + self.make_weight(x.device).to(self.scalar) * scale
+            )
+            if self.wd:
+                weight = self.apply_weight_decompose(weight)
+            bias = (
+                None
+                if self.org_module[0].bias is None
+                else self.org_module[0].bias.data
+            )
+            return self.op(x, weight, bias, **self.extra_args)
         else:
-            mid = self.lora_down(x)
-
-        if self.rank_dropout and self.training:
-            drop = (
-                torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout
-            ).to(mid.dtype)
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
-            if (dims := len(x.shape)) == 4:
-                drop = drop.view(1, -1, 1, 1)
+            if self.tucker:
+                mid = self.lora_mid(self.lora_down(x))
             else:
-                drop = drop.view(*[1] * (dims - 1), -1)
-            mid = mid * drop
+                mid = self.lora_down(x)
 
-        return self.org_forward(x) + self.dropout(
-            self.lora_up(mid) * self.scalar * scale
-        )
+            if self.rank_dropout and self.training:
+                drop = (
+                    torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout
+                ).to(mid.dtype)
+                if self.rank_dropout_scale:
+                    drop /= drop.mean()
+                if (dims := len(x.shape)) == 4:
+                    drop = drop.view(1, -1, 1, 1)
+                else:
+                    drop = drop.view(*[1] * (dims - 1), -1)
+                mid = mid * drop
+
+            return self.org_forward(x) + self.dropout(
+                self.lora_up(mid) * self.scalar * scale
+            )
+
+
+if __name__ == '__main__':
+    base = nn.Linear(128, 128)
+    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True)
+    print(lokr)
+    test_input = torch.randn(1, 128)
+    test_output = lokr(test_input)
+    print(test_output.shape)
+    
+    base = nn.Conv2d(128, 128, 3, 1, 1)
+    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+    print(lokr)
+    test_input = torch.randn(1, 128, 16, 16)
+    test_output = lokr(test_input)
+    print(test_output.shape)
+
