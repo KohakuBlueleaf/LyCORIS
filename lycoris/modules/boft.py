@@ -99,6 +99,7 @@ class ButterflyOFTModule(ModuleCustomSD):
         # block_num > block_size
         self.rescaled = rescaled
         self.constrain = constrain * out_dim
+        self.register_buffer("alpha", torch.tensor(constrain))
         self.oft_blocks = nn.Parameter(
             torch.zeros(self.boft_m, self.block_num, self.block_size, self.block_size)
         )
