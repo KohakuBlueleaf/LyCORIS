@@ -14,7 +14,7 @@ from ..logging import logger
 @cache
 def log_oft_factorize(dim, factor, num, bdim):
     logger.info(
-        f"Use OFT(block num: {num}, blcok dim: {bdim})"
+        f"Use OFT(block num: {num}, block dim: {bdim})"
         f" (equivalent to lora_dim={num}) "
         f"for {dim=} and lora_dim={factor=}"
     )
