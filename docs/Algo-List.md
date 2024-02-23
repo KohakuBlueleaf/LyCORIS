@@ -6,7 +6,7 @@ All the methods below except for GLoKr are supported in a1111/sd-webui.
 However, newer methods may only be available in the latest release / the dev branch.
 
 ### Conventional LoRA
-* Trigged by `algo=lora`
+* Trigged by `algo=lora` or `algo=locon` (Just alias)
 * Includes Conv layer implementation from LoCon.
 * Recommended settings
   * dim <= 64
