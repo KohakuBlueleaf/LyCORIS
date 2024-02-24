@@ -1150,9 +1150,11 @@ class NetworkTrainer:
                                 text_encoder,
                                 batch["captions"],
                                 accelerator.device,
-                                args.max_token_length // 75
-                                if args.max_token_length
-                                else 1,
+                                (
+                                    args.max_token_length // 75
+                                    if args.max_token_length
+                                    else 1
+                                ),
                                 clip_skip=args.clip_skip,
                             )
                         else:

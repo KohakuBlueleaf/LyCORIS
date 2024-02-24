@@ -46,7 +46,10 @@ def get_args():
 ARGS = get_args()
 
 
-from lycoris.kohya.model_utils import load_file, load_models_from_stable_diffusion_checkpoint
+from lycoris.kohya.model_utils import (
+    load_file,
+    load_models_from_stable_diffusion_checkpoint,
+)
 from lycoris.kohya import create_hypernetwork
 
 import torch
