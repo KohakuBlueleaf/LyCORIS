@@ -52,7 +52,7 @@ class HadaWeightCP(torch.autograd.Function):
         return grad_out, grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
 
 
-def make_weight_cp(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
+def make_weight_tucker(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(0.25)):
     return HadaWeightCP.apply(orig_weight, t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
@@ -90,7 +90,7 @@ test_t = torch.randn(1, 4, 64, 64)
 
 
 w1 = make_cp(orig, t1, w1a, w1b, t2, w2a, w2b)
-w2 = make_weight_cp(orig, t1, w1a, w1b, t2, w2a, w2b)
+w2 = make_weight_tucker(orig, t1, w1a, w1b, t2, w2a, w2b)
 
 torch.mean(w1).backward()
 grad1 = t1.grad.clone()

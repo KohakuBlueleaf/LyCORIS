@@ -77,7 +77,7 @@ def make_weight(w1a, w1b, w2a, w2b, scale):
     return HadaWeight.apply(w1a, w1b, w2a, w2b, scale)
 
 
-def make_weight_cp(t1, w1a, w1b, t2, w2a, w2b, scale):
+def make_weight_tucker(t1, w1a, w1b, t2, w2a, w2b, scale):
     return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
@@ -220,7 +220,7 @@ class LohaModule(ModuleCustomSD):
 
     def get_weight(self, orig_weight=None):
         if self.tucker:
-            weight = make_weight_cp(
+            weight = make_weight_tucker(
                 self.hada_t1,
                 self.hada_w1_a,
                 self.hada_w1_b,

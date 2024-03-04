@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisPluginBlock
-from ..modules.lokr import make_kron, make_weight_cp, factorization
+from ..modules.lokr import make_kron, make_weight_tucker, factorization
 
 
 class LokrBlock(LycorisPluginBlock):
@@ -98,8 +98,8 @@ class LokrBlock(LycorisPluginBlock):
                 self.lokr_w2
                 if self.use_w2
                 else (
-                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
-                    if self.cp
+                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    if self.tucker
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
             ),
@@ -114,7 +114,7 @@ class LokrBlock(LycorisPluginBlock):
                 self.lokr_w2
                 if self.use_w2
                 else (
-                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
                     if self.tucker
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )

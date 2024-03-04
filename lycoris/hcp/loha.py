@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisPluginBlock
-from ..modules.loha import make_weight, make_weight_cp
+from ..modules.loha import make_weight, make_weight_tucker
 
 
 class LohaBlock(LycorisPluginBlock):
@@ -58,7 +58,7 @@ class LohaBlock(LycorisPluginBlock):
 
     def forward(self, orig_weight, org_bias, new_weight, new_bias, *args, **kwargs):
         if self.tucker:
-            weight = make_weight_cp(
+            weight = make_weight_tucker(
                 self.hada_t1,
                 self.hada_w1_a,
                 self.hada_w1_b,
