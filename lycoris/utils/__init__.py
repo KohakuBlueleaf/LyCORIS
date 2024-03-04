@@ -448,6 +448,14 @@ def tucker_weight(wa, wb, t):
     return torch.einsum("i j k l, i r -> r j k l", temp, wa)
 
 
+def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
+    dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+    weight = org_weight + rebuild
+    merged_scale1 = weight / weight.mean(dim=dora_mean_dim, keepdim=True) * dora_scale
+    diff_weight = merged_scale1 - org_weight
+    return org_weight + diff_weight * scale
+
+
 @torch.no_grad()
 def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
     if orig_weight is None:
@@ -462,7 +470,11 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
             rebuild = tucker_weight_from_conv(up, down, mid)
         else:
             rebuild = up.reshape(up.size(0), -1) @ down.reshape(down.size(0), -1)
-        merged = orig_weight + rebuild.reshape(orig_weight.shape) * scale
+        rebuild = rebuild.reshape(orig_weight.shape)
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del up, down, mid, alpha, params, rebuild
     elif module_type == "hada":
         w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale = params
@@ -477,7 +489,10 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
         else:
             rebuild2 = w2a @ w2b
         rebuild = (rebuild1 * rebuild2).reshape(orig_weight.shape)
-        merged = orig_weight + rebuild * scale
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del w1a, w1b, w2a, w2b, t1, t2, alpha, params, rebuild, rebuild1, rebuild2
     elif module_type == "ia3":
         weight, on_input = params
@@ -503,7 +518,10 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
             w1 = w1.unsqueeze(2).unsqueeze(2)
         w2 = w2.contiguous()
         rebuild = torch.kron(w1, w2).reshape(orig_weight.shape)
-        merged = orig_weight + rebuild * scale
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
     elif module_type == "full":
         rebuild = params[0].reshape(orig_weight.shape)
