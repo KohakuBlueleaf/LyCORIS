@@ -1,5 +1,16 @@
 # Change Log
 
+## 2024/03/xx update to 2.2.0
+
+#### New Algo
+
+* DoRA
+* Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
+
+#### Improvements
+
+#### Fixes, slight changes
+
 ## 2024/02/18 update to 2.1.0
 
 #### New Algo
