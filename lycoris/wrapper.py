@@ -67,6 +67,10 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     constrain = float(kwargs.get("constrain", 0) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
+    full_matrix = str_bool(kwargs.get("full_matrix", False))
+
+    if full_matrix:
+        logger.info("Full matrix mode for LoKr is enabled")
 
     if algo == "glora" and conv_dim > 0:
         conv_dim = 0
@@ -116,6 +120,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         constrain=constrain,
         rescaled=rescaled,
         weight_decompose=weight_decompose,
+        full_matrix=full_matrix,
     )
 
     if algo == "dylora":
