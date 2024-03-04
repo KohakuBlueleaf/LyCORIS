@@ -360,18 +360,17 @@ class LoConModule(ModuleCustomSD):
             )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     base = nn.Linear(128, 128)
     lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True)
     print(lokr)
     test_input = torch.randn(1, 128)
     test_output = lokr(test_input)
     print(test_output.shape)
-    
+
     base = nn.Conv2d(128, 128, 3, 1, 1)
     lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
     print(lokr)
     test_input = torch.randn(1, 128, 16, 16)
     test_output = lokr(test_input)
     print(test_output.shape)
-
