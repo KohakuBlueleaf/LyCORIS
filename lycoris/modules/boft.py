@@ -1,5 +1,5 @@
 from functools import cache
-from math import log2, ceil
+from math import log2
 
 import torch
 import torch.nn as nn

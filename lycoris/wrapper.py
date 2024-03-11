@@ -9,8 +9,8 @@ sys.setrecursionlimit(10000)
 from typing import List
 
 import torch
+import torch.nn as nn
 
-from .utils import *
 from .modules.locon import LoConModule
 from .modules.loha import LohaModule
 from .modules.lokr import LokrModule
