@@ -1216,7 +1216,7 @@ class NetworkTrainer:
                     loss = loss.mean()  # 平均なのでbatch_sizeで割る必要なし
 
                     accelerator.backward(loss)
-                    if accelerator.sync_gradients and args.max_grad_norm != 0.0:
+                    if accelerator.sync_gradients and args.max_grad_norm != 0:
                         params_to_clip = network.get_trainable_params()
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
 
