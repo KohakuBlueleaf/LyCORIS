@@ -273,7 +273,7 @@ class LohaModule(ModuleCustomSD):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu() / norm.cpu()
 
-        scaled = ratio.item() != 1.0
+        scaled = norm != desired
         if scaled:
             self.scalar *= ratio
 

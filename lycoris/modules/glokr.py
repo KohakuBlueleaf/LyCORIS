@@ -261,7 +261,7 @@ class LokrModule(ModuleCustomSD):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu() / norm.cpu()
 
-        scaled = ratio.item() != 1.0
+        scaled = norm != desired
         if scaled:
             modules = 4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.tucker)
             if self.use_w1:
