@@ -45,7 +45,7 @@ After sd-webui 1.5.0, LyCORIS models are officially supported by the built-in Lo
 
 When we add new model types, we will always make sure they can be used with the newest version of sd-webui.
 
-As for sd-webui with version < 1.5.0, please check this [extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris).
+As for sd-webui with version < 1.5.0 or sd-webui-forge, please check this [extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris).
 
 #### Others
 
@@ -64,7 +64,7 @@ There are three different ways to train LyCORIS models.
 
 - With [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section)
 - With [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion)
-- With your own script by using LyCORIS as standalone wrappers for any pytorch modules.
+- With your own script by using LyCORIS as standalone wrappers for **ANY** pytorch modules.
 
 In any case, please install this package in the corresponding virtual environment. You can either install it
 
@@ -210,10 +210,10 @@ This script allows you to use the LyCORIS models trained with HCP-Diffusion in s
 
 ```bash
 python3 batch_hcp_convert.py \
---network_path /path/to/ckpts \
---dst_dir /path/to/stable-diffusion-webui/models/Lora \
---output_prefix something \
---auto_scale_alpha --to_webui
+  --network_path /path/to/ckpts \
+  --dst_dir /path/to/stable-diffusion-webui/models/Lora \
+  --output_prefix something \
+  --auto_scale_alpha --to_webui
 ```
 
 See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
@@ -224,10 +224,10 @@ This script is particularly useful in the case of pivotal tuning.
 
 ```bash
 python3 batch_bundle_convert.py \
---network_path /path/to/sd-webui-ssd/models/Lora  \
---emb_path /path/to/ckpts \
---dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
---to_bundle --verbose 2 
+  --network_path /path/to/sd-webui-ssd/models/Lora  \
+  --emb_path /path/to/ckpts \
+  --dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
+  --to_bundle --verbose 2 
 ```
 
 See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.

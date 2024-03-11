@@ -7,9 +7,19 @@
 * DoRA
 * Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
 
+#### New Features
+
+* Support "bypass" (a.k.a. adapter) mode for LoHa/LoKr/OFT/BOFT
+  * LoHa and BOFT will require 2xFLOPs since we rebuild full diff weight and then do one more forward.
+  * LoKr and OFT will be more efficient than above two algorithms.
+* Support bnb 8bit/4bit Linear layer (a.k.a. QLyCORIS) with LoHa/LoKr/OFT/BOFT.
+  * This will require user/developer to enable bypass mode.
+
 #### Improvements
 
 #### Fixes, slight changes
+
+* Refine some details about code quality. Based on the report from GitRoll. (Thx you gitroll!)
 
 ## 2024/02/18 update to 2.1.0
 
