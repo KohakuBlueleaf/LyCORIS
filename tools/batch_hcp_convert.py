@@ -13,6 +13,10 @@ from safetensors.torch import load_file
 from hcpdiff.ckpt_manager import auto_manager
 
 
+DOWN_WEIGHT = "lora_down.weight"
+UP_WEIGHT = "lora_up.weight"
+
+
 class LoraConverter(object):
     com_name_unet = [
         "down_blocks",
@@ -35,7 +39,7 @@ class LoraConverter(object):
     prefix_te_xl_clip_B = "lora_te1_"
     prefix_te_xl_clip_bigG = "lora_te2_"
 
-    lora_w_map = {"lora_down.weight": "W_down", "lora_up.weight": "W_up"}
+    lora_w_map = {DOWN_WEIGHT: "W_down", UP_WEIGHT: "W_up"}
 
     def __init__(self, save_fp16=False):
         self.com_name_unet_tmp = [x.replace("_", "%") for x in self.com_name_unet]
@@ -138,10 +142,10 @@ class LoraConverter(object):
             # LoRA version after commit 9fdce2d
             elif k.endswith("W_down"):
                 model_k, _ = k.split(separator, 1)
-                lora_k = "lora_down.weight"
+                lora_k = DOWN_WEIGHT
             elif k.endswith("W_up"):
                 model_k, _ = k.split(separator, 1)
-                lora_k = "lora_up.weight"
+                lora_k = UP_WEIGHT
             # LoRA version before commit 9fdce2d
             else:
                 separator = ".___.layer."
@@ -160,10 +164,10 @@ class LoraConverter(object):
             # LoRA version after commit 9fdce2d
             elif k.endswith("W_down"):
                 model_k, _ = k.split(separator, 1)
-                lora_k = "lora_down.weight"
+                lora_k = DOWN_WEIGHT
             elif k.endswith("W_up"):
                 model_k, _ = k.split(separator, 1)
-                lora_k = "lora_up.weight"
+                lora_k = UP_WEIGHT
             # LoRA version before commit 9fdce2d
             else:
                 separator = ".___.layer."
