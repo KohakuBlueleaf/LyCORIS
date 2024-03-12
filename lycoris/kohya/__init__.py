@@ -74,6 +74,9 @@ def create_network(
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
 
+    if weight_decompose:
+        logger.info("Weight decomposition is enabled")
+
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
 
