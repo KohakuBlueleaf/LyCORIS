@@ -111,7 +111,7 @@ class LokrModule(ModuleCustomSD):
         self.tucker = False
         self.use_w1 = False
         self.use_w2 = False
-        self.full_matrix = False
+        self.full_matrix = full_matrix
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":
