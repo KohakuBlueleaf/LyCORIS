@@ -1,6 +1,6 @@
 # Change Log
 
-## 2024/03/xx update to 2.2.0
+## 2024/xx/xx update to 2.2.0
 
 #### New Algo
 
@@ -20,6 +20,8 @@
 #### Fixes, slight changes
 
 * Refine some details about code quality. Based on the report from GitRoll. (Thx you gitroll!)
+* Fix bugs in lokr when lokr_w1_a not exist.
+* Fix bugs in conversion scritps.
 
 ## 2024/02/18 update to 2.1.0
 
