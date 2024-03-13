@@ -380,16 +380,23 @@ class LokrModule(ModuleCustomSD):
         if self.use_w2:
             ba = self.lokr_w2
         else:
-            ba = self.lokr_w2_a @ self.lokr_w2_b
+            a = self.lokr_w2_b
+            b = self.lokr_w2_a
         if self.use_w1:
             c = self.lokr_w1
         else:
             c = self.lokr_w1_a @ self.lokr_w1_b
-        vq = ba.size(1)
         uq = c.size(1)
 
-        h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
-        hb = F.linear(h_in_group, ba)
+        if self.use_w2:
+            vq = ba.size(1)
+            h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
+            hb = F.linear(h_in_group, ba)
+        else:
+            vq = a.size(1)
+            h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
+            ha = F.linear(h_in_group, a)
+            hb = F.linear(ha, b)
 
         h_cross_group = hb.transpose(-1, -2)
         hc = F.linear(h_cross_group, c)
