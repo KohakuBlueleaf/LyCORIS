@@ -68,6 +68,10 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
+    bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+
+    if bypass_mode:
+        logger.info("Bypass mode is enabled")
 
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
@@ -121,6 +125,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         rescaled=rescaled,
         weight_decompose=weight_decompose,
         full_matrix=full_matrix,
+        bypass_mode=bypass_mode,
     )
 
     if algo == "dylora":
