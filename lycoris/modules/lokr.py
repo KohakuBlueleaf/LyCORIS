@@ -377,6 +377,8 @@ class LokrModule(ModuleCustomSD):
         return scaled, orig_norm * ratio
 
     def bypass_forward(self, h):
+        if isinstance(self.org_module[0], nn.Conv2d):
+            h = h.transpose(1, -1)
         if self.use_w2:
             ba = self.lokr_w2
         else:
@@ -402,6 +404,8 @@ class LokrModule(ModuleCustomSD):
         hc = F.linear(h_cross_group, c)
 
         h = rearrange(hc, "b ... vp up -> b ... (up vp)")
+        if isinstance(self.org_module[0], nn.Conv2d):
+            h = h.transpose(1, -1)
 
         return h
 
