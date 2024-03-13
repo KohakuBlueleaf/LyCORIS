@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from einops import rearrange
+
 from .base import ModuleCustomSD
 from ..logging import logger
 from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
@@ -374,6 +376,28 @@ class LokrModule(ModuleCustomSD):
 
         return scaled, orig_norm * ratio
 
+    def bypass_forward(self, h):
+        if self.use_w2:
+            ba = self.lokr_w2
+        else:
+            ba = self.lokr_w2_a @ self.lokr_w2_b
+        if self.use_w1:
+            c = self.lokr_w1
+        else:
+            c = self.lokr_w1_a @ self.lokr_w1_b
+        vq = ba.size(1)
+        uq = c.size(1)
+
+        h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
+        hb = F.linear(h_in_group, ba)
+
+        h_cross_group = hb.transpose(-1, -2)
+        hc = F.linear(h_cross_group, c)
+
+        h = rearrange(hc, "b ... vp up -> b ... (up vp)")
+
+        return h
+
     def forward(self, x):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
@@ -387,10 +411,7 @@ class LokrModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            diff_weight = self.get_weight(self.shape) * self.scalar * self.multiplier
-            return self.org_forward(x) + self.op(
-                x, diff_weight.view(self.shape), **self.extra_args
-            )
+            return self.org_forward(x) + self.bypass_forward(x)
         else:
             weight = (
                 self.org_module[0].weight.data.to(
@@ -411,9 +432,11 @@ class LokrModule(ModuleCustomSD):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
-    lokr = LokrModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    lokr = LokrModule(
+        "test", base, 1, 4, 1, weight_decompose=False, bypass_mode=True
+    ).cuda()
     print(lokr)
-    test_input = torch.randn(1, 128).cuda()
+    test_input = torch.randn(1, 77, 128).cuda()
     test_output = lokr(test_input)
     print(test_output.shape)
 
@@ -422,9 +445,9 @@ if __name__ == "__main__":
     base_4bit.cuda()
     qlocon = LokrModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
     print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
-    print(test_output.shape)
+    test_output2 = qlocon(test_input)
+    print(test_output2.shape)
+    print(F.mse_loss(test_output, test_output2))
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
     lokr = LokrModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
