@@ -8,15 +8,9 @@ import torch.nn.functional as F
 from .base import ModuleCustomSD
 from ..logging import logger
 from ..utils.bnb import (
-    Linear8bitLt,
-    LinearFP4,
-    LinearNF4
-)
-
-QuantLinears = (
-    Linear8bitLt,
-    LinearFP4,
-    LinearNF4
+    LinearNF4,
+    QuantLinears,
+    log_bypass
 )
 
 @cache
@@ -24,13 +18,6 @@ def log_wd():
     return logger.warning(
         "Using weight_decompose=True with LoRA (DoRA) will ignore network_dropout."
         "Only rank dropout and module dropout will be applied"
-    )
-
-
-@cache
-def log_bypass():
-    return logger.warning(
-        "Using bnb with LyCORIS will enable force-bypass mode."
     )
 
 
