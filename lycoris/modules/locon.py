@@ -13,11 +13,24 @@ from ..utils.bnb import (
     LinearNF4
 )
 
+QuantLinears = (
+    Linear8bitLt,
+    LinearFP4,
+    LinearNF4
+)
+
 @cache
 def log_wd():
     return logger.warning(
         "Using weight_decompose=True with LoRA (DoRA) will ignore network_dropout."
         "Only rank dropout and module dropout will be applied"
+    )
+
+
+@cache
+def log_bypass():
+    return logger.warning(
+        "Using bnb with LyCORIS will enable force-bypass mode."
     )
 
 
@@ -48,7 +61,6 @@ class LoConModule(ModuleCustomSD):
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
-        assert not (bypass_mode and weight_decompose), "bypass_mode and dora_wd cannot be used together"
 
         if isinstance(org_module, nn.Conv2d):
             in_dim = org_module.in_channels
@@ -67,6 +79,13 @@ class LoConModule(ModuleCustomSD):
             out_dim = org_module.out_features
             self.op = F.linear
             self.extra_args = {}
+
+        if isinstance(org_module, QuantLinears):
+            if not bypass_mode:
+                log_bypass()
+            bypass_mode = True
+        self.bypass_mode = bypass_mode
+        assert not (bypass_mode and weight_decompose), "bypass_mode and dora_wd cannot be used together"
 
         if isinstance(org_module, nn.Conv2d):
             self.isconv = True
@@ -221,7 +240,7 @@ class LoConModule(ModuleCustomSD):
         scale = self.scale * self.multiplier
 
         dtype_device = next(self.parameters())
-        if self.wd:
+        if not self.bypass_mode:
             weight = (
                 self.org_module[0].weight.data.to(dtype_device)
                 + self.make_weight(x.device).to(dtype_device) * scale
@@ -258,11 +277,20 @@ class LoConModule(ModuleCustomSD):
 
 
 if __name__ == "__main__":
-    base = nn.Linear(128, 128)
-    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True)
+    base = nn.Linear(128, 128).cuda()
+    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
     print(lokr)
-    test_input = torch.randn(1, 128)
+    test_input = torch.randn(1, 128).cuda()
     test_output = lokr(test_input)
+    print(test_output.shape)
+
+    base_4bit = LinearNF4(128, 128)
+    base_4bit.load_state_dict(base.state_dict())
+    base_4bit.cuda()
+    qlocon = LoConModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
+    print(qlocon)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = qlocon(test_input)
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
