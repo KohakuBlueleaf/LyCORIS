@@ -7,11 +7,8 @@ import torch.nn.functional as F
 
 from .base import ModuleCustomSD
 from ..logging import logger
-from ..utils.bnb import (
-    LinearNF4,
-    QuantLinears,
-    log_bypass
-)
+from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
+
 
 @cache
 def log_wd():
@@ -72,7 +69,9 @@ class LoConModule(ModuleCustomSD):
                 log_bypass()
             bypass_mode = True
         self.bypass_mode = bypass_mode
-        assert not (bypass_mode and weight_decompose), "bypass_mode and dora_wd cannot be used together"
+        assert not (
+            bypass_mode and weight_decompose
+        ), "bypass_mode and dora_wd cannot be used together"
 
         if isinstance(org_module, nn.Conv2d):
             self.isconv = True

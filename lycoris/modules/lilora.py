@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from .base import ModuleCustomSD
 from ..logging import logger
 
+
 @cache
 def log_wd():
     return logger.warning(
@@ -43,7 +44,9 @@ class LiLoConModule(ModuleCustomSD):
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
-        assert not (bypass_mode and weight_decompose), "bypass_mode and dora_wd cannot be used together"
+        assert not (
+            bypass_mode and weight_decompose
+        ), "bypass_mode and dora_wd cannot be used together"
 
         if isinstance(org_module, nn.Conv2d):
             in_dim = org_module.in_channels

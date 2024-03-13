@@ -7,11 +7,7 @@ import torch.nn.functional as F
 
 from .base import ModuleCustomSD
 from ..logging import logger
-from ..utils.bnb import (
-    LinearNF4,
-    QuantLinears,
-    log_bypass
-)
+from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
 
 
 @cache
@@ -213,7 +209,9 @@ class LokrModule(ModuleCustomSD):
                 log_bypass()
             bypass_mode = True
         self.bypass_mode = bypass_mode
-        assert not (bypass_mode and weight_decompose), "bypass_mode and dora_wd cannot be used together"
+        assert not (
+            bypass_mode and weight_decompose
+        ), "bypass_mode and dora_wd cannot be used together"
 
         self.wd = weight_decompose
         if self.wd:
@@ -389,20 +387,22 @@ class LokrModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            diff_weight = (
-                self.get_weight(self.shape)
-                * self.scalar
-                * self.multiplier
+            diff_weight = self.get_weight(self.shape) * self.scalar * self.multiplier
+            return self.org_forward(x) + self.op(
+                x, diff_weight.view(self.shape), **self.extra_args
             )
-            return self.org_forward(x) + self.op(x, diff_weight.view(self.shape), **self.extra_args)
         else:
             weight = (
-                self.org_module[0].weight.data.to(x.device, dtype=next(self.parameters()).dtype)
-                + self.get_weight(self.shape)
-                * self.scalar
-                * self.multiplier
+                self.org_module[0].weight.data.to(
+                    x.device, dtype=next(self.parameters()).dtype
+                )
+                + self.get_weight(self.shape) * self.scalar * self.multiplier
             )
-            bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
+            bias = (
+                None
+                if self.org_module[0].bias is None
+                else self.org_module[0].bias.data
+            )
 
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
