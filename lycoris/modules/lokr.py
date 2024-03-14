@@ -422,7 +422,12 @@ class LokrModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            return self.org_forward(x) + self.bypass_forward(x)
+            if len(self.shape)>2 and self.shape[2]>1:
+                return self.org_forward(x) + self.op(
+                    x, self.get_weight(self.shape), **self.extra_args
+                )
+            else:
+                return self.org_forward(x) + self.bypass_forward(x)
         else:
             weight = (
                 self.org_module[0].weight.data.to(
