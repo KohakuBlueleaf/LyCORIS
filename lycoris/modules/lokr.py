@@ -221,7 +221,7 @@ class LokrModule(ModuleCustomSD):
             self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
             self.dora_scale = nn.Parameter(
                 torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
-            )
+            ).float()
 
         self.dropout = dropout
         if dropout:
