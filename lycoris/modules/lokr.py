@@ -326,8 +326,8 @@ class LokrModule(ModuleCustomSD):
         return weight
 
     def apply_weight_decompose(self, weight):
-        return (
-            weight / weight.mean(dim=self.dora_mean_dim, keepdim=True) * self.dora_scale
+        return weight * (
+            self.dora_scale / weight.mean(dim=self.dora_mean_dim, keepdim=True)
         )
 
     def custom_state_dict(self):
@@ -422,7 +422,7 @@ class LokrModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            if len(self.shape)>2 and self.shape[2]>1:
+            if len(self.shape) > 2 and self.shape[2] > 1:
                 return self.org_forward(x) + self.op(
                     x, self.get_weight(self.shape), **self.extra_args
                 )
@@ -449,7 +449,7 @@ class LokrModule(ModuleCustomSD):
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
     lokr = LokrModule(
-        "test", base, 1, 4, 1, weight_decompose=False, bypass_mode=True
+        "test", base, 1, 4, 1, weight_decompose=True, factor=8
     ).cuda()
     print(lokr)
     test_input = torch.randn(1, 77, 128).cuda()

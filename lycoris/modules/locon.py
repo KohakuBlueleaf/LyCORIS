@@ -191,8 +191,8 @@ class LoConModule(ModuleCustomSD):
         return weight * self.scalar.to(device)
 
     def apply_weight_decompose(self, weight):
-        return (
-            weight / weight.mean(dim=self.dora_mean_dim, keepdim=True) * self.dora_scale
+        return weight * (
+            self.dora_scale / weight.mean(dim=self.dora_mean_dim, keepdim=True)
         )
 
     def custom_state_dict(self):
