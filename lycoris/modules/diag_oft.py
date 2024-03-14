@@ -128,14 +128,6 @@ class DiagOFTModule(ModuleCustomSD):
         return r
 
     def make_weight(self, scale=1, device=None):
-        if self.rank_dropout and self.training:
-            drop = torch.rand(self.dim, device=device) < self.rank_dropout
-            drop = drop.to(self.oft_blocks.dtype)
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
-        else:
-            drop = 1
-
         r = self.get_r()
         org_weight = self.org_module[0].weight.to(device, dtype=r.dtype)
         org_weight = rearrange(
