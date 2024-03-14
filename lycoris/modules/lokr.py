@@ -448,9 +448,7 @@ class LokrModule(ModuleCustomSD):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
-    lokr = LokrModule(
-        "test", base, 1, 4, 1, weight_decompose=True, factor=8
-    ).cuda()
+    lokr = LokrModule("test", base, 1, 4, 1, weight_decompose=True, factor=8).cuda()
     print(lokr)
     test_input = torch.randn(1, 77, 128).cuda()
     test_output = lokr(test_input)

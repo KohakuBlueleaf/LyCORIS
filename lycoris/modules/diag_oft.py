@@ -180,9 +180,7 @@ class DiagOFTModule(ModuleCustomSD):
             n=self.block_size,
         )
         oft_out = torch.einsum(
-            "k n m, ... k n -> ... k m", 
-            r * scale + (1 - scale) * self.I,
-            org_out
+            "k n m, ... k n -> ... k m", r * scale + (1 - scale) * self.I, org_out
         )
         out = rearrange(oft_out, "... k m -> ... (k m)")
         if self.op == F.conv2d:
@@ -194,7 +192,7 @@ class DiagOFTModule(ModuleCustomSD):
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
         scale = self.multiplier
-        
+
         if self.bypass_mode:
             return self.bypass_forward(x, scale)
         else:
