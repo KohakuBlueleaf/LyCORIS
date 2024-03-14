@@ -9,6 +9,7 @@ from einops import rearrange
 from .base import ModuleCustomSD
 from .lokr import factorization
 from ..logging import logger
+from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
 
 
 @cache
@@ -40,6 +41,7 @@ class DiagOFTModule(ModuleCustomSD):
         rank_dropout_scale=False,
         constrain=0,
         rescaled=False,
+        bypass_mode=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -62,7 +64,13 @@ class DiagOFTModule(ModuleCustomSD):
         else:
             raise NotImplementedError
 
-        out_dim = org_module.weight.shape[0]
+        if isinstance(org_module, QuantLinears):
+            if not bypass_mode:
+                log_bypass()
+            bypass_mode = True
+        self.bypass_mode = bypass_mode
+
+        out_dim = self.dim
         self.block_size, self.block_num = factorization(out_dim, lora_dim)
         # block_num > block_size
         self.rescaled = rescaled
@@ -160,12 +168,61 @@ class DiagOFTModule(ModuleCustomSD):
 
         return scaled, orig_norm * ratio
 
+    def bypass_forward(self, x, scale=1):
+        r = self.get_r()
+        org_out = self.org_forward(x)
+        if self.op == F.conv2d:
+            org_out = org_out.transpose(1, -1)
+        org_out = rearrange(
+            org_out,
+            "... (k n) ->... k n",
+            k=self.block_num,
+            n=self.block_size,
+        )
+        oft_out = torch.einsum(
+            "k n m, ... k n -> ... k m", 
+            r * scale + (1 - scale) * self.I,
+            org_out
+        )
+        out = rearrange(oft_out, "... k m -> ... (k m)")
+        if self.op == F.conv2d:
+            out = out.transpose(1, -1)
+        return out
+
     def forward(self, x):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
         scale = self.multiplier
+        
+        if self.bypass_mode:
+            return self.bypass_forward(x, scale)
+        else:
+            w = self.make_weight(scale, x.device)
+            kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
+            return self.op(x, **kw_dict)
 
-        w = self.make_weight(scale, x.device)
-        kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
-        return self.op(x, **kw_dict)
+
+if __name__ == "__main__":
+    base = nn.Linear(128, 128).cuda()
+    lokr = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(lokr)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = lokr(test_input)
+    print(test_output.shape)
+
+    base_4bit = LinearNF4(128, 128)
+    base_4bit.load_state_dict(base.state_dict())
+    base_4bit.cuda()
+    qlocon = DiagOFTModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
+    print(qlocon)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = qlocon(test_input)
+    print(test_output.shape)
+
+    base = nn.Conv2d(128, 128, 3, 1, 1)
+    lokr = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+    print(lokr)
+    test_input = torch.randn(1, 128, 16, 16)
+    test_output = lokr(test_input)
+    print(test_output.shape)
