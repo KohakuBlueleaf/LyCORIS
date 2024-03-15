@@ -5,7 +5,7 @@
 #### New Algo
 
 * DoRA
-  * Ref: [DoRA: Weight-Decomposed Low-Rank Adaptation]()
+  * Ref: [DoRA: Weight-Decomposed Low-Rank Adaptation](https://github.com/KohakuBlueleaf/LyCORIS)
 * Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
   * DoRA/DoHa/DoKr will require smaller Learning rate!
 
