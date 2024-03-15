@@ -106,7 +106,7 @@ def extract_step(file_path):
         name = "-".join(filename.split("-")[:-1])
         return name, int(step)
     else:
-        return name, ""
+        return filename, ""
 
 
 def gather_files_from_list(
