@@ -1,5 +1,5 @@
 from functools import cache
-from math import log2, ceil
+from math import log2
 
 import torch
 import torch.nn as nn
@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .base import ModuleCustomSD
-from lycoris.logging import logger
+from ..logging import logger
+from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
 
 
 @cache
@@ -67,6 +68,7 @@ class ButterflyOFTModule(ModuleCustomSD):
         rank_dropout_scale=False,
         constrain=0,
         rescaled=False,
+        bypass_mode=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -89,7 +91,13 @@ class ButterflyOFTModule(ModuleCustomSD):
         else:
             raise NotImplementedError
 
-        out_dim = org_module.weight.shape[0]
+        if isinstance(org_module, QuantLinears):
+            if not bypass_mode:
+                log_bypass()
+            bypass_mode = True
+        self.bypass_mode = bypass_mode
+
+        out_dim = self.dim
         b, m_exp = butterfly_factor(out_dim, lora_dim)
         self.block_size = b
         self.block_num = m_exp
@@ -146,14 +154,6 @@ class ButterflyOFTModule(ModuleCustomSD):
         return r
 
     def make_weight(self, scale=1, device=None):
-        if self.rank_dropout and self.training:
-            drop = torch.rand(self.dim, device=device) < self.rank_dropout
-            drop = drop.to(self.oft_blocks.dtype)
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
-        else:
-            drop = 1
-
         m = self.boft_m
         b = self.boft_b
         r_b = b // 2
@@ -173,10 +173,7 @@ class ButterflyOFTModule(ModuleCustomSD):
             inp = rearrange(inp, "d b ... -> (d b) ...")
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
 
-        weight = inp
-        if self.rescaled:
-            weight = self.rescale * weight
-        return weight * drop
+        return inp
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
@@ -185,11 +182,33 @@ class ButterflyOFTModule(ModuleCustomSD):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired / norm
 
-        scaled = ratio.item() != 1.0
+        scaled = norm != desired
         if scaled:
             self.oft_blocks *= ratio
 
         return scaled, orig_norm * ratio
+
+    def bypass_forward(self, x, scale=1):
+        m = self.boft_m
+        b = self.boft_b
+        r_b = b // 2
+        r = self.get_r()
+        inp = self.org_forward(x)
+
+        for i in range(m):
+            bi = r[i]  # b_num, b_size, b_size
+            if i == 0:
+                # Apply multiplier/scale and rescale into first weight
+                bi = bi * scale + (1 - scale) * self.I
+                if self.rescaled:
+                    bi = bi * self.rescale
+            inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
+            inp = rearrange(inp, "... (d b) -> ... d b", b=b)
+            inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
+            inp = rearrange(inp, "... d b -> ... (d b)")
+            inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
+
+        return inp
 
     def forward(self, x):
         if self.module_dropout and self.training:
@@ -197,17 +216,39 @@ class ButterflyOFTModule(ModuleCustomSD):
                 return self.org_forward(x)
         scale = self.multiplier
 
-        w = self.make_weight(scale, x.device)
-        kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
-        return self.op(x, **kw_dict)
+        if self.bypass_mode:
+            return self.bypass_forward(x, scale)
+        else:
+            w = self.make_weight(scale, x.device)
+            kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
+            return self.op(x, **kw_dict)
 
 
 if __name__ == "__main__":
-    dim = 320
-    test_layer = nn.Linear(dim, dim)
-    test_layer.weight = nn.Parameter(torch.eye(dim))
-    test_boft = ButterflyOFTModule("test", test_layer, lora_dim=16)
-    test_boft.oft_blocks = nn.Parameter(torch.randn_like(test_boft.oft_blocks))
+    base = nn.Linear(128, 128).cuda()
+    lokr = ButterflyOFTModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(lokr)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = lokr(test_input)
+    print(test_output.shape)
+    print(F.mse_loss(test_output, lokr.bypass_forward(test_input)))
 
-    print(test_boft.make_weight(1, "cpu").shape)
-    print(torch.count_nonzero(test_boft.make_weight(1, "cpu")), dim * dim)
+    base_4bit = LinearNF4(128, 128)
+    base_4bit.load_state_dict(base.state_dict())
+    base_4bit.cuda()
+    qlocon = ButterflyOFTModule(
+        "test", base_4bit, 1, 4, 1, weight_decompose=False
+    ).cuda()
+    print(qlocon)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = qlocon(test_input)
+    print(test_output.shape)
+
+    base = nn.Conv2d(128, 128, 3, 1, 1)
+    lokr = ButterflyOFTModule(
+        "test", base, 1, 4, 1, weight_decompose=True, use_tucker=True
+    )
+    print(lokr)
+    test_input = torch.randn(1, 128, 16, 16)
+    test_output = lokr(test_input)
+    print(test_output.shape)

@@ -19,7 +19,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             1,
             down.size(0),
             float(alpha),
-            use_cp=mid is not None,
+            use_tucker=mid is not None,
         )
         module.lora_up.weight.data.copy_(up)
         module.lora_down.weight.data.copy_(down)
@@ -28,7 +28,12 @@ def make_module(lyco_type, params, lora_name, orig_module):
     elif lyco_type == "hada":
         w1a, w1b, w2a, w2b, t1, t2, alpha = params
         module = LohaModule(
-            lora_name, orig_module, 1, w1b.size(0), float(alpha), use_cp=t1 is not None
+            lora_name,
+            orig_module,
+            1,
+            w1b.size(0),
+            float(alpha),
+            use_tucker=t1 is not None,
         )
         module.hada_w1_a.copy_(w1a)
         module.hada_w1_b.copy_(w1b)
@@ -75,7 +80,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             1,
             lora_dim,
             float(alpha),
-            use_cp=t2 is not None,
+            use_tucker=t2 is not None,
             decompose_both=w1 is None and w2 is None,
             factor=factor,
         )

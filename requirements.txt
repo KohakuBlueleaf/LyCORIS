@@ -1,5 +1,7 @@
 torch
 safetensors
-diffusers[torch]==0.10.2
+diffusers[torch]
 transformers
+toml
+einops
 git+https://github.com/kohya-ss/sd-scripts.git

@@ -1,5 +1,30 @@
 # Change Log
 
+## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
+
+#### New Algo
+
+* DoRA
+  * Ref: [DoRA: Weight-Decomposed Low-Rank Adaptation]()
+* Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
+  * DoRA/DoHa/DoKr will require smaller Learning rate!
+
+#### New Features
+
+* Support "bypass" (a.k.a. adapter) mode for LoHa/LoKr/OFT/BOFT
+  * LoHa will require 2xFLOPs since we rebuild full diff weight and then do one more forward.
+  * LoKr, OFT, BOFT should be more efficient than LoHa in bypass mode.
+* Support [bnb 8bit/4bit Linear layer](https://github.com/TimDettmers/bitsandbytes) (a.k.a. QLyCORIS) with LoHa/LoKr/OFT/BOFT.
+  * This will force module to enable bypass mode.
+
+#### Fixes, slight changes
+
+* Refine some details about code quality. Based on the report from GitRoll. (Thx you gitroll!)
+* Remove redundant calculation in BOFT
+* rank_dropout has been removed from OFT/BOFT temporarily untill we ensure how to apply it.
+* Fix bugs in lokr when `lokr_w1_a` not exist.
+* Fix bugs in conversion scritps.
+
 ## 2024/02/18 update to 2.1.0
 
 #### New Algo

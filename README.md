@@ -45,7 +45,7 @@ After sd-webui 1.5.0, LyCORIS models are officially supported by the built-in Lo
 
 When we add new model types, we will always make sure they can be used with the newest version of sd-webui.
 
-As for sd-webui with version < 1.5.0, please check this [extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris).
+As for sd-webui with version < 1.5.0 or sd-webui-forge, please check this [extension](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris).
 
 #### Others
 
@@ -64,7 +64,7 @@ There are three different ways to train LyCORIS models.
 
 - With [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section)
 - With [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion)
-- With your own script by using LyCORIS as standalone wrappers for any pytorch modules.
+- With your own script by using LyCORIS as standalone wrappers for **ANY** pytorch modules.
 
 In any case, please install this package in the corresponding virtual environment. You can either install it
 
@@ -153,6 +153,10 @@ forward_with_lyco = your_model(x)
 
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
+#### Bitsandbytes support
+
+See [bnb_example.py](bnb_example.py) for example. Basically as same as standalone wrapper.
+
 #### Graphical interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
@@ -210,10 +214,10 @@ This script allows you to use the LyCORIS models trained with HCP-Diffusion in s
 
 ```bash
 python3 batch_hcp_convert.py \
---network_path /path/to/ckpts \
---dst_dir /path/to/stable-diffusion-webui/models/Lora \
---output_prefix something \
---auto_scale_alpha --to_webui
+  --network_path /path/to/ckpts \
+  --dst_dir /path/to/stable-diffusion-webui/models/Lora \
+  --output_prefix something \
+  --auto_scale_alpha --to_webui
 ```
 
 See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
@@ -224,10 +228,10 @@ This script is particularly useful in the case of pivotal tuning.
 
 ```bash
 python3 batch_bundle_convert.py \
---network_path /path/to/sd-webui-ssd/models/Lora  \
---emb_path /path/to/ckpts \
---dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
---to_bundle --verbose 2 
+  --network_path /path/to/sd-webui-ssd/models/Lora  \
+  --emb_path /path/to/ckpts \
+  --dst_dir /path/to/sd-webui-ssd/models/Lora/bundle \
+  --to_bundle --verbose 2 
 ```
 
 See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
@@ -236,30 +240,30 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-## 2024/02/18 update to 2.1.0
+## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
 
 #### New Algo
 
-* [BOFT (Butterfly OFT)](https://arxiv.org/abs/2311.06243)
+* DoRA
+  * Ref: [DoRA: Weight-Decomposed Low-Rank Adaptation]()
+* Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
+  * DoRA/DoHa/DoKr will require smaller Learning rate!
 
-#### Improvements
+#### New Features
 
-* Faster, better extract script
-* support kohya-ss/sd-scripts image gen
-* support regex name in kohya-ss/sd-scripts
-* support resume on:
-  * full
-  * loha
-  * oft
-  * boft
-* Add logger into LyCORIS
+* Support "bypass" (a.k.a. adapter) mode for LoHa/LoKr/OFT/BOFT
+  * LoHa will require 2xFLOPs since we rebuild full diff weight and then do one more forward.
+  * LoKr, OFT, BOFT should be more efficient than LoHa in bypass mode.
+* Support [bnb 8bit/4bit Linear layer](https://github.com/TimDettmers/bitsandbytes) (a.k.a. QLyCORIS) with LoHa/LoKr/OFT/BOFT.
+  * This will force module to enable bypass mode.
 
 #### Fixes, slight changes
 
-* Update HCP convert for the case where only UNet or TE is trained.
-* Change arg names for conversion scripts.
-* Fix wrong TE prefix in merge scripts.
-* Fix warnings and confusing logging.
+* Refine some details about code quality. Based on the report from GitRoll. (Thx you gitroll!)
+* Remove redundant calculation in BOFT
+* rank_dropout has been removed from OFT/BOFT temporarily untill we ensure how to apply it.
+* Fix bugs in lokr when `lokr_w1_a` not exist.
+* Fix bugs in conversion scritps.
 
 ## Todo list
 

@@ -1,5 +1,5 @@
-from typing import *
 import re
+from typing import Dict, Tuple, Union
 
 import numpy as np
 
@@ -394,7 +394,8 @@ def get_module(lyco_state_dict: Dict, lora_name):
         down = lyco_state_dict[f"{lora_name}.lora_down.weight"]
         mid = lyco_state_dict.get(f"{lora_name}.lora_mid.weight", None)
         alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        return "locon", (up, down, mid, alpha)
+        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
+        return "locon", (up, down, mid, alpha, dora_scale)
     elif f"{lora_name}.hada_w1_a" in lyco_state_dict:
         w1a = lyco_state_dict[f"{lora_name}.hada_w1_a"]
         w1b = lyco_state_dict[f"{lora_name}.hada_w1_b"]
@@ -403,7 +404,8 @@ def get_module(lyco_state_dict: Dict, lora_name):
         t1 = lyco_state_dict.get(f"{lora_name}.hada_t1", None)
         t2 = lyco_state_dict.get(f"{lora_name}.hada_t2", None)
         alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        return "hada", (w1a, w1b, w2a, w2b, t1, t2, alpha)
+        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
+        return "hada", (w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale)
     elif f"{lora_name}.weight" in lyco_state_dict:
         weight = lyco_state_dict[f"{lora_name}.weight"]
         on_input = lyco_state_dict.get(f"{lora_name}.on_input", False)
@@ -421,7 +423,8 @@ def get_module(lyco_state_dict: Dict, lora_name):
         t1 = lyco_state_dict.get(f"{lora_name}.lokr_t1", None)
         t2 = lyco_state_dict.get(f"{lora_name}.lokr_t2", None)
         alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        return "kron", (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha)
+        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
+        return "kron", (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, dora_scale)
     elif f"{lora_name}.diff" in lyco_state_dict:
         diff = lyco_state_dict[f"{lora_name}.diff"]
         diff_b = lyco_state_dict.get(f"{lora_name}.diff_b", None)
@@ -434,15 +437,23 @@ def get_module(lyco_state_dict: Dict, lora_name):
         return "None", ()
 
 
-def cp_weight_from_conv(up, down, mid):
+def tucker_weight_from_conv(up, down, mid):
     up = up.reshape(up.size(0), up.size(1))
     down = down.reshape(down.size(0), down.size(1))
     return torch.einsum("m n w h, i m, n j -> i j w h", mid, up, down)
 
 
-def cp_weight(wa, wb, t):
+def tucker_weight(wa, wb, t):
     temp = torch.einsum("i j k l, j r -> i r k l", t, wb)
     return torch.einsum("i j k l, i r -> r j k l", temp, wa)
+
+
+def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
+    dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+    weight = org_weight + rebuild
+    merged_scale1 = weight / weight.mean(dim=dora_mean_dim, keepdim=True) * dora_scale
+    diff_weight = merged_scale1 - org_weight
+    return org_weight + diff_weight * scale
 
 
 @torch.no_grad()
@@ -452,29 +463,36 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
     merged = orig_weight
     merged_bias = orig_bias
     if module_type == "locon":
-        up, down, mid, alpha = params
+        up, down, mid, alpha, dora_scale = params
         if alpha is not None:
             scale *= alpha / up.size(1)
         if mid is not None:
-            rebuild = cp_weight_from_conv(up, down, mid)
+            rebuild = tucker_weight_from_conv(up, down, mid)
         else:
             rebuild = up.reshape(up.size(0), -1) @ down.reshape(down.size(0), -1)
-        merged = orig_weight + rebuild.reshape(orig_weight.shape) * scale
+        rebuild = rebuild.reshape(orig_weight.shape)
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del up, down, mid, alpha, params, rebuild
     elif module_type == "hada":
-        w1a, w1b, w2a, w2b, t1, t2, alpha = params
+        w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale = params
         if alpha is not None:
             scale *= alpha / w1b.size(0)
         if t1 is not None:
-            rebuild1 = cp_weight(w1a, w1b, t1)
+            rebuild1 = tucker_weight(w1a, w1b, t1)
         else:
             rebuild1 = w1a @ w1b
         if t2 is not None:
-            rebuild2 = cp_weight(w2a, w2b, t2)
+            rebuild2 = tucker_weight(w2a, w2b, t2)
         else:
             rebuild2 = w2a @ w2b
         rebuild = (rebuild1 * rebuild2).reshape(orig_weight.shape)
-        merged = orig_weight + rebuild * scale
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del w1a, w1b, w2a, w2b, t1, t2, alpha, params, rebuild, rebuild1, rebuild2
     elif module_type == "ia3":
         weight, on_input = params
@@ -483,24 +501,27 @@ def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
         merged = orig_weight + weight * orig_weight * scale
         del weight, on_input, params
     elif module_type == "kron":
-        w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha = params
+        w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, dora_scale = params
         if alpha is not None and (w1b is not None or w2b is not None):
             scale *= alpha / (w1b.size(0) if w1b else w2b.size(0))
         if w1a is not None and w1b is not None:
             if t1 is not None:
-                w1 = cp_weight(w1a, w1b, t1)
+                w1 = tucker_weight(w1a, w1b, t1)
             else:
                 w1 = w1a @ w1b
         if w2a is not None and w2b is not None:
             if t2 is not None:
-                w2 = cp_weight(w2a, w2b, t2)
+                w2 = tucker_weight(w2a, w2b, t2)
             else:
                 w2 = w2a @ w2b
         if len(w2.shape) == 4:
             w1 = w1.unsqueeze(2).unsqueeze(2)
         w2 = w2.contiguous()
         rebuild = torch.kron(w1, w2).reshape(orig_weight.shape)
-        merged = orig_weight + rebuild * scale
+        if dora_scale is None:
+            merged = orig_weight + rebuild * scale
+        else:
+            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
         del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
     elif module_type == "full":
         rebuild = params[0].reshape(orig_weight.shape)

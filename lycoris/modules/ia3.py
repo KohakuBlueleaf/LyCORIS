@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .base import ModuleCustomSD
 
@@ -21,7 +20,7 @@ class IA3Module(ModuleCustomSD):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
         super().__init__()
         self.lora_name = lora_name
-        self.cp = False
+        self.tucker = False
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":

@@ -48,7 +48,7 @@ def factorization(dimension: int, factor: int = -1) -> tuple[int, int]:
     return m, n
 
 
-def make_weight_cp(t, wa, wb):
+def make_weight_tucker(t, wa, wb):
     rebuild2 = torch.einsum("i j k l, i p, j r -> p r k l", t, wa, wb)  # [c, d, k1, k2]
     return rebuild2
 
@@ -216,7 +216,7 @@ class LokrModule(ModuleCustomSD):
                 self.lokr_w2
                 if self.use_w2
                 else (
-                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
                     if self.tucker
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
@@ -237,7 +237,7 @@ class LokrModule(ModuleCustomSD):
                 self.lokr_w2
                 if self.use_w2
                 else (
-                    make_weight_cp(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
                     if self.tucker
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
@@ -261,7 +261,7 @@ class LokrModule(ModuleCustomSD):
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu() / norm.cpu()
 
-        scaled = ratio.item() != 1.0
+        scaled = norm != desired
         if scaled:
             modules = 4 - self.use_w1 - self.use_w2 + (not self.use_w2 and self.tucker)
             if self.use_w1:

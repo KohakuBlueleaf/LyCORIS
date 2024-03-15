@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .base import ModuleCustomSD
 
@@ -30,7 +29,7 @@ class GLoRAModule(ModuleCustomSD):
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
-        self.cp = False
+        self.tucker = False
 
         if isinstance(org_module, nn.Conv2d):
             assert org_module.kernel_size == (1, 1)

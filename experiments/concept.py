@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..lycoris.kohya_utils import *
+from ..lycoris.kohya.utils import *
 
 
 class ConceptModule(nn.Module):
@@ -46,13 +46,6 @@ class ConceptModule(nn.Module):
 
     def forward(self, x):
         bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
-        return self.op(
-            x,
-            self.org_module[0].weight.data
-            * (1 + self.concept_mask * self.concept_neuron),
-            bias,
-            **self.extra_args,
-        )
         if torch.max(self.concept_mask) - torch.min(self.concept_mask) < 0.1:
             return self.op(
                 x,
