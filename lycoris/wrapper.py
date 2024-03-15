@@ -69,6 +69,10 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+
+    if unbalanced_factorization:
+        logger.info("Unbalanced factorization for LoKr is enabled")
 
     if bypass_mode:
         logger.info("Bypass mode is enabled")
@@ -133,6 +137,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         weight_decompose=weight_decompose,
         full_matrix=full_matrix,
         bypass_mode=bypass_mode,
+        unbalanced_factorization=unbalanced_factorization,
     )
 
     if algo == "dylora":

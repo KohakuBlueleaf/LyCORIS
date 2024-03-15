@@ -105,6 +105,7 @@ class LokrModule(ModuleCustomSD):
         weight_decompose=False,
         full_matrix=False,
         bypass_mode=False,
+        unbalanced_factorization=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -126,6 +127,8 @@ class LokrModule(ModuleCustomSD):
 
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
+            if unbalanced_factorization:
+                out_l, out_k = out_k, out_l
             shape = ((out_l, out_k), (in_m, in_n), *k_size)  # ((a, b), (c, d), *k_size)
             self.tucker = use_tucker and k_size != (1, 1)
             if (
@@ -181,6 +184,8 @@ class LokrModule(ModuleCustomSD):
 
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
+            if unbalanced_factorization:
+                out_l, out_k = out_k, out_l
             shape = (
                 (out_l, out_k),
                 (in_m, in_n),
