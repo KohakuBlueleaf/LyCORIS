@@ -153,6 +153,10 @@ forward_with_lyco = your_model(x)
 
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
+#### Bitsandbytes support
+
+See [bnb_example.py](bnb_example.py) for example. Basically as same as standalone wrapper.
+
 #### Graphical interfaces and Colabs (via kohya trainer)
 
 You can also train LyCORIS with the following graphical interfaces
