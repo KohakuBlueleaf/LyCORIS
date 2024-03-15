@@ -292,10 +292,10 @@ class LycorisNetwork(torch.nn.Module):
                     **kwargs,
                 )
             lora = None
-            if module.__class__.__name__ == "Linear" and lora_dim > 0:
+            if isinstance(module, torch.nn.Linear) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
-            elif module.__class__.__name__ == "Conv2d":
+            elif isinstance(module, torch.nn.Conv2d):
                 k_size, *_ = module.kernel_size
                 if k_size == 1 and lora_dim > 0:
                     dim = dim or lora_dim
