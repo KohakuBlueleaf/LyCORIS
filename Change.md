@@ -1,6 +1,6 @@
 # Change Log
 
-## 2024/03/xx update to 2.2.0
+## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
 
 #### New Algo
 
@@ -16,8 +16,6 @@
   * LoKr, OFT, BOFT should be more efficient than LoHa in bypass mode.
 * Support [bnb 8bit/4bit Linear layer](https://github.com/TimDettmers/bitsandbytes) (a.k.a. QLyCORIS) with LoHa/LoKr/OFT/BOFT.
   * This will force module to enable bypass mode.
-
-#### Improvements
 
 #### Fixes, slight changes
 

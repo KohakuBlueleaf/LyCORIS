@@ -236,30 +236,30 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-## 2024/02/18 update to 2.1.0
+## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
 
 #### New Algo
 
-* [BOFT (Butterfly OFT)](https://arxiv.org/abs/2311.06243)
+* DoRA
+  * Ref: [DoRA: Weight-Decomposed Low-Rank Adaptation]()
+* Weight decompose for LoHa and LoKr. (A.K.A DoHa/DoKr)
+  * DoRA/DoHa/DoKr will require smaller Learning rate!
 
-#### Improvements
+#### New Features
 
-* Faster, better extract script
-* support kohya-ss/sd-scripts image gen
-* support regex name in kohya-ss/sd-scripts
-* support resume on:
-  * full
-  * loha
-  * oft
-  * boft
-* Add logger into LyCORIS
+* Support "bypass" (a.k.a. adapter) mode for LoHa/LoKr/OFT/BOFT
+  * LoHa will require 2xFLOPs since we rebuild full diff weight and then do one more forward.
+  * LoKr, OFT, BOFT should be more efficient than LoHa in bypass mode.
+* Support [bnb 8bit/4bit Linear layer](https://github.com/TimDettmers/bitsandbytes) (a.k.a. QLyCORIS) with LoHa/LoKr/OFT/BOFT.
+  * This will force module to enable bypass mode.
 
 #### Fixes, slight changes
 
-* Update HCP convert for the case where only UNet or TE is trained.
-* Change arg names for conversion scripts.
-* Fix wrong TE prefix in merge scripts.
-* Fix warnings and confusing logging.
+* Refine some details about code quality. Based on the report from GitRoll. (Thx you gitroll!)
+* Remove redundant calculation in BOFT
+* rank_dropout has been removed from OFT/BOFT temporarily untill we ensure how to apply it.
+* Fix bugs in lokr when `lokr_w1_a` not exist.
+* Fix bugs in conversion scritps.
 
 ## Todo list
 
