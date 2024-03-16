@@ -133,7 +133,6 @@ class LoConModule(ModuleCustomSD):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar: torch.FloatTensor
             self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
@@ -225,11 +224,11 @@ class LoConModule(ModuleCustomSD):
                 return self.org_forward(x)
         scale = self.scale * self.multiplier
 
-        dtype_device = next(self.parameters())
+        dtype = next(self.parameters()).dtype
         if not self.bypass_mode:
             weight = (
-                self.org_module[0].weight.data.to(dtype_device)
-                + self.make_weight(x.device).to(dtype_device) * scale
+                self.org_module[0].weight.data.to(device=x.device, dtype=dtype)
+                + self.make_weight(x.device).to(device=x.device, dtype=dtype) * scale
             )
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
