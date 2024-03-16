@@ -109,9 +109,15 @@ class LoConModule(ModuleCustomSD):
         self.wd = weight_decompose
         if self.wd:
             org_weight: nn.Parameter = org_module.weight
-            self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+            self.dora_norm_dims = org_weight.dim() - 1
             self.dora_scale = nn.Parameter(
-                torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
+                torch.norm(
+                    org_weight.transpose(1, 0).reshape(org_weight.shape[1], -1),
+                    dim=1,
+                    keepdim=True,
+                )
+                .reshape(org_weight.shape[1], *[1] * self.dora_norm_dims)
+                .transpose(1, 0)
             ).float()
 
         if dropout:
@@ -190,9 +196,15 @@ class LoConModule(ModuleCustomSD):
         return weight * self.scalar.to(device)
 
     def apply_weight_decompose(self, weight):
-        return weight * (
-            self.dora_scale / weight.mean(dim=self.dora_mean_dim, keepdim=True)
+        weight_norm = (
+            weight.transpose(0, 1)
+            .reshape(weight.shape[1], -1)
+            .norm(dim=1, keepdim=True)
+            .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
+            .transpose(0, 1)
         )
+
+        return weight * (self.dora_scale / weight_norm)
 
     def custom_state_dict(self):
         destination = {}
