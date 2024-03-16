@@ -223,9 +223,15 @@ class LokrModule(ModuleCustomSD):
         self.wd = weight_decompose
         if self.wd:
             org_weight: nn.Parameter = org_module.weight
-            self.dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+            self.dora_norm_dims = org_weight.dim() - 1
             self.dora_scale = nn.Parameter(
-                torch.mean(org_weight, dim=self.dora_mean_dim, keepdim=True)
+                torch.norm(
+                    org_weight.transpose(1, 0).reshape(org_weight.shape[1], -1),
+                    dim=1,
+                    keepdim=True,
+                )
+                .reshape(org_weight.shape[1], *[1] * self.dora_norm_dims)
+                .transpose(1, 0)
             ).float()
 
         self.dropout = dropout
@@ -331,9 +337,15 @@ class LokrModule(ModuleCustomSD):
         return weight
 
     def apply_weight_decompose(self, weight):
-        return weight * (
-            self.dora_scale / weight.mean(dim=self.dora_mean_dim, keepdim=True)
+        weight_norm = (
+            weight.transpose(0, 1)
+            .reshape(weight.shape[1], -1)
+            .norm(dim=1, keepdim=True)
+            .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
+            .transpose(0, 1)
         )
+
+        return weight * (self.dora_scale / weight_norm)
 
     def custom_state_dict(self):
         destination = {}
@@ -458,6 +470,17 @@ if __name__ == "__main__":
     test_input = torch.randn(1, 77, 128).cuda()
     test_output = lokr(test_input)
     print(test_output.shape)
+
+    # opt = torch.optim.AdamW(lokr.parameters(), lr=1e-2)
+    # for _ in range(100):
+    #     x = torch.randn(128, 128).cuda()
+    #     t = x / 10
+    #     y = lokr(x)
+    #     loss = F.mse_loss(y, t)
+    #     loss.backward()
+    #     opt.step()
+    #     opt.zero_grad()
+    #     print(loss.item())
 
     base_4bit = LinearNF4(128, 128)
     base_4bit.load_state_dict(base.state_dict())
