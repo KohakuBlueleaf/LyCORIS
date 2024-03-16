@@ -352,7 +352,7 @@ class LokrModule(ModuleCustomSD):
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
-        orig_norm = self.get_weight().norm()
+        orig_norm = self.get_weight(self.shape).norm()
         norm = torch.clamp(orig_norm, max_norm / 2)
         desired = torch.clamp(norm, max=max_norm)
         ratio = desired.cpu() / norm.cpu()
