@@ -75,10 +75,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
 
     if weight_decompose:
         logger.info("Weight decomposition is enabled")
-        logger.warning(
-            "Weight Decomposition will need lower Learning Rate. "
-            "If you met high loss or NaN problem, try to use lower LR."
-        )
 
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
