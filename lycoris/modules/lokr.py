@@ -344,7 +344,7 @@ class LokrModule(ModuleCustomSD):
             .norm(dim=1, keepdim=True)
             .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
             .transpose(0, 1)
-        )
+        ) + torch.finfo(weight.dtype).eps
 
         return weight * (self.dora_scale.to(weight.device) / weight_norm)
 
