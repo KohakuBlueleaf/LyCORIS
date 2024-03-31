@@ -12,7 +12,7 @@ from .ia3 import IA3Module
 def make_module(lyco_type, params, lora_name, orig_module):
     module = None
     if lyco_type == "locon":
-        up, down, mid, alpha = params
+        up, down, mid, alpha, dora_scale = params
         module = LoConModule(
             lora_name,
             orig_module,
@@ -20,13 +20,16 @@ def make_module(lyco_type, params, lora_name, orig_module):
             down.size(0),
             float(alpha),
             use_tucker=mid is not None,
+            weight_decompose=dora_scale is not None,
         )
         module.lora_up.weight.data.copy_(up)
         module.lora_down.weight.data.copy_(down)
         if mid is not None:
             module.lora_mid.weight.data.copy_(mid)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
     elif lyco_type == "hada":
-        w1a, w1b, w2a, w2b, t1, t2, alpha = params
+        w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale = params
         module = LohaModule(
             lora_name,
             orig_module,
@@ -34,6 +37,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             w1b.size(0),
             float(alpha),
             use_tucker=t1 is not None,
+            weight_decompose=dora_scale is not None,
         )
         module.hada_w1_a.copy_(w1a)
         module.hada_w1_b.copy_(w1b)
@@ -42,8 +46,10 @@ def make_module(lyco_type, params, lora_name, orig_module):
         if t1 is not None:
             module.hada_t1.copy_(t1)
             module.hada_t2.copy_(t2)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
     elif lyco_type == "kron":
-        w1, w1a, w1b, w2, w2a, w2b, _, t2, alpha = params
+        w1, w1a, w1b, w2, w2a, w2b, _, t2, alpha, dora_scale = params
         if w1a is not None:
             lora_dim = w1a.size(1)
         elif w2a is not None:
@@ -83,6 +89,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             use_tucker=t2 is not None,
             decompose_both=w1 is None and w2 is None,
             factor=factor,
+            weight_decompose=dora_scale is not None,
         )
         if w1 is not None:
             module.lokr_w1.copy_(w1)
@@ -96,6 +103,8 @@ def make_module(lyco_type, params, lora_name, orig_module):
             module.lokr_w2_b.copy_(w2b)
         if t2 is not None:
             module.lokr_t2.copy_(t2)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
     elif lyco_type == "norm":
         w_norm, b_norm = params
         module = NormModule(
