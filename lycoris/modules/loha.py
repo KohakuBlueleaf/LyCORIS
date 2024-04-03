@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 from .base import ModuleCustomSD
 from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
@@ -102,6 +103,7 @@ class LohaModule(ModuleCustomSD):
         rank_dropout_scale=False,
         weight_decompose=False,
         bypass_mode=False,
+        rs_lora=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -109,6 +111,7 @@ class LohaModule(ModuleCustomSD):
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
+        self.rs_lora = rs_lora
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":
