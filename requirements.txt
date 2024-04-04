@@ -5,3 +5,4 @@ transformers
 toml
 einops
 git+https://github.com/kohya-ss/sd-scripts.git
+pillow>=10.3.0 # not directly required, pinned by Snyk to avoid a vulnerability
