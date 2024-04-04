@@ -75,6 +75,10 @@ def create_network(
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
+    unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+
+    if unbalanced_factorization:
+        logger.info("Unbalanced factorization for LoKr is enabled")
 
     if bypass_mode:
         logger.info("Bypass mode is enabled")
@@ -143,6 +147,7 @@ def create_network(
             full_matrix=full_matrix,
             bypass_mode=bypass_mode,
             rs_lora=rs_lora
+            unbalanced_factorization=unbalanced_factorization,
         )
 
     if algo == "dylora":

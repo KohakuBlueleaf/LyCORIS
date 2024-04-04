@@ -106,6 +106,7 @@ class LokrModule(ModuleCustomSD):
         full_matrix=False,
         bypass_mode=False,
         rs_lora=False,
+        unbalanced_factorization=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -128,6 +129,8 @@ class LokrModule(ModuleCustomSD):
 
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
+            if unbalanced_factorization:
+                out_l, out_k = out_k, out_l
             shape = ((out_l, out_k), (in_m, in_n), *k_size)  # ((a, b), (c, d), *k_size)
             self.tucker = use_tucker and k_size != (1, 1)
             if (
@@ -183,6 +186,8 @@ class LokrModule(ModuleCustomSD):
 
             in_m, in_n = factorization(in_dim, factor)
             out_l, out_k = factorization(out_dim, factor)
+            if unbalanced_factorization:
+                out_l, out_k = out_k, out_l
             shape = (
                 (out_l, out_k),
                 (in_m, in_n),
@@ -340,15 +345,16 @@ class LokrModule(ModuleCustomSD):
         return weight
 
     def apply_weight_decompose(self, weight):
+        weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
             .reshape(weight.shape[1], -1)
             .norm(dim=1, keepdim=True)
             .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
             .transpose(0, 1)
-        )
+        ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale / weight_norm)
+        return weight * (self.dora_scale.to(weight.device) / weight_norm)
 
     def custom_state_dict(self):
         destination = {}

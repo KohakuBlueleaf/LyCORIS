@@ -449,9 +449,17 @@ def tucker_weight(wa, wb, t):
 
 
 def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
-    dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
+    dora_norm_dims = org_weight.dim() - 1
     weight = org_weight + rebuild
-    merged_scale1 = weight / weight.mean(dim=dora_mean_dim, keepdim=True) * dora_scale
+    weight = weight.to(dora_scale.dtype)
+    weight_norm = (
+        weight.transpose(0, 1)
+        .reshape(weight.shape[1], -1)
+        .norm(dim=1, keepdim=True)
+        .reshape(weight.shape[1], *[1] * dora_norm_dims)
+        .transpose(0, 1)
+    )
+    merged_scale1 = weight / weight_norm * dora_scale
     diff_weight = merged_scale1 - org_weight
     return org_weight + diff_weight * scale
 
