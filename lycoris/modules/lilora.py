@@ -156,7 +156,10 @@ class LiLoConModule(ModuleCustomSD):
         for key in missing_keys:
             if "scalar" in key:
                 del missing_keys[missing_keys.index(key)]
-        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
+        if isinstance(self.scalar, nn.Parameter):
+            self.scalar.copy_(torch.ones_like(self.scalar))
+        else:
+            self.scalar = torch.ones_like(self.scalar)
 
     def apply_to(self, is_hypernet=False, **kwargs):
         self.org_forward = self.org_module[0].forward

@@ -306,7 +306,10 @@ class LokrModule(ModuleCustomSD):
         for key in missing_keys:
             if "scalar" in key:
                 del missing_keys[missing_keys.index(key)]
-        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
+        if isinstance(self.scalar, nn.Parameter):
+            self.scalar.copy_(torch.ones_like(self.scalar))
+        else:
+            self.scalar = torch.ones_like(self.scalar)
 
     # Same as locon.py
     def apply_to(self):
