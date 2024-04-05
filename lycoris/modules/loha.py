@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -102,6 +104,7 @@ class LohaModule(ModuleCustomSD):
         rank_dropout_scale=False,
         weight_decompose=False,
         bypass_mode=False,
+        rs_lora=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -109,6 +112,7 @@ class LohaModule(ModuleCustomSD):
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
+        self.rs_lora = rs_lora
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":
@@ -196,7 +200,13 @@ class LohaModule(ModuleCustomSD):
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = lora_dim if alpha is None or alpha == 0 else alpha
-        self.scale = alpha / self.lora_dim
+        
+        r_factor = lora_dim
+        if self.rs_lora:
+            r_factor = math.sqrt(r_factor)
+
+        self.scale = alpha / r_factor
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         if use_scalar:

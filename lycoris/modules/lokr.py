@@ -105,6 +105,7 @@ class LokrModule(ModuleCustomSD):
         weight_decompose=False,
         full_matrix=False,
         bypass_mode=False,
+        rs_lora=False,
         unbalanced_factorization=False,
         **kwargs,
     ):
@@ -117,6 +118,7 @@ class LokrModule(ModuleCustomSD):
         self.use_w1 = False
         self.use_w2 = False
         self.full_matrix = full_matrix
+        self.rs_lora = rs_lora
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":
@@ -247,7 +249,13 @@ class LokrModule(ModuleCustomSD):
         if self.use_w2 and self.use_w1:
             # use scale = 1
             alpha = lora_dim
-        self.scale = alpha / self.lora_dim
+
+        r_factor = lora_dim
+        if self.rs_lora:
+            r_factor = math.sqrt(r_factor)
+
+        self.scale = alpha / r_factor
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         if use_scalar:

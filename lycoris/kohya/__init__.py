@@ -74,6 +74,7 @@ def create_network(
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
 
     if unbalanced_factorization:
@@ -145,6 +146,7 @@ def create_network(
             weight_decompose=weight_decompose,
             full_matrix=full_matrix,
             bypass_mode=bypass_mode,
+            rs_lora=rs_lora
             unbalanced_factorization=unbalanced_factorization,
         )
 

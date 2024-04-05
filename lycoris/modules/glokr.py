@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -83,6 +85,7 @@ class LokrModule(ModuleCustomSD):
         decompose_both=False,
         factor: int = -1,  # factorization factor
         rank_dropout_scale=False,
+        rs_lora=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -93,6 +96,7 @@ class LokrModule(ModuleCustomSD):
         self.tucker = False
         self.use_w1 = False
         self.use_w2 = False
+        self.rs_lora = rs_lora
 
         self.shape = org_module.weight.shape
         if org_module.__class__.__name__ == "Conv2d":
@@ -191,7 +195,13 @@ class LokrModule(ModuleCustomSD):
         if self.use_w2 and self.use_w1:
             # use scale = 1
             alpha = lora_dim
-        self.scale = alpha / self.lora_dim
+        
+        r_factor = lora_dim
+        if self.rs_lora:
+            r_factor = math.sqrt(r_factor)
+
+        self.scale = alpha / r_factor
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         if self.use_w2:
