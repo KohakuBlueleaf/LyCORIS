@@ -146,7 +146,7 @@ def create_network(
             weight_decompose=weight_decompose,
             full_matrix=full_matrix,
             bypass_mode=bypass_mode,
-            rs_lora=rs_lora
+            rs_lora=rs_lora,
             unbalanced_factorization=unbalanced_factorization,
         )
 

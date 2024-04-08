@@ -200,7 +200,7 @@ class LohaModule(ModuleCustomSD):
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = lora_dim if alpha is None or alpha == 0 else alpha
-        
+
         r_factor = lora_dim
         if self.rs_lora:
             r_factor = math.sqrt(r_factor)

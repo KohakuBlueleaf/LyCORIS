@@ -195,7 +195,7 @@ class LokrModule(ModuleCustomSD):
         if self.use_w2 and self.use_w1:
             # use scale = 1
             alpha = lora_dim
-        
+
         r_factor = lora_dim
         if self.rs_lora:
             r_factor = math.sqrt(r_factor)

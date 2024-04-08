@@ -69,7 +69,7 @@ class GLoRAModule(ModuleCustomSD):
             r_factor = math.sqrt(r_factor)
 
         self.scale = alpha / r_factor
-    
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         # same as microsoft's

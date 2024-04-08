@@ -141,7 +141,7 @@ class LoConModule(ModuleCustomSD):
             r_factor = math.sqrt(r_factor)
 
         self.scale = alpha / r_factor
-    
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         if use_scalar:

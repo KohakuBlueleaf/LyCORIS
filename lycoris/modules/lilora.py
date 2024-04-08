@@ -46,7 +46,7 @@ class LiLoConModule(ModuleCustomSD):
         self.lora_dim = lora_dim
         self.tucker = False
         self.rs_lora = rs_lora
-        
+
         assert not (
             bypass_mode and weight_decompose
         ), "bypass_mode and dora_wd cannot be used together"
