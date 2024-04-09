@@ -572,7 +572,15 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.loras = self.text_encoder_loras + self.unet_loras
         super().merge_to(1)
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, default_lr, unet_lora_plus_ratio=None, text_encoder_lora_plus_ratio=None):
+    def prepare_optimizer_params(
+        self,
+        text_encoder_lr,
+        unet_lr,
+        default_lr,
+        unet_loraplus_ratio=None,
+        text_encoder_loraplus_ratio=None,
+        loraplus_ratio=None
+    ):
         self.requires_grad_(True)
         all_params = []
 
@@ -582,24 +590,28 @@ class LycorisNetworkKohya(LycorisNetwork):
                 for name, param in lora.named_parameters():
                     if lora_plus_ratio is not None and (
                         "lora_up" in name or
+                        # LoHa
                         "hada_w1_b" in name or
                         "hada_w2_b" in name or
+                        # Lokr
                         "lokr_w2" in name or
                         "lokr_w1_b" in name or
-                        "lokr_w2_b" in name
+                        "lokr_w2_b" in name or
+                        # GLora
+                        name == "b1.weight" or
+                        name == "b2.weight"
                     ):
                         param_groups["plus"][f"{lora.lora_name}.{name}"] = param
                     else:
                         param_groups["lora"][f"{lora.lora_name}.{name}"] = param
 
-            # assigned_param_groups = ""
-            # for group in param_groups:
-            #     assigned_param_groups += f"{group}\n {list(param_groups[group].keys())}\n\n"
-            # logger.info(assigned_param_groups)
-
             params = []
             for key in param_groups.keys():
                 param_data = {"params": param_groups[key].values()}
+
+                if len(param_data["params"]) == 0:
+                    continue
+
                 if lr is not None:
                     if key == "plus":
                         param_data["lr"] = lr * lora_plus_ratio
@@ -614,11 +626,19 @@ class LycorisNetworkKohya(LycorisNetwork):
             return params
 
         if self.text_encoder_loras:
-            params = assemble_params(self.text_encoder_loras, text_encoder_lr, text_encoder_lora_plus_ratio)
+            params = assemble_params(
+                self.text_encoder_loras,
+                text_encoder_lr if text_encoder_lr is not None else default_lr,
+                text_encoder_loraplus_ratio or loraplus_ratio
+            )
             all_params.extend(params)
 
         if self.unet_loras:
-            params = assemble_params(self.unet_loras, unet_lr, unet_lora_plus_ratio)
+            params = assemble_params(
+                self.unet_loras,
+                unet_lr if unet_lr is not None else default_lr,
+                unet_loraplus_ratio or loraplus_ratio
+            )
             all_params.extend(params)
 
         return all_params
