@@ -81,7 +81,7 @@ In any case, please install this package in the corresponding virtual environmen
   pip install .
   ```
 
-A detilaed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
+A detailed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
 
 #### kohya script
 
