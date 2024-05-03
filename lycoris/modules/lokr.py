@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from einops import rearrange
 
-from .base import ModuleCustomSD
+from .base import ModuleCustomSD, LycorisBaseModule
 from ..logging import logger
 from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
 
@@ -80,12 +80,13 @@ def make_kron(w1, w2, scale):
     return rebuild * scale
 
 
-class LokrModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-        and from KohakuBlueleaf/LyCORIS/lycoris:loha:LoHaModule
-        and from KohakuBlueleaf/LyCORIS/lycoris:locon:LoconModule
-    """
+class LokrModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
 
     def __init__(
         self,
@@ -109,10 +110,20 @@ class LokrModule(ModuleCustomSD):
         unbalanced_factorization=False,
         **kwargs,
     ):
-        """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in LoRA/LoCon algo.")
+
         factor = int(factor)
-        self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
         self.use_w1 = False
@@ -120,8 +131,7 @@ class LokrModule(ModuleCustomSD):
         self.full_matrix = full_matrix
         self.rs_lora = rs_lora
 
-        self.shape = org_module.weight.shape
-        if org_module.__class__.__name__ == "Conv2d":
+        if self.module_type.startswith("conv"):
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
@@ -167,18 +177,11 @@ class LokrModule(ModuleCustomSD):
                 # bigger part. weight and LoRA. [b, dim] x [dim, d*k1*k2]
                 self.lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], lora_dim))
                 self.lokr_w2_b = nn.Parameter(
-                    torch.empty(lora_dim, shape[1][1] * shape[2] * shape[3])
+                    torch.empty(
+                        lora_dim, shape[1][1] * torch.tensor(shape[2:]).prod().item()
+                    )
                 )
                 # w1 ⊗ (w2_a x w2_b) = (a, b)⊗((c, dim)x(dim, d*k1*k2)) = (a, b)⊗(c, d*k1*k2) = (ac, bd*k1*k2)
-
-            self.op = F.conv2d
-            self.extra_args = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-
         else:  # Linear
             in_dim = org_module.in_features
             out_dim = org_module.out_features
@@ -209,18 +212,6 @@ class LokrModule(ModuleCustomSD):
             else:
                 self.use_w2 = True
                 self.lokr_w2 = nn.Parameter(torch.empty(shape[0][1], shape[1][1]))
-
-            self.op = F.linear
-            self.extra_args = {}
-
-        if isinstance(org_module, QuantLinears):
-            if not bypass_mode:
-                log_bypass()
-            bypass_mode = True
-        self.bypass_mode = bypass_mode
-        assert not (
-            bypass_mode and weight_decompose
-        ), "bypass_mode and dora_wd cannot be used together"
 
         self.wd = weight_decompose
         if self.wd:
@@ -283,24 +274,6 @@ class LokrModule(ModuleCustomSD):
             torch.nn.init.kaiming_uniform_(self.lokr_w1_a, a=math.sqrt(5))
             torch.nn.init.kaiming_uniform_(self.lokr_w1_b, a=math.sqrt(5))
 
-        self.multiplier = multiplier
-        self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
-        weight = make_kron(
-            self.lokr_w1 if self.use_w1 else self.lokr_w1_a @ self.lokr_w1_b,
-            (
-                self.lokr_w2
-                if self.use_w2
-                else (
-                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
-                    if self.tucker
-                    else self.lokr_w2_a @ self.lokr_w2_b
-                )
-            ),
-            torch.tensor(self.multiplier * self.scale),
-        )
-        assert torch.sum(torch.isnan(weight)) == 0, "weight is nan"
-
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
         for key in missing_keys:
@@ -310,18 +283,6 @@ class LokrModule(ModuleCustomSD):
             self.scalar.copy_(torch.ones_like(self.scalar))
         else:
             self.scalar = torch.ones_like(self.scalar)
-
-    # Same as locon.py
-    def apply_to(self):
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        weight = self.get_weight(self.shape)
-        self.org_module[0].weight.data.add_(weight * multiplier)
 
     def get_weight(self, shape):
         weight = make_kron(
@@ -346,6 +307,16 @@ class LokrModule(ModuleCustomSD):
                 drop /= drop.mean()
             weight *= drop
         return weight
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        scale = self.scale * multiplier
+        diff = self.get_weight(shape) * scale
+        if device is not None:
+            diff = diff.to(device)
+        merged = self.org_module[0].weight.data + diff
+        if self.wd:
+            merged = self.apply_weight_decompose(merged)
+        return merged
 
     def apply_weight_decompose(self, weight):
         weight = weight.to(self.dora_scale.dtype)
@@ -406,7 +377,13 @@ class LokrModule(ModuleCustomSD):
         return scaled, orig_norm * ratio
 
     def bypass_forward(self, h):
-        if isinstance(self.org_module[0], nn.Conv2d):
+        if len(self.shape) > 2 and self.shape[2] > 1:
+            return (
+                self.org_forward(h)
+                + self.op(h, self.get_weight(self.shape), **self.kw_dict)
+                * self.multiplier
+            )
+        if self.module_type.startswith("conv"):
             h = h.transpose(1, -1)
         if self.use_w2:
             ba = self.lokr_w2
@@ -433,12 +410,12 @@ class LokrModule(ModuleCustomSD):
         hc = F.linear(h_cross_group, c)
 
         h = rearrange(hc, "b ... vp up -> b ... (up vp)")
-        if isinstance(self.org_module[0], nn.Conv2d):
+        if self.module_type.startswith("conv"):
             h = h.transpose(1, -1)
 
-        return h
+        return h * self.multiplier + self.org_forward(h)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.op(
@@ -451,12 +428,7 @@ class LokrModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            if len(self.shape) > 2 and self.shape[2] > 1:
-                return self.org_forward(x) + self.op(
-                    x, self.get_weight(self.shape), **self.extra_args
-                )
-            else:
-                return self.org_forward(x) + self.bypass_forward(x)
+            return self.bypass_forward(x)
         else:
             weight = (
                 self.org_module[0].weight.data.to(
@@ -472,7 +444,7 @@ class LokrModule(ModuleCustomSD):
 
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
-            return self.op(x, weight.view(self.shape), bias, **self.extra_args)
+            return self.op(x, weight.view(self.shape), bias, **self.kw_dict)
 
 
 if __name__ == "__main__":
