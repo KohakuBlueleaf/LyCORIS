@@ -2,10 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD
+from .base import ModuleCustomSD, LycorisBaseModule
 
 
-class FullModule(ModuleCustomSD):
+class FullModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
+
     def __init__(
         self,
         lora_name,
@@ -19,37 +26,27 @@ class FullModule(ModuleCustomSD):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
+        bypass_mode=False,
         **kwargs,
     ):
-        super().__init__()
-        self.lora_name = lora_name
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in Full algo.")
 
-        if isinstance(org_module, nn.Linear):
-            self.op = F.linear
-            self.dim = org_module.out_features
-            self.kw_dict = {}
-        elif isinstance(org_module, nn.Conv2d):
-            self.op = F.conv2d
-            self.dim = org_module.out_channels
-            self.kw_dict = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            raise NotImplementedError
         self.weight = nn.Parameter(torch.zeros_like(org_module.weight))
         if org_module.bias is not None:
             self.bias = nn.Parameter(torch.zeros_like(org_module.bias))
         else:
             self.bias = None
-
-        self.rank_dropout = rank_dropout
-        self.module_dropout = module_dropout
-
-        self.multiplier = multiplier
-        self.org_module = [org_module]
 
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
@@ -116,6 +113,14 @@ class FullModule(ModuleCustomSD):
         else:
             weight = self.weight
             bias = self.bias
+        return weight, bias
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        weight, bias = self.make_weight(multiplier, device)
+        if shape is not None:
+            weight = weight.view(shape)
+            if bias is not None:
+                bias = bias.view(shape[0], 1)
         return weight, bias
 
     def forward(self, x: torch.Tensor):
