@@ -89,7 +89,11 @@ class LycorisBaseModule(ModuleCustomSD):
             self.kw_dict = {}
         elif isinstance(org_module, nn.Conv1d):
             self.module_type = "conv1d"
-            self.shape = (org_module.out_channels, org_module.in_channels, *org_module.kernel_size)
+            self.shape = (
+                org_module.out_channels,
+                org_module.in_channels,
+                *org_module.kernel_size,
+            )
             self.op = F.conv1d
             self.dim = org_module.out_channels
             self.kw_dict = {
@@ -100,7 +104,11 @@ class LycorisBaseModule(ModuleCustomSD):
             }
         elif isinstance(org_module, nn.Conv2d):
             self.module_type = "conv2d"
-            self.shape = (org_module.out_channels, org_module.in_channels, *org_module.kernel_size)
+            self.shape = (
+                org_module.out_channels,
+                org_module.in_channels,
+                *org_module.kernel_size,
+            )
             self.op = F.conv2d
             self.dim = org_module.out_channels
             self.kw_dict = {
@@ -111,7 +119,11 @@ class LycorisBaseModule(ModuleCustomSD):
             }
         elif isinstance(org_module, nn.Conv3d):
             self.module_type = "conv3d"
-            self.shape = (org_module.out_channels, org_module.in_channels, *org_module.kernel_size)
+            self.shape = (
+                org_module.out_channels,
+                org_module.in_channels,
+                *org_module.kernel_size,
+            )
             self.op = F.conv3d
             self.dim = org_module.out_channels
             self.kw_dict = {

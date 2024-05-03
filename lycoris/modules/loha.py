@@ -141,9 +141,7 @@ class LohaModule(LycorisBaseModule):
             self.op = F.conv2d
 
         if self.tucker:
-            self.hada_t1 = nn.Parameter(
-                torch.empty(lora_dim, lora_dim, *w_shape[2:])
-            )
+            self.hada_t1 = nn.Parameter(torch.empty(lora_dim, lora_dim, *w_shape[2:]))
             self.hada_w1_a = nn.Parameter(
                 torch.empty(lora_dim, w_shape[0])
             )  # out_dim, 1-mode
@@ -151,9 +149,7 @@ class LohaModule(LycorisBaseModule):
                 torch.empty(lora_dim, w_shape[1])
             )  # in_dim , 2-mode
 
-            self.hada_t2 = nn.Parameter(
-                torch.empty(lora_dim, lora_dim, *w_shape[2:])
-            )
+            self.hada_t2 = nn.Parameter(torch.empty(lora_dim, lora_dim, *w_shape[2:]))
             self.hada_w2_a = nn.Parameter(
                 torch.empty(lora_dim, w_shape[0])
             )  # out_dim, 1-mode
@@ -303,9 +299,7 @@ class LohaModule(LycorisBaseModule):
     def bypass_forward(self, x, scale=1):
         diff_weight = self.get_weight(self.shape) * self.scalar * scale
         print(diff_weight.shape, x.shape, self.shape)
-        return self.org_forward(x) + self.op(
-            x, diff_weight, **self.kw_dict
-        )
+        return self.org_forward(x) + self.op(x, diff_weight, **self.kw_dict)
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
