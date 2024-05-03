@@ -376,11 +376,10 @@ class LokrModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward(self, h):
+    def bypass_forward_diff(self, h):
         if len(self.shape) > 2 and self.shape[2] > 1:
             return (
-                self.org_forward(h)
-                + self.op(h, self.get_weight(self.shape), **self.kw_dict)
+                self.op(h, self.get_weight(self.shape), **self.kw_dict)
                 * self.multiplier
             )
         if self.module_type.startswith("conv"):
@@ -413,7 +412,10 @@ class LokrModule(LycorisBaseModule):
         if self.module_type.startswith("conv"):
             h = h.transpose(1, -1)
 
-        return h * self.multiplier + self.org_forward(h)
+        return h * self.multiplier
+
+    def bypass_forward(self, x, scale=1):
+        return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
