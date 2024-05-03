@@ -247,12 +247,17 @@ class LohaModule(LycorisBaseModule):
             weight *= drop
         return weight
 
-    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
         scale = self.scale * multiplier
         diff = self.get_weight(shape) * scale
         if device is not None:
             diff = diff.to(device)
-        merged = self.org_module[0].weight.data + diff
+        return diff
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        merged = self.org_module[0].weight.data + self.get_diff_weight(
+            multiplier=multiplier, shape=shape, device=device
+        )
         if self.wd:
             merged = self.apply_weight_decompose(merged)
         return merged
@@ -296,10 +301,12 @@ class LohaModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward(self, x, scale=1):
+    def bypass_forward_diff(self, x, scale=1):
         diff_weight = self.get_weight(self.shape) * self.scalar * scale
-        print(diff_weight.shape, x.shape, self.shape)
-        return self.org_forward(x) + self.op(x, diff_weight, **self.kw_dict)
+        return self.op(x, diff_weight, **self.kw_dict)
+
+    def bypass_forward(self, x, scale=1):
+        return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
