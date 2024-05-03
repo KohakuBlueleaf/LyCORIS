@@ -132,9 +132,11 @@ class LycorisBaseModule(ModuleCustomSD):
         else:
             self.module_type = "unknown"
 
+        self.is_bnb = False
         if isinstance(org_module, QuantLinears):
             if not bypass_mode:
                 log_bypass()
+            self.is_bnb = True
             bypass_mode = True
         self.bypass_mode = bypass_mode
         self.dropout = dropout
