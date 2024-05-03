@@ -52,7 +52,7 @@ class FullModule(LycorisBaseModule):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
         self.weight.data.add_(self.org_module[0].weight.data)
-        self.org_weight = [self.org_module[0].weight.data.cpu().clone()]
+        self._org_weight = [self.org_module[0].weight.data.cpu().clone()]
         delattr(self.org_module[0], "weight")
         if self.org_module[0].bias is not None:
             self.bias.data.add_(self.org_module[0].bias.data)
@@ -61,14 +61,8 @@ class FullModule(LycorisBaseModule):
         else:
             self.org_bias = None
 
-    def merge_to(self, multiplier=1.0):
-        weight, bias = self.make_weight(scale=multiplier)
-        self.org_module[0].weight.data.copy_(weight)
-        if bias is not None:
-            self.org_module[0].bias.data.copy_(bias)
-
     def custom_state_dict(self):
-        sd = {"diff": self.weight.data.cpu() - self.org_weight[0]}
+        sd = {"diff": self.weight.data.cpu() - self._org_weight[0]}
         if self.bias is not None:
             sd["diff_b"] = self.bias.data.cpu() - self.org_bias[0]
         return sd
@@ -91,7 +85,7 @@ class FullModule(LycorisBaseModule):
 
     def make_weight(self, scale=1, device=None, original=False):
         if original:
-            weight = self.org_weight[0].to(device, dtype=self.weight.dtype)
+            weight = self._org_weight[0].to(device, dtype=self.weight.dtype)
             if self.org_bias is not None:
                 bias = self.org_bias[0].to(device, dtype=self.bias.dtype)
             else:
