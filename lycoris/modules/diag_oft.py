@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from einops import rearrange
 
-from .base import ModuleCustomSD
+from .base import ModuleCustomSD, LycorisBaseModule
 from .lokr import factorization
 from ..logging import logger
 from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
@@ -21,10 +21,13 @@ def log_oft_factorize(dim, factor, num, bdim):
     )
 
 
-class DiagOFTModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-    """
+class DiagOFTModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
 
     def __init__(
         self,
@@ -44,31 +47,18 @@ class DiagOFTModule(ModuleCustomSD):
         bypass_mode=False,
         **kwargs,
     ):
-        """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
-        self.lora_name = lora_name
-
-        if isinstance(org_module, nn.Linear):
-            self.op = F.linear
-            self.dim = org_module.out_features
-            self.kw_dict = {}
-        elif isinstance(org_module, nn.Conv2d):
-            self.op = F.conv2d
-            self.dim = org_module.out_channels
-            self.kw_dict = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            raise NotImplementedError
-
-        if isinstance(org_module, QuantLinears):
-            if not bypass_mode:
-                log_bypass()
-            bypass_mode = True
-        self.bypass_mode = bypass_mode
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in Diag-OFT algo.")
 
         out_dim = self.dim
         self.block_size, self.block_num = factorization(out_dim, lora_dim)
@@ -91,28 +81,9 @@ class DiagOFTModule(ModuleCustomSD):
             bdim=self.block_size,
         )
 
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
-
-        self.multiplier = multiplier
-        self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
-
     @property
     def I(self):
         return torch.eye(self.block_size, device=next(self.parameters()).device)
-
-    def apply_to(self, **kwargs):
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        weight = self.make_weight(scale=multiplier)
-        self.org_module[0].weight.data.copy_(weight)
 
     def get_r(self):
         I = self.I
@@ -129,7 +100,7 @@ class DiagOFTModule(ModuleCustomSD):
 
     def make_weight(self, scale=1, device=None):
         r = self.get_r()
-        org_weight = self.org_module[0].weight.to(device, dtype=r.dtype)
+        org_weight = self.org_weight.to(device, dtype=r.dtype)
         org_weight = rearrange(
             org_weight,
             "(k n) ... -> k n ...",
@@ -146,6 +117,12 @@ class DiagOFTModule(ModuleCustomSD):
         if self.rescaled:
             weight = self.rescale * weight
         return weight
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        diff = self.make_weight(scale=multiplier, device=device)
+        if shape is not None:
+            diff = diff.view(shape)
+        return diff, None
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
