@@ -98,7 +98,7 @@ class DiagOFTModule(LycorisBaseModule):
         r = (I + normed_q) @ (I - normed_q).float().inverse()
         return r
 
-    def make_weight(self, scale=1, device=None):
+    def make_weight(self, scale=1, device=None, diff=False):
         r = self.get_r()
         org_weight = self.org_weight.to(device, dtype=r.dtype)
         org_weight = rearrange(
@@ -110,13 +110,19 @@ class DiagOFTModule(LycorisBaseModule):
         # Init R=0, so add I on it to ensure the output of step0 is original model output
         weight = torch.einsum(
             "k n m, k n ... -> k m ...",
-            r * scale + (1 - scale) * self.I,
+            r * scale - scale * self.I + (self.I if diff else 0),
             org_weight,
         )
         weight = rearrange(weight, "k m ... -> (k m) ...")
         if self.rescaled:
             weight = self.rescale * weight
         return weight
+
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        diff = self.make_weight(scale=multiplier, device=device, diff=True)
+        if shape is not None:
+            diff = diff.view(shape)
+        return diff
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device)
@@ -137,7 +143,7 @@ class DiagOFTModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward(self, x, scale=1):
+    def _bypass_forward(self, x, scale=1, diff=False):
         r = self.get_r()
         org_out = self.org_forward(x)
         if self.op == F.conv2d:
@@ -149,12 +155,20 @@ class DiagOFTModule(LycorisBaseModule):
             n=self.block_size,
         )
         oft_out = torch.einsum(
-            "k n m, ... k n -> ... k m", r * scale + (1 - scale) * self.I, org_out
+            "k n m, ... k n -> ... k m",
+            r * scale - scale * self.I + (self.I if diff else 0),
+            org_out,
         )
         out = rearrange(oft_out, "... k m -> ... (k m)")
         if self.op == F.conv2d:
             out = out.transpose(1, -1)
         return out
+
+    def bypass_forward_diff(self, x, scale=1):
+        return self._bypass_forward(x, scale, diff=True)
+
+    def bypass_forward(self, x, scale=1):
+        return self._bypass_forward(x, scale, diff=False)
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
