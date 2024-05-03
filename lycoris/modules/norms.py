@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD
+from .base import ModuleCustomSD, LycorisBaseModule
 
 
-class NormModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-    """
+class NormModule(LycorisBaseModule):
+    support_module = {
+        "layernorm",
+        "groupnorm",
+    }
 
     def __init__(
         self,
@@ -21,45 +22,20 @@ class NormModule(ModuleCustomSD):
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
-        self.lora_name = lora_name
+        super().__init__(
+            lora_name=lora_name,
+            org_module=org_module,
+            multiplier=multiplier,
+            rank_dropout=rank_dropout,
+            module_dropout=module_dropout,
+            rank_dropout_scale=rank_dropout_scale,
+            **kwargs,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in Norm algo.")
 
-        if isinstance(org_module, nn.LayerNorm):
-            self.op = F.layer_norm
-            self.dim = org_module.normalized_shape[0]
-            self.kw_dict = {
-                "normalized_shape": org_module.normalized_shape,
-                "eps": org_module.eps,
-            }
-        elif isinstance(org_module, nn.GroupNorm):
-            self.op = F.group_norm
-            self.group_num = org_module.num_groups
-            self.dim = org_module.num_channels
-            self.kw_dict = {"num_groups": org_module.num_groups, "eps": org_module.eps}
-        else:
-            raise NotImplementedError
         self.w_norm = nn.Parameter(torch.zeros(self.dim))
         self.b_norm = nn.Parameter(torch.zeros(self.dim))
-
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
-
-        self.multiplier = multiplier
-        self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
-
-    def apply_to(self, **kwargs):
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        weight, bias = self.make_weight(scale=multiplier)
-        self.org_module[0].weight.data.copy_(weight)
-        self.org_module[0].bias.data.copy_(bias)
 
     def make_weight(self, scale=1, device=None):
         org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
@@ -80,6 +56,9 @@ class NormModule(ModuleCustomSD):
         weight = self.w_norm.to(device) * drop * scale
         bias = self.b_norm.to(device) * drop * scale
         return org_weight + weight, org_bias + bias
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        return self.make_weight(multiplier, device)
 
     def forward(self, x):
         if self.module_dropout and self.training:
