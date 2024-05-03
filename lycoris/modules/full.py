@@ -42,6 +42,9 @@ class FullModule(LycorisBaseModule):
         if self.module_type not in self.support_module:
             raise ValueError(f"{self.module_type} is not supported in Full algo.")
 
+        if self.bypass_mode:
+            raise ValueError("bypass mode is not supported in Full algo.")
+
         self.weight = nn.Parameter(torch.zeros_like(org_module.weight))
         if org_module.bias is not None:
             self.bias = nn.Parameter(torch.zeros_like(org_module.bias))
