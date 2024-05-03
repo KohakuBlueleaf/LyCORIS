@@ -93,7 +93,6 @@ class LoConModule(LycorisBaseModule):
             self.lora_up = nn.Linear(lora_dim, out_dim, bias=False)
         else:
             raise NotImplementedError
-        self.shape = org_module.weight.shape
 
         self.wd = weight_decompose
         if self.wd:
@@ -223,6 +222,28 @@ class LoConModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
+    def bypass_forward(self, x, scale=1):
+        if self.tucker:
+            mid = self.lora_mid(self.lora_down(x))
+        else:
+            mid = self.lora_down(x)
+
+        if self.rank_dropout and self.training:
+            drop = (
+                torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout
+            ).to(mid.dtype)
+            if self.rank_dropout_scale:
+                drop /= drop.mean()
+            if (dims := len(x.shape)) == 4:
+                drop = drop.view(1, -1, 1, 1)
+            else:
+                drop = drop.view(*[1] * (dims - 1), -1)
+            mid = mid * drop
+
+        return self.org_forward(x) + self.dropout(
+            self.lora_up(mid) * self.scalar * self.scale * scale
+        )
+
     def forward(self, x):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
@@ -244,26 +265,7 @@ class LoConModule(LycorisBaseModule):
             )
             return self.op(x, weight, bias, **self.kw_dict)
         else:
-            if self.tucker:
-                mid = self.lora_mid(self.lora_down(x))
-            else:
-                mid = self.lora_down(x)
-
-            if self.rank_dropout and self.training:
-                drop = (
-                    torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout
-                ).to(mid.dtype)
-                if self.rank_dropout_scale:
-                    drop /= drop.mean()
-                if (dims := len(x.shape)) == 4:
-                    drop = drop.view(1, -1, 1, 1)
-                else:
-                    drop = drop.view(*[1] * (dims - 1), -1)
-                mid = mid * drop
-
-            return self.org_forward(x) + self.dropout(
-                self.lora_up(mid) * self.scalar * scale
-            )
+            return self.bypass_forward(x, scale=self.multiplier)
 
 
 if __name__ == "__main__":
