@@ -124,7 +124,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         r = (I + normed_q) @ (I - normed_q).float().inverse()
         return r
 
-    def make_weight(self, scale=1, device=None):
+    def make_weight(self, scale=1, device=None, diff=False):
         m = self.boft_m
         b = self.boft_b
         r_b = b // 2
@@ -135,9 +135,9 @@ class ButterflyOFTModule(LycorisBaseModule):
             bi = r[i]  # b_num, b_size, b_size
             if i == 0:
                 # Apply multiplier/scale and rescale into first weight
-                bi = bi * scale + (1 - scale) * self.I
                 if self.rescaled:
                     bi = bi * self.rescale
+            bi = bi * scale - scale * self.I + (self.I if diff else 0)
             inp = rearrange(inp, "(c g k) ... -> (c k g) ...", g=2, k=2**i * r_b)
             inp = rearrange(inp, "(d b) ... -> d b ...", b=b)
             inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
@@ -145,6 +145,12 @@ class ButterflyOFTModule(LycorisBaseModule):
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
 
         return inp
+
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        diff = self.make_weight(scale=multiplier, device=device, diff=True)
+        if shape is not None:
+            diff = diff.view(shape)
+        return diff
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device)
@@ -165,7 +171,7 @@ class ButterflyOFTModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward(self, x, scale=1):
+    def _bypass_forward(self, x, scale=1, diff=False):
         m = self.boft_m
         b = self.boft_b
         r_b = b // 2
@@ -176,9 +182,9 @@ class ButterflyOFTModule(LycorisBaseModule):
             bi = r[i]  # b_num, b_size, b_size
             if i == 0:
                 # Apply multiplier/scale and rescale into first weight
-                bi = bi * scale + (1 - scale) * self.I
                 if self.rescaled:
                     bi = bi * self.rescale
+            bi = bi * scale - scale * self.I + (self.I if diff else 0)
             inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
             inp = rearrange(inp, "... (d b) -> ... d b", b=b)
             inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
@@ -186,6 +192,12 @@ class ButterflyOFTModule(LycorisBaseModule):
             inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
 
         return inp
+
+    def bypass_forward_diff(self, x, scale=1):
+        return self._bypass_forward(x, scale, diff=True)
+
+    def bypass_forward(self, x, scale=1):
+        return self._bypass_forward(x, scale, diff=False)
 
     def forward(self, x, *args, **kwargs):
         if self.module_dropout and self.training:
