@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 from .full import FullModule
 from .norms import NormModule
@@ -122,9 +123,12 @@ def make_module(lyco_type, params, lora_name, orig_module):
             orig_module,
             1,
         )
-        module.diff.copy_(diff)
+        module.weight.copy_(diff + orig_module[0].weight.data)
         if diff_b is not None:
-            module.diff_b.copy_(diff_b)
+            if orig_module[0].bias is not None:
+                module.bias.copy_(diff_b + orig_module[0].bias.data)
+            else:
+                module.bias = nn.Parameter(diff_b)
     elif lyco_type == "ia3":
         pass
     else:
