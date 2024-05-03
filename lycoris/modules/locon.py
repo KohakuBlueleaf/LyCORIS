@@ -61,35 +61,7 @@ class LoConModule(LycorisBaseModule):
         self.tucker = False
         self.rs_lora = rs_lora
 
-        if isinstance(org_module, nn.Conv2d):
-            in_dim = org_module.in_channels
-            k_size = org_module.kernel_size
-            out_dim = org_module.out_channels
-            self.tucker = use_tucker and k_size != (1, 1)
-            self.op = F.conv2d
-            self.extra_args = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            in_dim = org_module.in_features
-            out_dim = org_module.out_features
-            self.op = F.linear
-            self.extra_args = {}
-
-        if self.module_type in {"conv1d", "conv2d", "conv3d"}:
-            op = {
-                "conv1d": F.conv1d,
-                "conv2d": F.conv2d,
-                "conv3d": F.conv3d,
-            }[self.module_type]
-            module = {
-                "conv1d": nn.Conv1d,
-                "conv2d": nn.Conv2d,
-                "conv3d": nn.Conv3d,
-            }[self.module_type]
+        if self.module_type.startswith("conv"):
             self.isconv = True
             # For general LoCon
             in_dim = org_module.in_channels
@@ -97,19 +69,20 @@ class LoConModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.down_op = op
-            self.up_op = op
+            self.tucker = use_tucker and k_size != (1, 1)
+            self.down_op = self.op
+            self.up_op = self.op
             if use_tucker and k_size != (1, 1):
-                self.lora_down = module(in_dim, lora_dim, (1, 1), bias=False)
-                self.lora_mid = module(
+                self.lora_down = self.module(in_dim, lora_dim, (1, 1), bias=False)
+                self.lora_mid = self.module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False
                 )
                 self.tucker = True
             else:
-                self.lora_down = module(
+                self.lora_down = self.module(
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
-            self.lora_up = module(lora_dim, out_dim, (1, 1), bias=False)
+            self.lora_up = self.module(lora_dim, out_dim, (1, 1), bias=False)
         elif isinstance(org_module, nn.Linear):
             self.isconv = False
             self.down_op = F.linear
@@ -180,10 +153,6 @@ class LoConModule(LycorisBaseModule):
             self.scalar.copy_(torch.ones_like(self.scalar))
         else:
             self.scalar = torch.ones_like(self.scalar)
-
-    def merge_to(self, multiplier=1.0):
-        weight = self.make_weight() * self.scale * multiplier
-        self.org_module[0].weight.data.add_(weight)
 
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
@@ -273,7 +242,7 @@ class LoConModule(LycorisBaseModule):
                 if self.org_module[0].bias is None
                 else self.org_module[0].bias.data
             )
-            return self.op(x, weight, bias, **self.extra_args)
+            return self.op(x, weight, bias, **self.kw_dict)
         else:
             if self.tucker:
                 mid = self.lora_mid(self.lora_down(x))

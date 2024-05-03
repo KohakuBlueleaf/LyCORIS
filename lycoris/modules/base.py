@@ -80,6 +80,7 @@ class LycorisBaseModule(ModuleCustomSD):
         super().__init__()
         self.lora_name = lora_name
 
+        self.module = type(org_module)
         if isinstance(org_module, nn.Linear):
             self.module_type = "linear"
             self.op = F.linear
