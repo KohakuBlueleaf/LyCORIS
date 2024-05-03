@@ -117,7 +117,7 @@ class FullModule(LycorisBaseModule):
                 bias = bias.view(shape[0], 1)
         return weight, bias
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, *args, **kwargs):
         if (
             self.module_dropout
             and self.training

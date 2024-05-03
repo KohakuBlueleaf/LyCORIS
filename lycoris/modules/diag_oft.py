@@ -156,7 +156,7 @@ class DiagOFTModule(LycorisBaseModule):
             out = out.transpose(1, -1)
         return out
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
