@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD
+from .base import ModuleCustomSD, LycorisBaseModule
 from ..logging import logger
 from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
 
@@ -18,10 +18,13 @@ def log_wd():
     )
 
 
-class LoConModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-    """
+class LoConModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
 
     def __init__(
         self,
@@ -42,8 +45,18 @@ class LoConModule(ModuleCustomSD):
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
-        self.lora_name = lora_name
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in LoRA/LoCon algo.")
         self.lora_dim = lora_dim
         self.tucker = False
         self.rs_lora = rs_lora
@@ -66,16 +79,17 @@ class LoConModule(ModuleCustomSD):
             self.op = F.linear
             self.extra_args = {}
 
-        if isinstance(org_module, QuantLinears):
-            if not bypass_mode:
-                log_bypass()
-            bypass_mode = True
-        self.bypass_mode = bypass_mode
-        assert not (
-            bypass_mode and weight_decompose
-        ), "bypass_mode and dora_wd cannot be used together"
-
-        if isinstance(org_module, nn.Conv2d):
+        if self.module_type in {"conv1d", "conv2d", "conv3d"}:
+            op = {
+                "conv1d": F.conv1d,
+                "conv2d": F.conv2d,
+                "conv3d": F.conv3d,
+            }[self.module_type]
+            module = {
+                "conv1d": nn.Conv1d,
+                "conv2d": nn.Conv2d,
+                "conv3d": nn.Conv3d,
+            }[self.module_type]
             self.isconv = True
             # For general LoCon
             in_dim = org_module.in_channels
@@ -83,19 +97,19 @@ class LoConModule(ModuleCustomSD):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.down_op = F.conv2d
-            self.up_op = F.conv2d
+            self.down_op = op
+            self.up_op = op
             if use_tucker and k_size != (1, 1):
-                self.lora_down = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
-                self.lora_mid = nn.Conv2d(
+                self.lora_down = module(in_dim, lora_dim, (1, 1), bias=False)
+                self.lora_mid = module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False
                 )
                 self.tucker = True
             else:
-                self.lora_down = nn.Conv2d(
+                self.lora_down = module(
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
-            self.lora_up = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
+            self.lora_up = module(lora_dim, out_dim, (1, 1), bias=False)
         elif isinstance(org_module, nn.Linear):
             self.isconv = False
             self.down_op = F.linear
@@ -157,10 +171,6 @@ class LoConModule(ModuleCustomSD):
         if self.tucker:
             torch.nn.init.kaiming_uniform_(self.lora_mid.weight, a=math.sqrt(5))
 
-        self.multiplier = multiplier
-        self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
-
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
         for key in missing_keys:
@@ -170,16 +180,6 @@ class LoConModule(ModuleCustomSD):
             self.scalar.copy_(torch.ones_like(self.scalar))
         else:
             self.scalar = torch.ones_like(self.scalar)
-
-    def apply_to(self, is_hypernet=False, **kwargs):
-        self.org_forward = self.org_module[0].forward
-        if is_hypernet:
-            self.org_module[0].forward = self.hypernet_forward
-        else:
-            self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
 
     def merge_to(self, multiplier=1.0):
         weight = self.make_weight() * self.scale * multiplier
@@ -205,6 +205,18 @@ class LoConModule(ModuleCustomSD):
             weight *= drop
 
         return weight * self.scalar.to(device)
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        scale = self.scale * multiplier
+        diff = self.make_weight(device=device) * scale
+        if shape is not None:
+            diff = diff.view(shape)
+        if device is not None:
+            diff = diff.to(device)
+        merged = self.org_module[0].weight.data + diff
+        if self.wd:
+            merged = self.apply_weight_decompose(merged)
+        return merged
 
     def apply_weight_decompose(self, weight):
         weight = weight.to(self.dora_scale.dtype)
