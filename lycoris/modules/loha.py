@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD, LycorisBaseModule
-from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
+from .base import LycorisBaseModule
+from ..utils.bnb import LinearNF4
 
 
 class HadaWeight(torch.autograd.Function):

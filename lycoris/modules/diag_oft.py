@@ -6,10 +6,10 @@ import torch.nn.functional as F
 
 from einops import rearrange
 
-from .base import ModuleCustomSD, LycorisBaseModule
+from .base import LycorisBaseModule
 from .lokr import factorization
 from ..logging import logger
-from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
+from ..utils.bnb import LinearNF4
 
 
 @cache

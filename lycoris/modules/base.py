@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..logging import logger
 from ..utils.bnb import QuantLinears, log_bypass
 
 

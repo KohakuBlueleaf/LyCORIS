@@ -5,9 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD, LycorisBaseModule
+from .base import LycorisBaseModule
 from ..logging import logger
-from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
+from ..utils.bnb import LinearNF4
 
 
 @cache
