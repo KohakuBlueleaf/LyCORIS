@@ -164,7 +164,6 @@ class LycorisBaseModule(ModuleCustomSD):
 
         self.multiplier = multiplier
         self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
 
     @property
     def org_weight(self):
@@ -192,11 +191,17 @@ class LycorisBaseModule(ModuleCustomSD):
             else:
                 self.org_module[0].bias = nn.Parameter(bias)
 
+    def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
+        raise NotImplementedError
+
     def get_merged_weight(self, multiplier=1.0, shape=None, device=None):
         raise NotImplementedError
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
+        raise NotImplementedError
+
+    def bypass_forward_diff(self, x, scale=1):
         raise NotImplementedError
 
     def bypass_forward(self, x, scale=1):
