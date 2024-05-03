@@ -245,9 +245,7 @@ class LoConModule(LycorisBaseModule):
                 drop = drop.view(*[1] * (dims - 1), -1)
             mid = mid * drop
 
-        return self.dropout(
-            self.lora_up(mid) * self.scalar * self.scale * scale
-        )
+        return self.dropout(self.lora_up(mid) * self.scalar * self.scale * scale)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
