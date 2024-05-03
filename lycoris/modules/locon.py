@@ -174,17 +174,22 @@ class LoConModule(LycorisBaseModule):
 
         return weight * self.scalar.to(device)
 
-    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
         scale = self.scale * multiplier
         diff = self.make_weight(device=device) * scale
         if shape is not None:
             diff = diff.view(shape)
         if device is not None:
             diff = diff.to(device)
-        merged = self.org_module[0].weight.data + diff
+        return diff
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        merged = self.org_module[0].weight.data + self.get_diff_weight(
+            multiplier=multiplier, shape=shape, device=device
+        )
         if self.wd:
             merged = self.apply_weight_decompose(merged)
-        return merged
+        return merged, None
 
     def apply_weight_decompose(self, weight):
         weight = weight.to(self.dora_scale.dtype)
@@ -222,7 +227,7 @@ class LoConModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward(self, x, scale=1):
+    def bypass_forward_diff(self, x, scale=1):
         if self.tucker:
             mid = self.lora_mid(self.lora_down(x))
         else:
@@ -240,9 +245,12 @@ class LoConModule(LycorisBaseModule):
                 drop = drop.view(*[1] * (dims - 1), -1)
             mid = mid * drop
 
-        return self.org_forward(x) + self.dropout(
+        return self.dropout(
             self.lora_up(mid) * self.scalar * self.scale * scale
         )
+
+    def bypass_forward(self, x, scale=1):
+        return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
     def forward(self, x):
         if self.module_dropout and self.training:
