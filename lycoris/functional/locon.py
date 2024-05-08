@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def lora_diff_weight(a, b, alpha=None):
+def lora_diff_weight(a, b, gamma=1.0):
     """### lora_diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
@@ -11,7 +11,7 @@ def lora_diff_weight(a, b, alpha=None):
     Args:
         a (torch.Tensor): weight of down proj linear/conv layer
         b (torch.Tensor): weight of up proj linear/conv layer
-        alpha (float, optional): scale factor, alpha/rank is gamma (check our paper)
+        gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: ΔW
@@ -19,10 +19,6 @@ def lora_diff_weight(a, b, alpha=None):
     assert a.size(0) == b.size(1)
     R, I, *k = a.shape
     O, R, *_ = b.shape
-    if alpha is None:
-        gamma = 1
-    else:
-        gamma = alpha / R
 
     result = b.reshape(-1, b.size(1)) @ (a.reshape(a.size(0), -1) * gamma)
     return result.reshape(O, I, *k)
@@ -31,14 +27,14 @@ def lora_diff_weight(a, b, alpha=None):
 FUNC_LIST = [None, None, F.linear, F.conv1d, F.conv2d, F.conv3d]
 
 
-def lora_bypass_forward_diff(x, a, b, alpha=None, extra_args={}):
+def lora_bypass_forward_diff(x, a, b, gamma=1.0, extra_args={}):
     """### lora_bypass_forward_diff
 
     Args:
         x (torch.Tensor): input tensor
         a (torch.Tensor): weight of down proj linear/conv layer
         b (torch.Tensor): weight of up proj linear/conv layer
-        alpha (float, optional): scale factor, alpha/rank is gamma (check our paper)
+        gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: output tensor
@@ -46,10 +42,6 @@ def lora_bypass_forward_diff(x, a, b, alpha=None, extra_args={}):
     assert a.size(0) == b.size(1)
     R, I, *k = a.shape
     O, R, *_ = b.shape
-    if alpha is None:
-        gamma = 1
-    else:
-        gamma = alpha / R
 
     down = FUNC_LIST[a.dim()](x, a, **extra_args)
     up = FUNC_LIST[a.dim()](down, b)
