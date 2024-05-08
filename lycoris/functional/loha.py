@@ -79,7 +79,7 @@ def make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, scale):
     return HadaWeightTucker.apply(t1, w1d, w1u, t2, w2d, w2u, scale)
 
 
-def loha_diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, alpha=None):
+def loha_diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
     """### loha_diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
@@ -87,24 +87,25 @@ def loha_diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, alpha=None):
     Args:
         w1d, w2d (torch.Tensor): weight of down proj linear/conv layer
         w1u, w2u (torch.Tensor): weight of up proj linear/conv layer
-        alpha (float, optional): scale factor, alpha/rank is gamma (check our paper)
+        gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: ΔW
     """
-    assert w1d.size(0) == w1u.size(1)
-    assert w2d.size(0) == w2u.size(1)
-
-    R, I, *k = w1d.shape
-    O, R, *_ = w1u.shape
-    if alpha is None:
-        gamma = 1
-    else:
-        gamma = alpha / R
-
     if t1 is not None and t2 is not None:
+        assert w1d.size(0) == t1.size(1)
+        assert w1u.size(0) == t1.size(0)
+        assert w2d.size(0) == t2.size(1)
+        assert w2u.size(0) == t2.size(0)
+        R, I = w1d.shape
+        R, O = w1u.shape
+        R, R, *k = t1.shape
         result = make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, gamma)
     else:
+        assert w1d.size(0) == w1u.size(1)
+        assert w2d.size(0) == w2u.size(1)
+        R, I, *k = w1d.shape
+        O, R, *_ = w1u.shape
         w1d = w1d.reshape(w1d.size(0), -1)
         w1u = w1u.reshape(-1, w1u.size(1))
         w2d = w2d.reshape(w2d.size(0), -1)
@@ -119,7 +120,7 @@ FUNC_LIST = [None, None, F.linear, F.conv1d, F.conv2d, F.conv3d]
 
 
 def loha_bypass_forward_diff(
-    x, w1d, w1u, w2d, w2u, t1=None, t2=None, alpha=None, extra_args={}
+    x, w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0, extra_args={}
 ):
     """### loha_bypass_forward_diff
 
@@ -127,12 +128,12 @@ def loha_bypass_forward_diff(
         x (torch.Tensor): input tensor
         w1d, w2d (torch.Tensor): weight of up proj linear/conv layer
         w1u, w2u (torch.Tensor): weight of down proj linear/conv layer
-        alpha (float, optional): scale factor, alpha/rank is gamma (check our paper)
+        gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: output tensor
     """
-    diff_w = loha_diff_weight(w1d, w1u, w2d, w2u, t1, t2, alpha)
+    diff_w = loha_diff_weight(w1d, w1u, w2d, w2u, t1, t2, gamma)
     return FUNC_LIST[w1d.dim() if t1 is None else t1.dim()](x, diff_w, **extra_args)
 
 
@@ -144,8 +145,8 @@ if __name__ == "__main__":
 
     x = torch.randn(1, 128, 8, 8)
     y = FUNC_LIST[a.dim()](x, w, **extra_args)
-    diff_w = loha_diff_weight(a, b, a, b, None, None, 4)
-    diff_y = loha_bypass_forward_diff(x, a, b, a, b, None, None, 4, extra_args)
+    diff_w = loha_diff_weight(a, b, a, b, None, None, 1)
+    diff_y = loha_bypass_forward_diff(x, a, b, a, b, None, None, 1, extra_args)
 
     print(F.mse_loss(y, y + diff_y))
     print(F.mse_loss(w, w + diff_w))
