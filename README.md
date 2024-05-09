@@ -1,4 +1,4 @@
-# LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion.
+# LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
 ![banner image](docs/images/banner.png)
 
@@ -10,7 +10,7 @@ This project originated from LoCon (see archive branch).
 
 [![Discord!](https://i.imgur.com/A8tOvFS.jpg)](https://discord.gg/VtTFKrj9gJ)
 
-**If you want to check more in-depth experiment results and discussions for LyCORIS, you can check our [paper](https://arxiv.org/abs/2309.14859)**
+**If you want to check more in-depth experiment results and discussions for LyCORIS, you can check our [paper](https://openreview.net/forum?id=wfzXa8e783)**
 
 ## Algorithm Overview
 
@@ -23,7 +23,7 @@ A simple comparison of some of these methods are provided below (to be taken wit
 |                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
 | Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
-| Flexibility$^*$     | ★   | ●   | ◉   | ▲              | ●$^†$        |
+| Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$        |
 | Diversity             | ▲   | ◉   | ★   | ●              | ★               |
 | Size                  | ▲   | ●   | ●   | ●              | ★               |
 | Training Speed Linear | ★   | ●   | ●   | ★              | ★               |
