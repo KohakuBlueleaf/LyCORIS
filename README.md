@@ -1,4 +1,4 @@
-# LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion.
+# LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
 ![banner image](docs/images/banner.png)
 
@@ -10,7 +10,7 @@ This project originated from LoCon (see archive branch).
 
 [![Discord!](https://i.imgur.com/A8tOvFS.jpg)](https://discord.gg/VtTFKrj9gJ)
 
-**If you want to check more in-depth experiment results and discussions for LyCORIS, you can check our [paper](https://arxiv.org/abs/2309.14859)**
+**If you want to check more in-depth experiment results and discussions for LyCORIS, you can check our [paper](https://openreview.net/forum?id=wfzXa8e783)**
 
 ## Algorithm Overview
 
@@ -20,10 +20,10 @@ Please check [List of Implemented Algorithms](docs/Algo-List.md) and [Guidelines
 
 A simple comparison of some of these methods are provided below (to be taken with a grain of salt)
 
-|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
+|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor $^+$ |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
 | Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
-| Flexibility$^*$     | ★   | ●   | ◉   | ▲              | ●$^†$        |
+| Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$        |
 | Diversity             | ▲   | ◉   | ★   | ●              | ★               |
 | Size                  | ▲   | ●   | ●   | ●              | ★               |
 | Training Speed Linear | ★   | ●   | ●   | ★              | ★               |
@@ -32,8 +32,11 @@ A simple comparison of some of these methods are provided below (to be taken wit
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
-$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not
-$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation
+$^+$ Usually we take `factor <= 0.5 * sqrt(dim)` as low factor and `factor >= sqrt(dim` as high factor. For example, factor<=8 for SD1.x/SD2.x/SDXL can be seen as low factor, and, factor>=16 can be seen as high factor. <br>
+$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not <br>
+$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation <br>
+
+**The actual performance may vary depending on the datasets, tasks, and hyperparameters used. It is recommended to experiment with different settings to achieve optimal results.**
 
 ## Usage
 
