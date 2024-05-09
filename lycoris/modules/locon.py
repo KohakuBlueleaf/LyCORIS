@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisBaseModule
+from ..functional.general import rebuild_tucker
 from ..logging import logger
 from ..utils.bnb import LinearNF4
 
@@ -158,9 +159,9 @@ class LoConModule(LycorisBaseModule):
         wb = self.lora_down.weight.to(device)
         if self.tucker:
             t = self.lora_mid.weight.to(device)
-            wa = wa.reshape(wa.size(0), -1)
+            wa = wa.reshape(wa.size(0), -1).transpose(0, 1)
             wb = wb.reshape(wb.size(0), -1)
-            weight = torch.einsum("i j k l, p i, j r -> p r k l", t, wa, wb)
+            weight = rebuild_tucker(t, wa, wb)
         else:
             weight = wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)
 
