@@ -20,7 +20,7 @@ Please check [List of Implemented Algorithms](docs/Algo-List.md) and [Guidelines
 
 A simple comparison of some of these methods are provided below (to be taken with a grain of salt)
 
-|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor |
+|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor $^+$ |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
 | Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
 | Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$        |
@@ -32,8 +32,11 @@ A simple comparison of some of these methods are provided below (to be taken wit
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
+$^+$ Usually we take `factor <= 0.5 * sqrt(dim)` as low factor and `factor >= sqrt(dim` as high factor. For example, factor<=8 for SD1.x/SD2.x/SDXL can be seen as low factor, and, factor>=16 can be seen as high factor. <br>
 $^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not <br>
-$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation
+$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation <br>
+
+**The actual performance may vary depending on the datasets, tasks, and hyperparameters used. It is recommended to experiment with different settings to achieve optimal results.**
 
 ## Usage
 
