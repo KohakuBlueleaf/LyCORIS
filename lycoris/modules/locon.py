@@ -158,8 +158,8 @@ class LoConModule(LycorisBaseModule):
         wb = self.lora_down.weight.to(device)
         if self.tucker:
             t = self.lora_mid.weight.to(device)
-            wa = wa.squeeze(-1, -2)
-            wb = wb.squeeze(-1, -2)
+            wa = wa.reshape(wa.size(0), -1)
+            wb = wb.reshape(wb.size(0), -1)
             weight = torch.einsum("i j k l, p i, j r -> p r k l", t, wa, wb)
         else:
             weight = wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)
