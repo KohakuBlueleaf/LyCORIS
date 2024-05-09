@@ -138,15 +138,16 @@ def loha_bypass_forward_diff(
 
 
 if __name__ == "__main__":
-    w = torch.randn(128, 128, 3, 3)
-    a = torch.randn(16, 128, 3, 3) * 0.1
-    b = torch.randn(128, 16) * 0.1
+    w = torch.randn(128, 128, 3, 3, 3)
+    a = torch.randn(16, 128) * 0.01
+    b = torch.randn(16, 128) * 0.01
+    m = torch.randn(16, 16, 3, 3, 3) * 0.01
     extra_args = {"padding": 1}
 
-    x = torch.randn(1, 128, 8, 8)
-    y = FUNC_LIST[a.dim()](x, w, **extra_args)
-    diff_w = loha_diff_weight(a, b, a, b, None, None, 1)
-    diff_y = loha_bypass_forward_diff(x, a, b, a, b, None, None, 1, extra_args)
+    x = torch.randn(1, 128, 8, 8, 8)
+    y = FUNC_LIST[w.dim()](x, w, **extra_args)
+    diff_w = loha_diff_weight(a, b, a, b, m, m, 1)
+    diff_y = loha_bypass_forward_diff(x, a, b, a, b, m, m, 1, extra_args)
 
     print(F.mse_loss(y, y + diff_y))
     print(F.mse_loss(w, w + diff_w))
