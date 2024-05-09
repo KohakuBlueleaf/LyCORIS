@@ -139,7 +139,7 @@ class LohaModule(LycorisBaseModule):
             if "scalar" in key:
                 del missing_keys[missing_keys.index(key)]
         if isinstance(self.scalar, nn.Parameter):
-            self.scalar.copy_(torch.ones_like(self.scalar))
+            self.scalar.data.copy_(torch.ones_like(self.scalar))
         else:
             self.scalar = torch.ones_like(self.scalar)
 
