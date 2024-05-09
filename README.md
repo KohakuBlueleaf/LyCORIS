@@ -32,7 +32,7 @@ A simple comparison of some of these methods are provided below (to be taken wit
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
-$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not
+$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not <br>
 $^†$ It may become more difficult to switch base model or combine multiple concepts in this situation
 
 ## Usage
