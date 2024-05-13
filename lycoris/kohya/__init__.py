@@ -147,6 +147,15 @@ def create_network(
         # dylora didn't support scale weight norm yet
         delattr(type(network), "apply_max_norm_regularization")
 
+    loraplus_lr_ratio = kwargs.get("loraplus_lr_ratio", None)
+    loraplus_unet_lr_ratio = kwargs.get("loraplus_unet_lr_ratio", None)
+    loraplus_text_encoder_lr_ratio = kwargs.get("loraplus_text_encoder_lr_ratio", None)
+    loraplus_lr_ratio = float(loraplus_lr_ratio) if loraplus_lr_ratio is not None else None
+    loraplus_unet_lr_ratio = float(loraplus_unet_lr_ratio) if loraplus_unet_lr_ratio is not None else None
+    loraplus_text_encoder_lr_ratio = float(loraplus_text_encoder_lr_ratio) if loraplus_text_encoder_lr_ratio is not None else None
+    if loraplus_lr_ratio is not None or loraplus_unet_lr_ratio is not None or loraplus_text_encoder_lr_ratio is not None:
+        network.set_loraplus_lr_ratio(loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio)
+
     return network
 
 
@@ -572,23 +581,22 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.loras = self.text_encoder_loras + self.unet_loras
         super().merge_to(1)
 
-    def prepare_optimizer_params(
-        self,
-        text_encoder_lr,
-        unet_lr,
-        default_lr,
-        text_encoder_loraplus_ratio=None,
-        unet_loraplus_ratio=None,
-        loraplus_ratio=None
-    ):
-        self.requires_grad_(True)
-        all_params = []
+    def set_loraplus_lr_ratio(self, loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio):
+        self.loraplus_lr_ratio = loraplus_lr_ratio
+        self.loraplus_unet_lr_ratio = loraplus_unet_lr_ratio
+        self.loraplus_text_encoder_lr_ratio = loraplus_text_encoder_lr_ratio
 
-        def assemble_params(loras, lr, lora_plus_ratio):
+    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, default_lr):
+        self.requires_grad_(True)
+
+        all_params = []
+        lr_descriptions = []
+
+        def assemble_params(loras, lr, ratio):
             param_groups = {"lora": {}, "plus": {}}
             for lora in loras:
                 for name, param in lora.named_parameters():
-                    if lora_plus_ratio is not None and (
+                    if ratio is not None and (
                         "lora_up" in name or
                         # LoHa
                         "hada_w1_b" in name or
@@ -606,6 +614,7 @@ class LycorisNetworkKohya(LycorisNetwork):
                         param_groups["lora"][f"{lora.lora_name}.{name}"] = param
 
             params = []
+            descriptions = []
             for key in param_groups.keys():
                 param_data = {"params": param_groups[key].values()}
 
@@ -614,34 +623,38 @@ class LycorisNetworkKohya(LycorisNetwork):
 
                 if lr is not None:
                     if key == "plus":
-                        param_data["lr"] = lr * lora_plus_ratio
+                        param_data["lr"] = lr * ratio
                     else:
                         param_data["lr"] = lr
 
                 if param_data.get("lr", None) == 0 or param_data.get("lr", None) is None:
+                    logger.info("NO LR skipping!")
                     continue
 
                 params.append(param_data)
+                descriptions.append("plus" if key == "plus" else "")
 
-            return params
+            return params, descriptions
 
         if self.text_encoder_loras:
-            params = assemble_params(
+            params, descriptions = assemble_params(
                 self.text_encoder_loras,
                 text_encoder_lr if text_encoder_lr is not None else default_lr,
-                text_encoder_loraplus_ratio or loraplus_ratio
+                self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
+            lr_descriptions.extend(["textencoder" + (" " + d if d else "") for d in descriptions])
 
         if self.unet_loras:
-            params = assemble_params(
+            params, descriptions = assemble_params(
                 self.unet_loras,
                 unet_lr if unet_lr is not None else default_lr,
-                unet_loraplus_ratio or loraplus_ratio
+                self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
+            lr_descriptions.extend(["unet" + (" " + d if d else "") for d in descriptions])
 
-        return all_params
+        return all_params, lr_descriptions
 
     def save_weights(self, file, dtype, metadata):
         if metadata is not None and len(metadata) == 0:
