@@ -331,6 +331,8 @@ class LycorisNetwork(torch.nn.Module):
             loras = {}
             lora_names = []
             for name, module in root_module.named_modules():
+                if module is root_module:
+                    continue
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP:
                     next_config = self.MODULE_ALGO_MAP[module_name]
