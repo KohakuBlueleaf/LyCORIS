@@ -5,83 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisBaseModule
+from ..functional.loha import loha_diff_weight
 from ..utils.bnb import LinearNF4
-
-
-class HadaWeight(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
-        ctx.save_for_backward(w1a, w1b, w2a, w2b, scale)
-        diff_weight = ((w1a @ w1b) * (w2a @ w2b)) * scale
-        return diff_weight
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        (w1a, w1b, w2a, w2b, scale) = ctx.saved_tensors
-        grad_out = grad_out * scale
-        temp = grad_out * (w2a @ w2b)
-        grad_w1a = temp @ w1b.T
-        grad_w1b = w1a.T @ temp
-
-        temp = grad_out * (w1a @ w1b)
-        grad_w2a = temp @ w2b.T
-        grad_w2b = w2a.T @ temp
-
-        del temp
-        return grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
-
-
-class HadaWeightCP(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
-        ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
-
-        rebuild1 = torch.einsum("i j k l, j r, i p -> p r k l", t1, w1b, w1a)
-        rebuild2 = torch.einsum("i j k l, j r, i p -> p r k l", t2, w2b, w2a)
-
-        return rebuild1 * rebuild2 * scale
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
-        grad_out = grad_out * scale
-
-        temp = torch.einsum("i j k l, j r -> i r k l", t2, w2b)
-        rebuild = torch.einsum("i j k l, i r -> r j k l", temp, w2a)
-
-        grad_w = rebuild * grad_out
-        del rebuild
-
-        grad_w1a = torch.einsum("r j k l, i j k l -> r i", temp, grad_w)
-        grad_temp = torch.einsum("i j k l, i r -> r j k l", grad_w, w1a.T)
-        del grad_w, temp
-
-        grad_w1b = torch.einsum("i r k l, i j k l -> r j", t1, grad_temp)
-        grad_t1 = torch.einsum("i j k l, j r -> i r k l", grad_temp, w1b.T)
-        del grad_temp
-
-        temp = torch.einsum("i j k l, j r -> i r k l", t1, w1b)
-        rebuild = torch.einsum("i j k l, i r -> r j k l", temp, w1a)
-
-        grad_w = rebuild * grad_out
-        del rebuild
-
-        grad_w2a = torch.einsum("r j k l, i j k l -> r i", temp, grad_w)
-        grad_temp = torch.einsum("i j k l, i r -> r j k l", grad_w, w2a.T)
-        del grad_w, temp
-
-        grad_w2b = torch.einsum("i r k l, i j k l -> r j", t2, grad_temp)
-        grad_t2 = torch.einsum("i j k l, j r -> i r k l", grad_temp, w2b.T)
-        del grad_temp
-        return grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
-
-
-def make_weight(w1a, w1b, w2a, w2b, scale):
-    return HadaWeight.apply(w1a, w1b, w2a, w2b, scale)
-
-
-def make_weight_tucker(t1, w1a, w1b, t2, w2a, w2b, scale):
-    return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
 
 
 class LohaModule(LycorisBaseModule):
@@ -214,28 +139,30 @@ class LohaModule(LycorisBaseModule):
             if "scalar" in key:
                 del missing_keys[missing_keys.index(key)]
         if isinstance(self.scalar, nn.Parameter):
-            self.scalar.copy_(torch.ones_like(self.scalar))
+            self.scalar.data.copy_(torch.ones_like(self.scalar))
         else:
             self.scalar = torch.ones_like(self.scalar)
 
     def get_weight(self, shape):
         if self.tucker:
-            weight = make_weight_tucker(
-                self.hada_t1,
-                self.hada_w1_a,
+            weight = loha_diff_weight(
                 self.hada_w1_b,
-                self.hada_t2,
-                self.hada_w2_a,
+                self.hada_w1_a,
                 self.hada_w2_b,
-                scale=torch.tensor(self.scale),
+                self.hada_w2_a,
+                self.hada_t1,
+                self.hada_t2,
+                gamma=torch.tensor(self.scale),
             )
         else:
-            weight = make_weight(
-                self.hada_w1_a,
+            weight = loha_diff_weight(
                 self.hada_w1_b,
-                self.hada_w2_a,
+                self.hada_w1_a,
                 self.hada_w2_b,
-                scale=torch.tensor(self.scale),
+                self.hada_w2_a,
+                None,
+                None,
+                gamma=torch.tensor(self.scale),
             )
         if shape is not None:
             weight = weight.reshape(shape)
@@ -339,20 +266,21 @@ class LohaModule(LycorisBaseModule):
 
 
 if __name__ == "__main__":
-    base = nn.Linear(128, 128).cuda()
-    lokr = LohaModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    device = torch.device("mps")
+    base = nn.Linear(128, 128).to(device)
+    lokr = LohaModule("test", base, 1, 4, 1, weight_decompose=True).to(device)
     print(lokr)
-    test_input = torch.randn(1, 128).cuda()
+    test_input = torch.randn(1, 128).to(device)
     test_output = lokr(test_input)
     print(test_output.shape)
 
-    base_4bit = LinearNF4(128, 128)
-    base_4bit.load_state_dict(base.state_dict())
-    base_4bit.cuda()
-    qlocon = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
+    # base_4bit = LinearNF4(128, 128)
+    # base_4bit.load_state_dict(base.state_dict())
+    # base_4bit.to(device)
+    # qlocon = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
+    # print(qlocon)
+    # test_input = torch.randn(1, 128).to(device)
+    # test_output = qlocon(test_input)
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
