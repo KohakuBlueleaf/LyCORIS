@@ -329,6 +329,10 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
 
+        self.loraplus_lr_ratio = None
+        self.loraplus_unet_lr_ratio = None
+        self.loraplus_text_encoder_lr_ratio = None
+
         self.use_tucker = use_tucker
 
         def create_single_module(
