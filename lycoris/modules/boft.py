@@ -201,29 +201,32 @@ class ButterflyOFTModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
-    lokr = ButterflyOFTModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
-    print(lokr)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = lokr(test_input)
+    boft = ButterflyOFTModule(
+        "test", base, 1, 4, 1, weight_decompose=True, factor=8
+    ).cuda()
+    print(boft)
+    test_input = torch.randn(1, 77, 128).cuda()
+    test_output = boft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
-    print(F.mse_loss(test_output, lokr.bypass_forward(test_input)))
 
     base_4bit = LinearNF4(128, 128)
     base_4bit.load_state_dict(base.state_dict())
     base_4bit.cuda()
-    qlocon = ButterflyOFTModule(
+    qboft = ButterflyOFTModule(
         "test", base_4bit, 1, 4, 1, weight_decompose=False
     ).cuda()
-    print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
+    print(qboft)
+    test_output = qboft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
-    lokr = ButterflyOFTModule(
+    boft = ButterflyOFTModule(
         "test", base, 1, 4, 1, weight_decompose=True, use_tucker=True
     )
-    print(lokr)
+    print(boft)
     test_input = torch.randn(1, 128, 16, 16)
-    test_output = lokr(test_input)
+    test_output = boft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
