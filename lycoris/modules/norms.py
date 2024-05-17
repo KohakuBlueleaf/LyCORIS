@@ -56,8 +56,24 @@ class NormModule(LycorisBaseModule):
         bias = self.b_norm.to(device) * drop * scale
         return org_weight + weight, org_bias + bias
 
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        w = self.w_norm*multiplier
+        b = self.b_norm*multiplier
+        if device is not None:
+            w = w.to(device)
+            b = b.to(device)
+        if shape is not None:
+            w = w.view(shape)
+            b = b.view(shape)
+        return w, b
+
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        return self.make_weight(multiplier, device)
+        org_w = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
+        org_b = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+        diff_w, diff_b = self.get_diff_weight(multiplier, shape, device)
+        weight = org_w + diff_w
+        bias = org_b + diff_b
+        return weight, bias
 
     def forward(self, x):
         if self.module_dropout and self.training:
@@ -68,3 +84,21 @@ class NormModule(LycorisBaseModule):
         w, b = self.make_weight(scale, x.device)
         kw_dict = self.kw_dict | {"weight": w, "bias": b}
         return self.op(x, **kw_dict)
+
+
+if __name__ == "__main__":
+    base = nn.LayerNorm(128).cuda()
+    norm = NormModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(norm)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = norm(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
+
+    base = nn.GroupNorm(4, 128).cuda()
+    norm = NormModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(norm)
+    test_input = torch.randn(1, 128, 3, 3).cuda()
+    test_output = norm(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
