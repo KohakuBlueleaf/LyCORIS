@@ -127,17 +127,6 @@ class FullModule(LycorisBaseModule):
                 bias = bias.view(shape[0], 1)
         return weight, bias
 
-    def bypass_forward_diff(self, x, scale=1):
-        diff_weight, diff_bias = self.get_diff_weight(scale)
-        kw_dict = self.kw_dict | {"weight": diff_weight, "bias": diff_bias}
-        return self.op(x, **kw_dict)
-
-    def bypass_forward(self, x, scale=1):
-        org_result = self.org_forward(x)
-        diff_weight, diff_bias = self.get_diff_weight(scale)
-        kw_dict = self.kw_dict | {"weight": diff_weight, "bias": diff_bias}
-        return self.op(org_result, **kw_dict) + org_result
-
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if (
             self.module_dropout
@@ -153,7 +142,6 @@ class FullModule(LycorisBaseModule):
         weight, bias = self.make_weight(scale, x.device)
         kw_dict = self.kw_dict | {"weight": weight, "bias": bias}
         return self.op(x, **kw_dict)
-
 
 
 if __name__ == "__main__":
