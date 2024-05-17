@@ -115,9 +115,6 @@ class LoConModule(LycorisBaseModule):
                 log_wd()
         else:
             self.dropout = nn.Identity()
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
 
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
