@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .base import LycorisBaseModule
-from .lokr import factorization
+from ..functional import factorization
 from ..logging import logger
 from ..utils.bnb import LinearNF4
 
@@ -186,24 +186,26 @@ class DiagOFTModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
-    lokr = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
-    print(lokr)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = lokr(test_input)
+    doft = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, factor=8).cuda()
+    print(doft)
+    test_input = torch.randn(1, 77, 128).cuda()
+    test_output = doft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base_4bit = LinearNF4(128, 128)
     base_4bit.load_state_dict(base.state_dict())
     base_4bit.cuda()
-    qlocon = DiagOFTModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
+    qdoft = DiagOFTModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
+    print(qdoft)
+    test_output = qdoft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
-    lokr = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(lokr)
+    doft = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+    print(doft)
     test_input = torch.randn(1, 128, 16, 16)
-    test_output = lokr(test_input)
+    test_output = doft(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
