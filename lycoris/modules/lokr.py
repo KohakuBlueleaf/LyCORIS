@@ -376,7 +376,7 @@ class LokrModule(LycorisBaseModule):
 
         return scaled, orig_norm * ratio
 
-    def bypass_forward_diff(self, h):
+    def bypass_forward_diff(self, h, scale=1):
         if len(self.shape) > 2 and self.shape[2] > 1:
             return (
                 self.op(h, self.get_weight(self.shape), **self.kw_dict)
@@ -412,7 +412,7 @@ class LokrModule(LycorisBaseModule):
         if self.module_type.startswith("conv"):
             h = h.transpose(1, -1)
 
-        return h * self.multiplier
+        return h * scale
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
@@ -430,7 +430,7 @@ class LokrModule(LycorisBaseModule):
                     ),
                 )
         if self.bypass_mode:
-            return self.bypass_forward(x)
+            return self.bypass_forward(x, self.multiplier)
         else:
             weight = (
                 self.org_module[0].weight.data.to(
@@ -455,31 +455,22 @@ if __name__ == "__main__":
     print(lokr)
     test_input = torch.randn(1, 77, 128).cuda()
     test_output = lokr(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
-
-    # opt = torch.optim.AdamW(lokr.parameters(), lr=1e-2)
-    # for _ in range(100):
-    #     x = torch.randn(128, 128).cuda()
-    #     t = x / 10
-    #     y = lokr(x)
-    #     loss = F.mse_loss(y, t)
-    #     loss.backward()
-    #     opt.step()
-    #     opt.zero_grad()
-    #     print(loss.item())
 
     base_4bit = LinearNF4(128, 128)
     base_4bit.load_state_dict(base.state_dict())
     base_4bit.cuda()
-    qlocon = LokrModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qlocon)
-    test_output2 = qlocon(test_input)
-    print(test_output2.shape)
-    print(F.mse_loss(test_output, test_output2))
+    qlokr = LokrModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
+    print(qlokr)
+    test_output = qlokr(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
     lokr = LokrModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
     print(lokr)
     test_input = torch.randn(1, 128, 16, 16)
     test_output = lokr(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)

@@ -277,10 +277,11 @@ class LoConModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     base = nn.Linear(128, 128).cuda()
-    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
-    print(lokr)
+    locon = LoConModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(locon)
     test_input = torch.randn(1, 128).cuda()
-    test_output = lokr(test_input)
+    test_output = locon(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base_4bit = LinearNF4(128, 128)
@@ -290,11 +291,13 @@ if __name__ == "__main__":
     print(qlocon)
     test_input = torch.randn(1, 128).cuda()
     test_output = qlocon(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
-    lokr = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(lokr)
+    locon = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+    print(locon)
     test_input = torch.randn(1, 128, 16, 16)
-    test_output = lokr(test_input)
+    test_output = locon(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
