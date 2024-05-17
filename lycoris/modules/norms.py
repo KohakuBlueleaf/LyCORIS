@@ -57,8 +57,8 @@ class NormModule(LycorisBaseModule):
         return org_weight + weight, org_bias + bias
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
-        w = self.w_norm*multiplier
-        b = self.b_norm*multiplier
+        w = self.w_norm * multiplier
+        b = self.b_norm * multiplier
         if device is not None:
             w = w.to(device)
             b = b.to(device)

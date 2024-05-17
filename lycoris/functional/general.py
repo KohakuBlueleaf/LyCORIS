@@ -71,4 +71,4 @@ def power2factorization(dimension: int, factor: int = -1) -> tuple[int, int]:
         if sum(int(i) for i in f"{dimension//m:b}") == 1:
             n = dimension // m
 
-    return dimension//n, n
+    return dimension // n, n

@@ -97,7 +97,7 @@ def lora_bypass_forward_diff(x, d, u, m=None, gamma=1.0, extra_args={}):
 if __name__ == "__main__":
     w = torch.randn(32, 32, 3, 3, 3)
     d, u, m = lora_weight_gen(w, 4)
-    u = u+0.01
+    u = u + 0.01
     extra_args = {"padding": 1}
 
     x = torch.randn(1, 32, 8, 8, 8)
