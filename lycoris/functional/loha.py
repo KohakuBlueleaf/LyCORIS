@@ -15,12 +15,12 @@ class HadaWeight(torch.autograd.Function):
         (w1d, w1u, w2d, w2u, scale) = ctx.saved_tensors
         grad_out = grad_out * scale
         temp = grad_out * (w2u @ w2d)
-        grad_w1d = temp @ w1d.T
-        grad_w1u = w1u.T @ temp
+        grad_w1u = temp @ w1d.T
+        grad_w1d = w1u.T @ temp
 
         temp = grad_out * (w1u @ w1d)
-        grad_w2d = temp @ w2d.T
-        grad_w2u = w2u.T @ temp
+        grad_w2u = temp @ w2d.T
+        grad_w2d = w2u.T @ temp
 
         del temp
         return grad_w1d, grad_w1u, grad_w2d, grad_w2u, None
@@ -47,11 +47,11 @@ class HadaWeightTucker(torch.autograd.Function):
         grad_w = rebuild * grad_out
         del rebuild
 
-        grad_w1d = torch.einsum("r j ..., i j ... -> r i", temp, grad_w)
+        grad_w1u = torch.einsum("r j ..., i j ... -> r i", temp, grad_w)
         grad_temp = torch.einsum("i j ..., i r -> r j ...", grad_w, w1u.T)
         del grad_w, temp
 
-        grad_w1u = torch.einsum("i r ..., i j ... -> r j", t1, grad_temp)
+        grad_w1d = torch.einsum("i r ..., i j ... -> r j", t1, grad_temp)
         grad_t1 = torch.einsum("i j ..., j r -> i r ...", grad_temp, w1d.T)
         del grad_temp
 
@@ -61,11 +61,11 @@ class HadaWeightTucker(torch.autograd.Function):
         grad_w = rebuild * grad_out
         del rebuild
 
-        grad_w2d = torch.einsum("r j ..., i j ... -> r i", temp, grad_w)
+        grad_w2u = torch.einsum("r j ..., i j ... -> r i", temp, grad_w)
         grad_temp = torch.einsum("i j ..., i r -> r j ...", grad_w, w2u.T)
         del grad_w, temp
 
-        grad_w2u = torch.einsum("i r ..., i j ... -> r j", t2, grad_temp)
+        grad_w2d = torch.einsum("i r ..., i j ... -> r j", t2, grad_temp)
         grad_t2 = torch.einsum("i j ..., j r -> i r ...", grad_temp, w2d.T)
         del grad_temp
         return grad_t1, grad_w1d, grad_w1u, grad_t2, grad_w2d, grad_w2u, None

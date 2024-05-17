@@ -163,6 +163,7 @@ class LycorisBaseModule(ModuleCustomSD):
         self.module_dropout = module_dropout
 
         self.multiplier = multiplier
+        self.org_forward = org_module.forward
         self.org_module = [org_module]
 
     @property

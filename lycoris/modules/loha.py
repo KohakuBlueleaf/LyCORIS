@@ -266,21 +266,23 @@ class LohaModule(LycorisBaseModule):
 
 
 if __name__ == "__main__":
-    device = torch.device("mps")
+    device = torch.device("cuda")
     base = nn.Linear(128, 128).to(device)
     lokr = LohaModule("test", base, 1, 4, 1, weight_decompose=True).to(device)
     print(lokr)
     test_input = torch.randn(1, 128).to(device)
     test_output = lokr(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
-    # base_4bit = LinearNF4(128, 128)
-    # base_4bit.load_state_dict(base.state_dict())
-    # base_4bit.to(device)
-    # qlocon = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
-    # print(qlocon)
-    # test_input = torch.randn(1, 128).to(device)
-    # test_output = qlocon(test_input)
+    base_4bit = LinearNF4(128, 128)
+    base_4bit.load_state_dict(base.state_dict())
+    base_4bit.to(device)
+    qlocon = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
+    print(qlocon)
+    test_input = torch.randn(1, 128).to(device)
+    test_output = qlocon(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
 
     base = nn.Conv2d(128, 128, 3, 1, 1)
@@ -288,4 +290,5 @@ if __name__ == "__main__":
     print(lokr)
     test_input = torch.randn(1, 128, 16, 16)
     test_output = lokr(test_input)
+    torch.sum(test_output).backward()
     print(test_output.shape)
