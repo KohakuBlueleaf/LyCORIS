@@ -1,5 +1,8 @@
+try:
+    from . import kohya
+except:
+    pass
 from . import (
-    kohya,
     modules,
     utils,
 )
