@@ -1,20 +1,50 @@
 # Change Log
 
-## 2024/05/xx update to 2.3.0 - Functional API and Consistent Module API
+## 2024/05/xx update to 3.0.0 - Brand New Functional API and Module API
+
+### The reasons of 3.0.0
+
+We reconstruct the whole library with new Class definition and brand new Functional API system.
+
+We also removed lot of redundant/unused modules.
+
+Since the whole library are changed significantly. We decide to call it 3.0.0 as a new major version.
+
+### Major Changes
+
+* New Module API
+* New Functional API
+* kohya-ss/sd-scripts as optional dependency
+* Remove lot of redundant/deprecated modules
+* Better testing
+
+### Full change log
 
 #### New Features
 
-* LyCORIS now have consistent API for different algorithm like `bypass_forward_diff` or `get_weight_dff` method. Developers of other project can utilise this to do more trick or integrate into their framework more easily.
-* LyCORIS now have functional API for each algo. Developers who prefer functional more than Module things can utilise this feature.
+* LyCORIS now have consistent API for different algorithm like `bypass_forward_diff` or `get_diff_weight` method. Developers of other project can utilize these API to do more tricks or integrate LyCORIS into their framework more easily.
+* LyCORIS now have functional API. Developers who prefer functional more than Module things can utilize this feature.
   * Functional API also allow developers who don't want to introduce new dependencies. Just copy-paste the source code and utilizing it. (with Apache-2 License, directly copy-paste is totally allowed)
-* Support Conv1d and Conv3d module on LoCon/LoHa/LoKr/OFT/BOFT (not All algo in LyCORIS support them, you may receive error when apply un sopported algo), support inherited module (like `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
+* Add support for Conv1d and Conv3d module on LoCon/LoHa/LoKr/OFT/BOFT (not All algo in LyCORIS support them, you may receive error when apply unsopported algo), support inherited module (like `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
+
+#### Deprecation
+
+* HCP support is now dropped. We will wait until HCP have better wrapper API.
+* HyperNetwork-related modules like `hypernet/`, `attention.py`, `lilora.py` are removed.
+* Uncompleted GLoKr are removed.
+* code copied from kohya-ss/sd-scripts are removed. The original sd-scripts repo is now a optional dependency.
 
 #### Fixes, Slight Changes
 
+* The definition of dropout and rank_dropout in each algorithm are changed. Since some concept of original rank_dropout is hard to applied to other algorithm. We can only design the dropout for each module seperatedly.
+
 #### Annotations
 
-* dylora, glora, ia3, lilora are outdated and need to be rewriten. (If you see this on final change note, it means the refactor of these algo will be in next version)
-* 
+* dylora, glora, ia3 are outdated and need to be rewriten. (If you see this on final change note, it means the refactor of these algo will be in next version)
+
+
+---
+
 
 ## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
 
