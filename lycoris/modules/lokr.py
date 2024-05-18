@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .base import LycorisBaseModule
-from ..functional import factorization
+from ..functional import factorization, rebuild_tucker
 from ..logging import logger
 from ..utils.bnb import LinearNF4
 
@@ -20,11 +20,6 @@ def logging_force_full_matrix(lora_dim, dim, factor):
         f" dim={dim} and {factor=}"
         ", using full matrix mode."
     )
-
-
-def make_weight_tucker(t, wa, wb):
-    rebuild2 = torch.einsum("i j k l, i p, j r -> p r k l", t, wa, wb)  # [c, d, k1, k2]
-    return rebuild2
 
 
 def make_kron(w1, w2, scale):
@@ -238,7 +233,9 @@ class LokrModule(LycorisBaseModule):
         if isinstance(self.scalar, nn.Parameter):
             self.scalar.data.copy_(torch.ones_like(self.scalar))
         else:
-            self.scalar = torch.ones_like(self.scalar)
+            self.register_buffer(
+                "scalar", torch.ones_like(self.scalar), persistent=False
+            )
 
     def get_weight(self, shape):
         weight = make_kron(
@@ -247,18 +244,19 @@ class LokrModule(LycorisBaseModule):
                 self.lokr_w2
                 if self.use_w2
                 else (
-                    make_weight_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
+                    rebuild_tucker(self.lokr_t2, self.lokr_w2_a, self.lokr_w2_b)
                     if self.tucker
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
             ),
             torch.tensor(self.scale),
         )
+        dtype = weight.dtype
         if shape is not None:
-            weight = weight.reshape(shape)
+            weight = weight.view(shape)
         if self.training and self.rank_dropout:
-            drop = (torch.rand(weight.size(0)) > self.rank_dropout).to(weight.dtype)
-            drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
+            drop = (torch.rand(weight.size(0)) > self.rank_dropout).to(dtype)
+            drop = drop.view(-1, *[1] * len(weight.shape[1:]))
             if self.rank_dropout_scale:
                 drop /= drop.mean()
             weight *= drop
@@ -284,7 +282,7 @@ class LokrModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale.to(weight.device) / weight_norm)
+        return weight * (self.dora_scale / weight_norm)
 
     def custom_state_dict(self):
         destination = {}
@@ -368,7 +366,7 @@ class LokrModule(LycorisBaseModule):
         if self.module_type.startswith("conv"):
             h = h.transpose(1, -1)
 
-        return h * scale
+        return self.drop(h * scale)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
@@ -376,20 +374,12 @@ class LokrModule(LycorisBaseModule):
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.op(
-                    x,
-                    self.org_module[0].weight.data,
-                    (
-                        None
-                        if self.org_module[0].bias is None
-                        else self.org_module[0].bias.data
-                    ),
-                )
+                return self.org_forward(x)
         if self.bypass_mode:
             return self.bypass_forward(x, self.multiplier)
         else:
             weight = (
-                self.org_module[0].weight.data.to(x.device, dtype=self.dtype)
+                self.org_module[0].weight.data.to(self.dtype)
                 + self.get_weight(self.shape) * self.scalar * self.multiplier
             )
             bias = (

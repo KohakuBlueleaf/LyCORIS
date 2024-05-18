@@ -88,7 +88,7 @@ class NormModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     base = nn.LayerNorm(128).cuda()
-    norm = NormModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    norm = NormModule("test", base, 1).cuda()
     print(norm)
     test_input = torch.randn(1, 128).cuda()
     test_output = norm(test_input)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     print(test_output.shape)
 
     base = nn.GroupNorm(4, 128).cuda()
-    norm = NormModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    norm = NormModule("test", base, 1).cuda()
     print(norm)
     test_input = torch.randn(1, 128, 3, 3).cuda()
     test_output = norm(test_input)

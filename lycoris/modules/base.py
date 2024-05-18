@@ -165,6 +165,18 @@ class LycorisBaseModule(ModuleCustomSD):
         self.rank_dropout_scale = rank_dropout_scale
         self.module_dropout = module_dropout
 
+        ## Dropout things
+        # Since LoKr/LoHa/OFT/BOFT are hard to follow the rank_dropout definition from kohya
+        # We redefine the dropout procedure here.
+        # g(x) = WX + drop(Brank_drop(AX)) for LoCon(lora), bypass
+        # g(x) = WX + drop(ΔWX) for any algo except LoCon(lora), bypass
+        # g(x) = (W + Brank_drop(A))X for LoCon(lora), rebuid
+        # g(x) = (W + rank_drop(ΔW))X for any algo except LoCon(lora), rebuild
+        self.drop = nn.Identity() if dropout == 0.0 else nn.Dropout(dropout)
+        self.rank_drop = (
+            nn.Identity() if rank_dropout == 0.0 else nn.Dropout(rank_dropout)
+        )
+
         self.multiplier = multiplier
         self.org_forward = org_module.forward
         self.org_module = [org_module]

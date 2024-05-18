@@ -141,7 +141,9 @@ class LohaModule(LycorisBaseModule):
         if isinstance(self.scalar, nn.Parameter):
             self.scalar.data.copy_(torch.ones_like(self.scalar))
         else:
-            self.scalar = torch.ones_like(self.scalar)
+            self.register_buffer(
+                "scalar", torch.ones_like(self.scalar), persistent=False
+            )
 
     def get_weight(self, shape):
         if self.tucker:
@@ -199,7 +201,7 @@ class LohaModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale.to(weight.device) / weight_norm)
+        return weight * (self.dora_scale / weight_norm)
 
     def custom_state_dict(self):
         destination = {}
@@ -230,7 +232,7 @@ class LohaModule(LycorisBaseModule):
 
     def bypass_forward_diff(self, x, scale=1):
         diff_weight = self.get_weight(self.shape) * self.scalar * scale
-        return self.op(x, diff_weight, **self.kw_dict)
+        return self.drop(self.op(x, diff_weight, **self.kw_dict))
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
@@ -251,7 +253,7 @@ class LohaModule(LycorisBaseModule):
             return self.bypass_forward(x, scale=self.multiplier)
         else:
             weight = (
-                self.org_module[0].weight.data.to(x.device, dtype=self.hada_w1_a.dtype)
+                self.org_module[0].weight.data.to(self.dtype)
                 + self.get_weight(self.shape) * self.scalar * self.multiplier
             )
             bias = (

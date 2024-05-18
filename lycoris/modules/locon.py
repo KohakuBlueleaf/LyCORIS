@@ -149,7 +149,9 @@ class LoConModule(LycorisBaseModule):
         if isinstance(self.scalar, nn.Parameter):
             self.scalar.data.copy_(torch.ones_like(self.scalar))
         else:
-            self.scalar = torch.ones_like(self.scalar)
+            self.register_buffer(
+                "scalar", torch.ones_like(self.scalar), persistent=False
+            )
 
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
@@ -164,13 +166,15 @@ class LoConModule(LycorisBaseModule):
 
         weight = weight.view(self.shape)
         if self.training and self.rank_dropout:
-            drop = (torch.rand(weight.size(0)) > self.rank_dropout).to(weight.dtype)
-            drop = drop.view(-1, *[1] * len(weight.shape[1:])).to(weight.device)
+            drop = (torch.rand(weight.size(0), device=device) > self.rank_dropout).to(
+                weight.dtype
+            )
+            drop = drop.view(-1, *[1] * len(weight.shape[1:]))
             if self.rank_dropout_scale:
                 drop /= drop.mean()
             weight *= drop
 
-        return weight * self.scalar.to(device)
+        return weight * self.scalar
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         scale = self.scale * multiplier
@@ -257,8 +261,8 @@ class LoConModule(LycorisBaseModule):
         dtype = self.dtype
         if not self.bypass_mode:
             weight = (
-                self.org_module[0].weight.data.to(device=x.device, dtype=dtype)
-                + self.make_weight(x.device).to(device=x.device, dtype=dtype) * scale
+                self.org_module[0].weight.data.to(dtype)
+                + self.make_weight(x.device).to(dtype) * scale
             )
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
