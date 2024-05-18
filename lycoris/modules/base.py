@@ -174,6 +174,10 @@ class LycorisBaseModule(ModuleCustomSD):
         return self.dtype_tensor.dtype
 
     @property
+    def device(self):
+        return self.dtype_tensor.device
+
+    @property
     def org_weight(self):
         return self.org_module[0].weight
 
