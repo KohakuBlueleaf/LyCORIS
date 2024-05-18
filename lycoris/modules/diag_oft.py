@@ -83,7 +83,7 @@ class DiagOFTModule(LycorisBaseModule):
 
     @property
     def I(self):
-        return torch.eye(self.block_size, device=next(self.parameters()).device)
+        return torch.eye(self.block_size, device=self.device)
 
     def get_r(self):
         I = self.I

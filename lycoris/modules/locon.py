@@ -254,7 +254,7 @@ class LoConModule(LycorisBaseModule):
                 return self.org_forward(x)
         scale = self.scale * self.multiplier
 
-        dtype = next(self.parameters()).dtype
+        dtype = self.dtype
         if not self.bypass_mode:
             weight = (
                 self.org_module[0].weight.data.to(device=x.device, dtype=dtype)

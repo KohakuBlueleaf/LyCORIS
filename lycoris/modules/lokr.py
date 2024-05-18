@@ -390,7 +390,7 @@ class LokrModule(LycorisBaseModule):
         else:
             weight = (
                 self.org_module[0].weight.data.to(
-                    x.device, dtype=next(self.parameters()).dtype
+                    x.device, dtype=self.dtype
                 )
                 + self.get_weight(self.shape) * self.scalar * self.multiplier
             )
