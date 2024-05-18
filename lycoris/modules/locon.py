@@ -277,28 +277,34 @@ class LoConModule(LycorisBaseModule):
 
 
 if __name__ == "__main__":
-    base = nn.Linear(128, 128).cuda()
-    locon = LoConModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
-    print(locon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = locon(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+    device = torch.device("cuda")
+    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+        base = nn.Linear(128, 128).to(device).half()
+        net = LoConModule("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base_4bit = LinearNF4(128, 128)
-    base_4bit.load_state_dict(base.state_dict())
-    base_4bit.cuda()
-    qlocon = LoConModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base_4bit = LinearNF4(128, 128, device="cuda")
+        base_4bit.load_state_dict(base.state_dict())
+        base_4bit.to(device)
+        qnet = LoConModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(
+            device
+        )
+        print(qnet)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = qnet(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base = nn.Conv2d(128, 128, 3, 1, 1)
-    locon = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(locon)
-    test_input = torch.randn(1, 128, 16, 16)
-    test_output = locon(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = LoConModule(
+            "test", base, 1, 4, 1, weight_decompose=True, use_tucker=True
+        )
+        print(net)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
