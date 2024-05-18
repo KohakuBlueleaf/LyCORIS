@@ -100,22 +100,19 @@ class DiagOFTModule(LycorisBaseModule):
 
     def make_weight(self, scale=1, device=None, diff=False):
         r = self.get_r()
+        _, *shape = self.org_weight.shape
         org_weight = self.org_weight.to(device, dtype=r.dtype)
-        org_weight = rearrange(
-            org_weight,
-            "(k n) ... -> k n ...",
-            k=self.block_num,
-            n=self.block_size,
-        )
+        org_weight = org_weight.view(self.block_num, self.block_size, *shape)
         # Init R=0, so add I on it to ensure the output of step0 is original model output
         weight = torch.einsum(
             "k n m, k n ... -> k m ...",
-            r * scale - scale * self.I + (self.I if diff else 0),
+            self.rank_drop(r * scale) - scale * self.I + (0 if diff else self.I),
             org_weight,
-        )
-        weight = rearrange(weight, "k m ... -> (k m) ...")
+        ).view(-1, *shape)
         if self.rescaled:
             weight = self.rescale * weight
+            if diff:
+                weight = weight + (self.rescale-1) * org_weight
         return weight
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
@@ -148,18 +145,21 @@ class DiagOFTModule(LycorisBaseModule):
         org_out = self.org_forward(x)
         if self.op == F.conv2d:
             org_out = org_out.transpose(1, -1)
-        org_out = rearrange(
-            org_out,
-            "... (k n) ->... k n",
-            k=self.block_num,
-            n=self.block_size,
-        )
+        *shape, _ = org_out.shape
+        org_out = org_out.view(*shape, self.block_num, self.block_size)
+        mask = neg_mask = 1
+        if self.dropout != 0 and self.training:
+            mask = torch.ones_like(org_out)
+            mask = self.drop(mask)
+            neg_mask = torch.max(mask) - mask
         oft_out = torch.einsum(
             "k n m, ... k n -> ... k m",
-            r * scale - scale * self.I + (self.I if diff else 0),
+            r * scale * mask + (1- scale) * self.I * neg_mask,
             org_out,
         )
-        out = rearrange(oft_out, "... k m -> ... (k m)")
+        if diff:
+            out = out - org_out
+        out = oft_out.view(*shape, -1)
         if self.op == F.conv2d:
             out = out.transpose(1, -1)
         return out
