@@ -61,6 +61,7 @@ class ModuleCustomSD(nn.Module):
 
 
 class LycorisBaseModule(ModuleCustomSD):
+    dtype_tensor: torch.Tensor
     support_module = {}
 
     def __init__(
@@ -150,6 +151,8 @@ class LycorisBaseModule(ModuleCustomSD):
         else:
             self.module_type = "unknown"
 
+        self.register_buffer("dtype_tensor", torch.tensor(0.0), persistent=False)
+
         self.is_bnb = False
         if isinstance(org_module, QuantLinears):
             if not bypass_mode:
@@ -165,6 +168,10 @@ class LycorisBaseModule(ModuleCustomSD):
         self.multiplier = multiplier
         self.org_forward = org_module.forward
         self.org_module = [org_module]
+
+    @property
+    def dtype(self):
+        return self.dtype_tensor.dtype
 
     @property
     def org_weight(self):
