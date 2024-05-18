@@ -18,8 +18,5 @@ setup(
         "einops",
         "toml",
     ],
-    extras_require={
-        "kohya": ["library @ git+https://github.com/kohya-ss/sd-scripts.git"]
-    },
     python_requires=">=3.10",
 )
