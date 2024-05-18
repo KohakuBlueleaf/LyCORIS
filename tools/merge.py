@@ -47,12 +47,12 @@ args = ARGS = get_args()
 
 
 from lycoris.utils import merge
-from lycoris.kohya.model_utils import (
+from library.model_util import (
     load_models_from_stable_diffusion_checkpoint,
     save_stable_diffusion_checkpoint,
     load_file,
 )
-from lycoris.kohya.sdxl_model_util import (
+from library.sdxl_model_util import (
     load_models_from_sdxl_checkpoint,
     save_stable_diffusion_checkpoint as save_sdxl_checkpoint,
 )

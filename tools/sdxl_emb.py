@@ -30,7 +30,7 @@ def get_args():
 args = ARGS = get_args()
 
 
-from lycoris.kohya.sdxl_model_util import (
+from library.sdxl_model_util import (
     load_models_from_sdxl_checkpoint,
 )
 
