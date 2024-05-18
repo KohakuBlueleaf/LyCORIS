@@ -53,6 +53,14 @@ class FullModule(LycorisBaseModule):
         else:
             self.bias = None
 
+    @property
+    def org_weight(self):
+        return self._org_weight[0]
+
+    @org_weight.setter
+    def org_weight(self, value):
+        self.org_module[0].weight.data.copy_(value)
+
     def apply_to(self, **kwargs):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
