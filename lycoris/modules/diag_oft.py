@@ -112,7 +112,7 @@ class DiagOFTModule(LycorisBaseModule):
         if self.rescaled:
             weight = self.rescale * weight
             if diff:
-                weight = weight + (self.rescale-1) * org_weight
+                weight = weight + (self.rescale - 1) * org_weight
         return weight
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
@@ -154,7 +154,7 @@ class DiagOFTModule(LycorisBaseModule):
             neg_mask = torch.max(mask) - mask
         oft_out = torch.einsum(
             "k n m, ... k n -> ... k m",
-            r * scale * mask + (1- scale) * self.I * neg_mask,
+            r * scale * mask + (1 - scale) * self.I * neg_mask,
             org_out,
         )
         if diff:
