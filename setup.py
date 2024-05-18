@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
     name="lycoris_lora",
     packages=find_packages(),
-    version="2.3.0.dev11",
+    version="3.0.0.dev1",
     url="https://github.com/KohakuBlueleaf/LyCORIS",
     description="Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
     author="Shih-Ying Yeh(KohakuBlueLeaf), Yu-Guan Hsieh, Zhidong Gao",
@@ -18,5 +18,8 @@ setup(
         "einops",
         "toml",
     ],
+    extras_require={
+        "kohya": ["library @ git+https://github.com/kohya-ss/sd-scripts.git"]
+    },
     python_requires=">=3.10",
 )
