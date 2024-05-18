@@ -2,14 +2,19 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from .base import ModuleCustomSD
+from .base import LycorisBaseModule
+from ..utils.bnb import LinearNF4
 
 
-class GLoRAModule(ModuleCustomSD):
-    """
-    modifed from kohya-ss/sd-scripts/networks/lora:LoRAModule
-    """
+class GLoRAModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
 
     def __init__(
         self,
@@ -21,44 +26,82 @@ class GLoRAModule(ModuleCustomSD):
         dropout=0.0,
         rank_dropout=0.0,
         module_dropout=0.0,
+        use_tucker=False,
+        use_scalar=False,
         rank_dropout_scale=False,
+        weight_decompose=False,
+        bypass_mode=False,
         rs_lora=False,
-        *args,
         **kwargs,
     ):
-        """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
-        self.lora_name = lora_name
+        """
+        f(x) = WX + WAX + BX, where A and B are low-rank matrices
+        bypass_forward(x) = W(X+A(X)) + B(X)
+        bypass_forward_diff(x) = W(A(X)) + B(X)
+        get_merged_weight() = W + WA + B
+        get_diff_weight() = WA + B
+        """
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in LoRA/LoCon algo.")
         self.lora_dim = lora_dim
         self.tucker = False
         self.rs_lora = rs_lora
 
-        if isinstance(org_module, nn.Conv2d):
-            assert org_module.kernel_size == (1, 1)
+        if self.module_type.startswith("conv"):
+            self.isconv = True
+            # For general LoCon
             in_dim = org_module.in_channels
+            k_size = org_module.kernel_size
+            stride = org_module.stride
+            padding = org_module.padding
             out_dim = org_module.out_channels
-            self.a1 = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
-            self.a2 = nn.Conv2d(lora_dim, in_dim, (1, 1), bias=False)
-            self.b1 = nn.Conv2d(in_dim, lora_dim, (1, 1), bias=False)
-            self.b2 = nn.Conv2d(lora_dim, out_dim, (1, 1), bias=False)
+            self.tucker = use_tucker and k_size != (1, 1)
+            self.down_op = self.op
+            self.up_op = self.op
+            if use_tucker and k_size != (1, 1):
+                self.a2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
+                self.am = self.module(
+                    lora_dim, lora_dim, k_size, stride, padding, bias=False
+                )
+                self.tucker = True
+            else:
+                self.a2 = self.module(
+                    in_dim, lora_dim, k_size, stride, padding, bias=False
+                )
+            self.a1 = self.module(lora_dim, in_dim, (1, 1), bias=False)
+            if use_tucker and k_size != (1, 1):
+                self.b2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
+                self.bm = self.module(
+                    lora_dim, lora_dim, k_size, stride, padding, bias=False
+                )
+                self.tucker = True
+            else:
+                self.b2 = self.module(
+                    in_dim, lora_dim, k_size, stride, padding, bias=False
+                )
+            self.b1 = self.module(lora_dim, out_dim, (1, 1), bias=False)
         elif isinstance(org_module, nn.Linear):
+            self.isconv = False
+            self.down_op = F.linear
+            self.up_op = F.linear
             in_dim = org_module.in_features
             out_dim = org_module.out_features
-            self.a1 = nn.Linear(in_dim, lora_dim, bias=False)
-            self.a2 = nn.Linear(lora_dim, in_dim, bias=False)
-            self.b1 = nn.Linear(in_dim, lora_dim, bias=False)
-            self.b2 = nn.Linear(lora_dim, out_dim, bias=False)
+            self.a2 = nn.Linear(in_dim, lora_dim, bias=False)
+            self.a1 = nn.Linear(lora_dim, in_dim, bias=False)
+            self.b2 = nn.Linear(in_dim, lora_dim, bias=False)
+            self.b1 = nn.Linear(lora_dim, out_dim, bias=False)
         else:
             raise NotImplementedError
-        self.shape = org_module.weight.shape
-
-        if dropout:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = nn.Identity()
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
 
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -72,33 +115,23 @@ class GLoRAModule(ModuleCustomSD):
 
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
+        if use_scalar:
+            self.scalar = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
+
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.a1.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.a2.weight)
         torch.nn.init.kaiming_uniform_(self.b1.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.b2.weight)
 
-        self.multiplier = multiplier
-        self.org_module = [org_module]
-        self.org_forward = self.org_module[0].forward
-
-    def apply_to(self):
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        weight = self.make_weight() * self.scale * multiplier
-        self.org_module[0].weight.data.add_(weight)
-
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
         wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
         wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
-        orig = self.org_module[0].weight.view(self.org_module[0].weight.size(0), -1)
+        orig = self.org_weight.view(self.org_module[0].weight.size(0), -1)
         return (wb2 @ wb1) + ((orig @ wa2) @ wa1)
 
     def forward(self, x):
@@ -114,12 +147,11 @@ class GLoRAModule(ModuleCustomSD):
             drop_a = (
                 torch.rand(self.lora_dim, device=ax_mid.device) < self.rank_dropout
             ).to(ax_mid.dtype)
-            if self.rank_dropout_scale:
-                drop_a /= drop_a.mean()
             drop_b = (
                 torch.rand(self.lora_dim, device=bx_mid.device) < self.rank_dropout
             ).to(bx_mid.dtype)
             if self.rank_dropout_scale:
+                drop_a /= drop_a.mean()
                 drop_b /= drop_b.mean()
             if (dims := len(x.shape)) == 4:
                 drop_a = drop_a.view(1, -1, 1, 1)
@@ -134,3 +166,31 @@ class GLoRAModule(ModuleCustomSD):
             self.org_forward(x + self.dropout(self.a2(ax_mid)) * self.scale)
             + self.dropout(self.b2(bx_mid)) * self.scale
         )
+
+
+if __name__ == "__main__":
+    base = nn.Linear(128, 128).cuda()
+    glora = GLoRAModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
+    print(glora)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = glora(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
+
+    base_4bit = LinearNF4(128, 128)
+    base_4bit.load_state_dict(base.state_dict())
+    base_4bit.cuda()
+    qglora = GLoRAModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
+    print(qglora)
+    test_input = torch.randn(1, 128).cuda()
+    test_output = qglora(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
+
+    base = nn.Conv2d(128, 128, 3, 1, 1)
+    glora = GLoRAModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+    print(glora)
+    test_input = torch.randn(1, 128, 16, 16)
+    test_output = glora(test_input)
+    torch.sum(test_output).backward()
+    print(test_output.shape)
