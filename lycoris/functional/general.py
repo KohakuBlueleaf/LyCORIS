@@ -59,6 +59,8 @@ def power2factorization(dimension: int, factor: int = -1) -> tuple[int, int]:
     n = 2**p
     m*n = dim
     """
+    if factor == -1:
+        factor = dimension
 
     # Find the first solution and check if it is even doable
     m = n = 0
