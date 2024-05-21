@@ -105,6 +105,7 @@ def main():
             None,
             base[2],
             getattr(base[1], "logit_scale", None),
+            None,
             dtype,
         )
     else:
@@ -116,6 +117,7 @@ def main():
             None,
             0,
             0,
+            None,
             dtype,
             base[1],
         )
