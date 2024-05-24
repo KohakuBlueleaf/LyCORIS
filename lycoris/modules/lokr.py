@@ -270,9 +270,10 @@ class LokrModule(LycorisBaseModule):
         return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        merged = self.org_module[0].weight.data + self.get_diff_weight(
-            multiplier=multiplier, shape=shape, device=device
-        )[0]
+        merged = (
+            self.org_module[0].weight.data
+            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
+        )
         if self.wd:
             merged = self.apply_weight_decompose(merged)
         return merged, None
@@ -421,7 +422,9 @@ if __name__ == "__main__":
         print(test_output.shape)
 
         base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(device)
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(
+            device
+        )
         print(net)
         test_input = torch.randn(1, 128, 16, 16).to(device).half()
         test_output = net(test_input)
