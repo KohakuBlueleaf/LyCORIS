@@ -210,6 +210,7 @@ class LycorisBaseModule(ModuleCustomSD):
             proxy_module.weight = target_param
         module_obj = cls("", proxy_module, *args, **kwargs)
         module_obj.forward = module_obj.parametrize_forward
+        module_obj.to(target_param.device)
         parametrize.register_parametrization(org_module, attr, module_obj)
         return module_obj
 
