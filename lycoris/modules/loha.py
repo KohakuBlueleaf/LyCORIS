@@ -181,15 +181,15 @@ class LohaModule(LycorisBaseModule):
         diff = self.get_weight(shape) * scale
         if device is not None:
             diff = diff.to(device)
-        return diff
+        return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         merged = self.org_module[0].weight.data + self.get_diff_weight(
             multiplier=multiplier, shape=shape, device=device
-        )
+        )[0]
         if self.wd:
             merged = self.apply_weight_decompose(merged)
-        return merged
+        return merged, None
 
     def apply_weight_decompose(self, weight):
         weight = weight.to(self.dora_scale.dtype)
@@ -269,28 +269,40 @@ class LohaModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     device = torch.device("cuda")
-    base = nn.Linear(128, 128).to(device)
-    loha = LohaModule("test", base, 1, 4, 1, weight_decompose=True).to(device)
-    print(loha)
-    test_input = torch.randn(1, 128).to(device)
-    test_output = loha(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+    module = LohaModule
+    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+        base = nn.Linear(128, 128).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base_4bit = LinearNF4(128, 128)
-    base_4bit.load_state_dict(base.state_dict())
-    base_4bit.to(device)
-    qloha = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
-    print(qloha)
-    test_input = torch.randn(1, 128).to(device)
-    test_output = qloha(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base_4bit = LinearNF4(128, 128, device="cuda")
+        base_4bit.load_state_dict(base.state_dict())
+        base_4bit.to(device)
+        qnet = module("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
+        print(qnet)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = qnet(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base = nn.Conv2d(128, 128, 3, 1, 1)
-    loha = LohaModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(loha)
-    test_input = torch.randn(1, 128, 16, 16)
-    test_output = loha(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module.parametrize(
+            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
+        )
+        print(base)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = base(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)

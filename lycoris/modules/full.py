@@ -158,18 +158,31 @@ class FullModule(LycorisBaseModule):
 
 
 if __name__ == "__main__":
-    base = nn.Linear(128, 128).cuda()
-    full = FullModule("test", base, 1, 4, 1, weight_decompose=True, factor=8).cuda()
-    print(full)
-    test_input = torch.randn(1, 77, 128).cuda()
-    test_output = full(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+    device = torch.device("cuda")
+    module = FullModule
+    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+        base = nn.Linear(128, 128).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base = nn.Conv2d(128, 128, 3, 1, 1)
-    full = FullModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(full)
-    test_input = torch.randn(1, 128, 16, 16)
-    test_output = full(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module.parametrize(
+            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
+        ).to(device)
+        print(base)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = base(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)

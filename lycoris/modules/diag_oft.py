@@ -119,7 +119,7 @@ class DiagOFTModule(LycorisBaseModule):
         diff = self.make_weight(scale=multiplier, device=device, diff=True)
         if shape is not None:
             diff = diff.view(shape)
-        return diff
+        return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device)
@@ -185,27 +185,41 @@ class DiagOFTModule(LycorisBaseModule):
 
 
 if __name__ == "__main__":
-    base = nn.Linear(128, 128).cuda()
-    doft = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, factor=8).cuda()
-    print(doft)
-    test_input = torch.randn(1, 77, 128).cuda()
-    test_output = doft(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+    device = torch.device("cuda")
+    module = DiagOFTModule
+    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+        base = nn.Linear(128, 128).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base_4bit = LinearNF4(128, 128)
-    base_4bit.load_state_dict(base.state_dict())
-    base_4bit.cuda()
-    qdoft = DiagOFTModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qdoft)
-    test_output = qdoft(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base_4bit = LinearNF4(128, 128, device="cuda")
+        base_4bit.load_state_dict(base.state_dict())
+        base_4bit.to(device)
+        qnet = module("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
+        print(qnet)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = qnet(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
 
-    base = nn.Conv2d(128, 128, 3, 1, 1)
-    doft = DiagOFTModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(doft)
-    test_input = torch.randn(1, 128, 16, 16)
-    test_output = doft(test_input)
-    torch.sum(test_output).backward()
-    print(test_output.shape)
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module.parametrize(
+            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
+        ).to(device)
+        print(base)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = base(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)

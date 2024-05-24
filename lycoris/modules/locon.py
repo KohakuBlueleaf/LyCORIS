@@ -183,12 +183,12 @@ class LoConModule(LycorisBaseModule):
             diff = diff.view(shape)
         if device is not None:
             diff = diff.to(device)
-        return diff
+        return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         merged = self.org_module[0].weight.data + self.get_diff_weight(
             multiplier=multiplier, shape=shape, device=device
-        )
+        )[0]
         if self.wd:
             merged = self.apply_weight_decompose(merged)
         return merged, None
@@ -278,9 +278,10 @@ class LoConModule(LycorisBaseModule):
 
 if __name__ == "__main__":
     device = torch.device("cuda")
+    module = LoConModule
     with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
         base = nn.Linear(128, 128).to(device).half()
-        net = LoConModule("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
         print(net)
         test_input = torch.randn(1, 128).to(device).half()
         test_output = net(test_input)
@@ -290,9 +291,7 @@ if __name__ == "__main__":
         base_4bit = LinearNF4(128, 128, device="cuda")
         base_4bit.load_state_dict(base.state_dict())
         base_4bit.to(device)
-        qnet = LoConModule("test", base_4bit, 1, 4, 1, weight_decompose=False).to(
-            device
-        )
+        qnet = module("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
         print(qnet)
         test_input = torch.randn(1, 128).to(device).half()
         test_output = qnet(test_input)
@@ -300,7 +299,7 @@ if __name__ == "__main__":
         print(test_output.shape)
 
         base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(device)
         print(net)
         test_input = torch.randn(1, 128, 16, 16).to(device).half()
         test_output = net(test_input)
@@ -308,7 +307,7 @@ if __name__ == "__main__":
         print(test_output.shape)
 
         base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = LoConModule.parametrize(
+        net = module.parametrize(
             base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
         )
         print(base)
