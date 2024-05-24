@@ -15,7 +15,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * New Module API
 * New Parametrize API
 * New Functional API
-* kohya-ss/sd-scripts as optional dependency
+* Remove optional deps from install_requires
 * Remove lot of redundant/deprecated modules
 * Better testing
 
@@ -30,6 +30,12 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * LyCORIS now have functional API. Developers who prefer functional more than Module things can utilize this feature.
   * Functional API also allow developers who don't want to introduce new dependencies. Just copy-paste the source code and utilizing it. (with Apache-2 License, directly copy-paste is totally allowed)
 * Add support for Conv1d and Conv3d module on LoCon/LoHa/LoKr/Full/OFT/BOFT/GLoRA (not All algo in LyCORIS support them, you may receive error when apply unsopported algo), support inherited module (for example: `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
+
+#### Improvement
+
+* Drop dependencies related to kohya-ss/sd-scripts:
+  * We now take kohya-ss/sd-scripts as optional dependency
+  * Which means `transformers`, `diffusers` and anything related to kohya are all optional deps now.
 
 #### Deprecation
 
