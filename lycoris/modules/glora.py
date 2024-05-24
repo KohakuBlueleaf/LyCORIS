@@ -69,11 +69,11 @@ class GLoRAModule(LycorisBaseModule):
             self.tucker = use_tucker and k_size != (1, 1)
             self.down_op = self.op
             self.up_op = self.op
-            
+
             # A
             self.a2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
             self.a1 = self.module(lora_dim, in_dim, (1, 1), bias=False)
-            
+
             # B
             if use_tucker and k_size != (1, 1):
                 self.b2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
@@ -125,17 +125,15 @@ class GLoRAModule(LycorisBaseModule):
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
-        
+
         if self.tucker:
-            wb = tucker_weight_from_conv(
-                self.b1.weight, self.b2.weight, self.bm.weight
-            )
+            wb = tucker_weight_from_conv(self.b1.weight, self.b2.weight, self.bm.weight)
         else:
             wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
             wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
             wb = wb1 @ wb2
         orig = self.org_weight
-        if orig.dim()>2:
+        if orig.dim() > 2:
             w_wa1 = torch.einsum("o i ..., i j -> o j ...", orig, wa1)
             w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
         else:
@@ -176,7 +174,9 @@ class GLoRAModule(LycorisBaseModule):
             ax_mid = ax_mid * drop_a
             bx_mid = bx_mid * drop_b
         return (
-            self.org_forward((0 if diff else x) + self.drop(self.a1(ax_mid)) * self.scale)
+            self.org_forward(
+                (0 if diff else x) + self.drop(self.a1(ax_mid)) * self.scale
+            )
             + self.drop(self.b1(bx_mid)) * self.scale
         )
 
