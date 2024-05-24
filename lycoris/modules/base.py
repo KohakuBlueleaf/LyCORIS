@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.utils.parametrize as parametrize
 
 from ..utils.bnb import QuantLinears, log_bypass
 
@@ -181,6 +182,37 @@ class LycorisBaseModule(ModuleCustomSD):
         self.org_forward = org_module.forward
         self.org_module = [org_module]
 
+    @classmethod
+    def parametrize(cls, org_module, attr, *args, **kwargs):
+        target_param = getattr(org_module, attr)
+        kwargs["bypass_mode"] = False
+        if target_param.dim() == 2:
+            proxy_module = nn.Linear(
+                target_param.shape[0], target_param.shape[1], bias=False
+            )
+            proxy_module.weight = target_param
+        elif target_param.dim() > 2:
+            module_type = [
+                None,
+                None,
+                None,
+                nn.Conv1d,
+                nn.Conv2d,
+                nn.Conv3d,
+                None,
+                None,
+            ][target_param.dim()]
+            proxy_module = module_type(
+                target_param.shape[0],
+                target_param.shape[1],
+                *target_param.shape[2:],
+            )
+            proxy_module.weight = target_param
+        module_obj = cls("", proxy_module, *args, **kwargs)
+        module_obj.forward = module_obj.parametrize_forward
+        parametrize.register_parametrization(org_module, attr, module_obj)
+        return module_obj
+
     @property
     def dtype(self):
         return self.dtype_tensor.dtype
@@ -230,6 +262,11 @@ class LycorisBaseModule(ModuleCustomSD):
 
     def bypass_forward(self, x, scale=1):
         raise NotImplementedError
+
+    def parametrize_forward(self, x: torch.Tensor, *args, **kwargs):
+        return self.get_merged_weight(
+            multiplier=self.multiplier, shape=x.shape, device=x.device
+        )[0].to(x.dtype)
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError

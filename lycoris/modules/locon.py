@@ -300,11 +300,19 @@ if __name__ == "__main__":
         print(test_output.shape)
 
         base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = LoConModule(
-            "test", base, 1, 4, 1, weight_decompose=True, use_tucker=True
-        )
+        net = LoConModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
         print(net)
         test_input = torch.randn(1, 128, 16, 16).to(device).half()
         test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = LoConModule.parametrize(
+            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
+        )
+        print(base)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = base(test_input)
         torch.sum(test_output).backward()
         print(test_output.shape)
