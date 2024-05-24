@@ -12,9 +12,6 @@ setup(
     zip_safe=False,
     install_requires=[
         "torch",
-        "safetensors",
-        "diffusers",
-        "transformers",
         "einops",
         "toml",
     ],
