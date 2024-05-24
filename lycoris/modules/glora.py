@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisBaseModule
+from ..utils import tucker_weight_from_conv
 from ..utils.bnb import LinearNF4
 
 
@@ -68,17 +69,12 @@ class GLoRAModule(LycorisBaseModule):
             self.tucker = use_tucker and k_size != (1, 1)
             self.down_op = self.op
             self.up_op = self.op
-            if use_tucker and k_size != (1, 1):
-                self.a2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
-                self.am = self.module(
-                    lora_dim, lora_dim, k_size, stride, padding, bias=False
-                )
-                self.tucker = True
-            else:
-                self.a2 = self.module(
-                    in_dim, lora_dim, k_size, stride, padding, bias=False
-                )
+            
+            # A
+            self.a2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
             self.a1 = self.module(lora_dim, in_dim, (1, 1), bias=False)
+            
+            # B
             if use_tucker and k_size != (1, 1):
                 self.b2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
                 self.bm = self.module(
@@ -129,19 +125,37 @@ class GLoRAModule(LycorisBaseModule):
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
-        wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
-        wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
-        orig = self.org_weight.view(self.org_module[0].weight.size(0), -1)
-        return (wb2 @ wb1) + ((orig @ wa2) @ wa1)
+        
+        if self.tucker:
+            wb = tucker_weight_from_conv(
+                self.b1.weight, self.b2.weight, self.bm.weight
+            )
+        else:
+            wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
+            wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
+            wb = wb1 @ wb2
+        orig = self.org_weight
+        if orig.dim()>2:
+            w_wa1 = torch.einsum("o i ..., i j -> o j ...", orig, wa1)
+            w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
+        else:
+            w_wa2 = (orig @ wa1) @ wa2
+        return (wb + w_wa2) * self.scale
 
-    def forward(self, x):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
-        scale = self.scale * self.multiplier
+    def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
+        weight = self.make_weight(device) * multiplier
+        if shape is not None:
+            weight = weight.view(shape)
+        return weight, None
 
-        ax_mid = self.a1(x) * scale
-        bx_mid = self.b1(x) * scale
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        diff_w, _ = self.get_diff_weight(multiplier, shape, device)
+        return self.org_weight + diff_w, None
+
+    def _bypass_forward(self, x, scale=1, diff=False):
+        scale = self.scale * scale
+        ax_mid = self.a2(x) * scale
+        bx_mid = self.b2(x) * scale
 
         if self.rank_dropout and self.training:
             drop_a = (
@@ -161,11 +175,34 @@ class GLoRAModule(LycorisBaseModule):
                 drop_b = drop_b.view(*[1] * (dims - 1), -1)
             ax_mid = ax_mid * drop_a
             bx_mid = bx_mid * drop_b
-
         return (
-            self.org_forward(x + self.dropout(self.a2(ax_mid)) * self.scale)
-            + self.dropout(self.b2(bx_mid)) * self.scale
+            self.org_forward((0 if diff else x) + self.drop(self.a1(ax_mid)) * self.scale)
+            + self.drop(self.b1(bx_mid)) * self.scale
         )
+
+    def bypass_forward_diff(self, x, scale=1):
+        return self._bypass_forward(x, scale=scale, diff=True)
+
+    def bypass_forward(self, x, scale=1):
+        return self._bypass_forward(x, scale=scale, diff=False)
+
+    def forward(self, x, *args, **kwargs):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x)
+        if self.bypass_mode:
+            return self.bypass_forward(x, self.multiplier)
+        else:
+            weight = (
+                self.org_module[0].weight.data.to(self.dtype)
+                + self.get_diff_weight(multiplier=self.multiplier)[0]
+            )
+            bias = (
+                None
+                if self.org_module[0].bias is None
+                else self.org_module[0].bias.data
+            )
+            return self.op(x, weight.view(self.shape), bias, **self.kw_dict)
 
 
 if __name__ == "__main__":
