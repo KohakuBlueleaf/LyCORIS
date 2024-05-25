@@ -265,7 +265,7 @@ class LohaModule(LycorisBaseModule):
 
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
-            return self.op(x, weight.view(self.shape), bias, **self.kw_dict)
+            return self.op(x, weight, bias, **self.kw_dict)
 
 
 if __name__ == "__main__":

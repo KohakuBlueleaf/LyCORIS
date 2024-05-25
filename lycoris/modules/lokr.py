@@ -72,7 +72,7 @@ class LokrModule(LycorisBaseModule):
             bypass_mode,
         )
         if self.module_type not in self.support_module:
-            raise ValueError(f"{self.module_type} is not supported in LoRA/LoCon algo.")
+            raise ValueError(f"{self.module_type} is not supported in LoKr algo.")
 
         factor = int(factor)
         self.lora_dim = lora_dim
@@ -396,7 +396,7 @@ class LokrModule(LycorisBaseModule):
 
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
-            return self.op(x, weight.view(self.shape), bias, **self.kw_dict)
+            return self.op(x, weight, bias, **self.kw_dict)
 
 
 if __name__ == "__main__":

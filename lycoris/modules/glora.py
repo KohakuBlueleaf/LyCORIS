@@ -53,7 +53,7 @@ class GLoRAModule(LycorisBaseModule):
             bypass_mode,
         )
         if self.module_type not in self.support_module:
-            raise ValueError(f"{self.module_type} is not supported in LoRA/LoCon algo.")
+            raise ValueError(f"{self.module_type} is not supported in GLoRA algo.")
         self.lora_dim = lora_dim
         self.tucker = False
         self.rs_lora = rs_lora
@@ -86,7 +86,7 @@ class GLoRAModule(LycorisBaseModule):
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
             self.b1 = self.module(lora_dim, out_dim, (1, 1), bias=False)
-        elif isinstance(org_module, nn.Linear):
+        else:
             self.isconv = False
             self.down_op = F.linear
             self.up_op = F.linear
@@ -96,8 +96,6 @@ class GLoRAModule(LycorisBaseModule):
             self.a1 = nn.Linear(lora_dim, in_dim, bias=False)
             self.b2 = nn.Linear(in_dim, lora_dim, bias=False)
             self.b1 = nn.Linear(lora_dim, out_dim, bias=False)
-        else:
-            raise NotImplementedError
 
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -202,7 +200,7 @@ class GLoRAModule(LycorisBaseModule):
                 if self.org_module[0].bias is None
                 else self.org_module[0].bias.data
             )
-            return self.op(x, weight.view(self.shape), bias, **self.kw_dict)
+            return self.op(x, weight, bias, **self.kw_dict)
 
 
 if __name__ == "__main__":
