@@ -4,16 +4,12 @@ from setuptools import setup, find_packages
 setup(
     name="lycoris_lora",
     packages=find_packages(),
-    version="3.0.0.dev4",
+    version="3.0.0.dev5",
     url="https://github.com/KohakuBlueleaf/LyCORIS",
     description="Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
     author="Shih-Ying Yeh(KohakuBlueLeaf), Yu-Guan Hsieh, Zhidong Gao",
     author_email="apolloyeh0123@gmail.com",
     zip_safe=False,
-    install_requires=[
-        "torch",
-        "einops",
-        "toml",
-    ],
+    install_requires=["torch", "einops", "toml", "tqdm"],
     python_requires=">=3.10",
 )
