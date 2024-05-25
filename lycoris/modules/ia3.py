@@ -45,11 +45,7 @@ class IA3Module(LycorisBaseModule):
         )
         if self.module_type not in self.support_module:
             raise ValueError(f"{self.module_type} is not supported in IA^3 algo.")
-        self.lora_dim = lora_dim
-        self.tucker = False
-        self.rs_lora = rs_lora
 
-        self.shape = org_module.weight.shape
         if self.module_type.startswith("conv"):
             self.isconv = True
             in_dim = org_module.in_channels
@@ -73,8 +69,6 @@ class IA3Module(LycorisBaseModule):
 
         # Need more experiences on init method
         torch.nn.init.constant_(self.weight, 0)
-
-        self.multiplier = multiplier
         self.train_input = train_on_input
         self.register_buffer("on_input", torch.tensor(int(train_on_input)))
 
