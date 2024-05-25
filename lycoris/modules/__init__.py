@@ -1,12 +1,18 @@
 import torch
 import torch.nn as nn
 
-from .full import FullModule
-from .norms import NormModule
 from .locon import LoConModule
 from .loha import LohaModule
-from .lokr import LokrModule, factorization
+from .lokr import LokrModule
+from .full import FullModule
+from .norms import NormModule
+from .diag_oft import DiagOFTModule
+from .boft import ButterflyOFTModule
+from .glora import GLoRAModule
+from .dylora import DyLoraModule
 from .ia3 import IA3Module
+
+from ..functional.general import factorization
 
 
 @torch.no_grad()
