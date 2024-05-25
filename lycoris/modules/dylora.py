@@ -5,13 +5,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import ModuleCustomSD
+from .base import LycorisBaseModule
+from ..utils import product
+from ..utils.bnb import LinearNF4
 
 
-class DyLoraModule(ModuleCustomSD):
-    """
-    Hadamard product Implementaion for Dynamic Low Rank adaptation
-    """
+class DyLoraModule(LycorisBaseModule):
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
 
     def __init__(
         self,
@@ -24,47 +29,44 @@ class DyLoraModule(ModuleCustomSD):
         rank_dropout=0.0,
         module_dropout=0.0,
         use_tucker=False,
-        block_size=1,
+        block_size=4,
+        use_scalar=False,
+        rank_dropout_scale=False,
+        weight_decompose=False,
+        bypass_mode=False,
+        rs_lora=False,
+        train_on_input=False,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
-        self.lora_name = lora_name
-        self.lora_dim = lora_dim
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in IA^3 algo.")
         assert lora_dim % block_size == 0, "lora_dim must be a multiple of block_size"
         self.block_count = lora_dim // block_size
         self.block_size = block_size
 
-        self.shape = org_module.weight.shape
-        if org_module.__class__.__name__ == "Conv2d":
-            in_dim = org_module.in_channels
-            k_size = org_module.kernel_size
-            out_dim = org_module.out_channels
-            shape = (out_dim, in_dim * k_size[0] * k_size[1])
-            self.op = F.conv2d
-            self.extra_args = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            in_dim = org_module.in_features
-            out_dim = org_module.out_features
-            shape = (out_dim, in_dim)
-            self.op = F.linear
-            self.extra_args = {}
+        shape = (
+            self.shape[0],
+            product(self.shape[1:]),
+        )
 
         self.lora_dim = lora_dim
         self.up_list = nn.ParameterList(
-            [torch.empty(shape[0], 1) for i in range(lora_dim)]
+            [torch.empty(shape[0], self.block_size) for i in range(self.block_count)]
         )
-
         self.down_list = nn.ParameterList(
-            [torch.empty(1, shape[1]) for i in range(lora_dim)]
+            [torch.empty(self.block_size, shape[1]) for i in range(self.block_count)]
         )
-
-        self.index = 0
 
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
@@ -73,17 +75,10 @@ class DyLoraModule(ModuleCustomSD):
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         # Need more experiences on init method
-
         for v in self.down_list:
             torch.nn.init.kaiming_uniform_(v, a=math.sqrt(5))
         for v in self.up_list:
             torch.nn.init.zeros_(v)
-
-        self.multiplier = multiplier
-        self.org_module = [org_module]  # remove in applying
-        self.org_forward = self.org_module[0].forward
-        self.grad_ckpt = False
-        self.state_dict()
 
     def custom_state_dict(self):
         destination = {}
@@ -92,41 +87,113 @@ class DyLoraModule(ModuleCustomSD):
             torch.concat(list(self.up_list), dim=1)
         )
         destination["lora_down.weight"] = nn.Parameter(
-            torch.concat(list(self.down_list))
+            torch.concat(list(self.down_list)).reshape(self.lora_dim, -1, *self.shape[2:])
         )
         return destination
 
-    def apply_to(self):
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        up = torch.concat(list(self.up_list), dim=1)
-        down = torch.concat(list(self.down_list))
-        diff_weight = up @ down * self.scale * multiplier / up.size(1)
-        self.org_module[0].weight.data.add_(diff_weight)
-
-    @torch.enable_grad()
-    def forward(self, x):
-        b = random.randint(0, self.block_count - 1)
-
+    def get_weight(self, rank):
+        b = math.ceil(rank / self.block_size)
         down = torch.concat(
-            list(i.data for i in self.down_list[: b * self.block_size])
-            + list(self.down_list[b * self.block_size : (b + 1) * self.block_size])
+            list(i.data for i in self.down_list[: b])
+            + list(self.down_list[b : (b + 1)])
         )
         up = torch.concat(
-            list(i.data for i in self.up_list[: b * self.block_size])
-            + list(self.up_list[b * self.block_size : (b + 1) * self.block_size]),
+            list(i.data for i in self.up_list[: b])
+            + list(self.up_list[b : (b + 1)]),
             dim=1,
         )
+        return down, up, self.alpha / (b+1)
 
-        bias = None if self.org_module[0].bias is None else self.org_module[0].bias.data
-        return self.op(
-            x,
-            self.org_module[0].weight
-            + (up @ down).view(self.shape) * self.alpha / (b + 1),
-            bias,
-            **self.extra_args,
+    def get_random_rank_weight(self):
+        b = random.randint(0, self.block_count - 1)
+        return self.get_weight(b * self.block_size)
+
+    def get_diff_weight(self, multiplier=1, shape=None, device=None, rank=None):
+        if rank is None:
+            down, up, scale = self.get_random_rank_weight()
+        else:
+            down, up, scale = self.get_random_rank_weight()
+        w = up @ (down * (scale * multiplier))
+        if device is not None:
+            w = w.to(device)
+        if shape is not None:
+            w = w.view(shape)
+        else:
+            w = w.view(self.shape)
+        return w, None
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None, rank=None):
+        diff, _ = self.get_diff_weight(multiplier, shape, device, rank)
+        return diff + self.org_weight, None
+
+    def bypass_forward_diff(self, x, scale=1, rank=None):
+        if rank is None:
+            down, up, gamma = self.get_random_rank_weight()
+        else:
+            down, up, gamma = self.get_random_rank_weight()
+        down = down.view(self.lora_dim, -1, *self.shape[2:])
+        up = up.view(-1, self.lora_dim, *(1 for _ in self.shape[2:]))
+        scale = scale * gamma
+        return self.op(self.op(x, down, **self.kw_dict), up)
+
+    def bypass_forward(self, x, scale=1, rank=None):
+        return self.org_forward(x) + self.bypass_forward_diff(x, scale, rank)
+
+    def forward(self, x, *args, **kwargs):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x)
+        if self.bypass_mode:
+            return self.bypass_forward(x, self.multiplier)
+        else:
+            weight = self.get_merged_weight(multiplier=self.multiplier)[0]
+            bias = (
+                None
+                if self.org_module[0].bias is None
+                else self.org_module[0].bias.data
+            )
+            return self.op(x, weight, bias, **self.kw_dict)
+
+
+if __name__ == "__main__":
+    device = torch.device("cuda")
+    module = DyLoraModule
+    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
+        base = nn.Linear(128, 128).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
+        print(net)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base_4bit = LinearNF4(128, 128, device="cuda")
+        base_4bit.load_state_dict(base.state_dict())
+        base_4bit.to(device)
+        qnet = module("test", base_4bit, 1, 4, 1, weight_decompose=False).to(device)
+        print(qnet)
+        test_input = torch.randn(1, 128).to(device).half()
+        test_output = qnet(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(
+            device
         )
+        print(net)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = net(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
+        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
+        net = module.parametrize(
+            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
+        ).to(device)
+        print(base)
+        test_input = torch.randn(1, 128, 16, 16).to(device).half()
+        test_output = base(test_input)
+        torch.sum(test_output).backward()
+        print(test_output.shape)
+
