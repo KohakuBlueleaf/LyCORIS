@@ -87,22 +87,22 @@ class DyLoraModule(LycorisBaseModule):
             torch.concat(list(self.up_list), dim=1)
         )
         destination["lora_down.weight"] = nn.Parameter(
-            torch.concat(list(self.down_list)).reshape(self.lora_dim, -1, *self.shape[2:])
+            torch.concat(list(self.down_list)).reshape(
+                self.lora_dim, -1, *self.shape[2:]
+            )
         )
         return destination
 
     def get_weight(self, rank):
         b = math.ceil(rank / self.block_size)
         down = torch.concat(
-            list(i.data for i in self.down_list[: b])
-            + list(self.down_list[b : (b + 1)])
+            list(i.data for i in self.down_list[:b]) + list(self.down_list[b : (b + 1)])
         )
         up = torch.concat(
-            list(i.data for i in self.up_list[: b])
-            + list(self.up_list[b : (b + 1)]),
+            list(i.data for i in self.up_list[:b]) + list(self.up_list[b : (b + 1)]),
             dim=1,
         )
-        return down, up, self.alpha / (b+1)
+        return down, up, self.alpha / (b + 1)
 
     def get_random_rank_weight(self):
         b = random.randint(0, self.block_count - 1)
@@ -196,4 +196,3 @@ if __name__ == "__main__":
         test_output = base(test_input)
         torch.sum(test_output).backward()
         print(test_output.shape)
-
