@@ -13,8 +13,8 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 ### Major Changes
 
 * New Module API
-* New Parametrize API
-* New Functional API
+* Add Parametrize API
+* Add Functional API
 * Remove optional deps from install_requires
 * Remove lot of redundant/deprecated modules
 * Better testing
@@ -31,26 +31,21 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
   * Functional API also allow developers who don't want to introduce new dependencies. Just copy-paste the source code and utilizing it. (with Apache-2 License, directly copy-paste is totally allowed)
 * Add support for Conv1d and Conv3d module on LoCon/LoHa/LoKr/Full/OFT/BOFT/GLoRA (not All algo in LyCORIS support them, you may receive error when apply unsopported algo), support inherited module (for example: `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
 
-#### Improvement
+#### Improvements, Fixes, Slight Changes
 
 * Drop dependencies related to kohya-ss/sd-scripts:
   * We now take kohya-ss/sd-scripts as optional dependency
   * Which means `transformers`, `diffusers` and anything related to kohya are all optional deps now.
+* The definition of dropout and rank_dropout in each algorithm are changed. Since some concept of original rank_dropout in the lora of kohya-ss/sd-script is hard to applied to other algorithm. We can only design the dropout for each module seperatedly.
+* `apply_max_norm` issue are all fixed.
+* DyLoRA, (IA)^3, GLoRA are all rewritten and support Linear/Conv1,2,3d.
 
 #### Deprecation
 
-* HCP support is now dropped. We will wait until HCP have better wrapper API.
+* HCP modules are dropped. We will wait until HCP have better wrapper API.
 * HyperNetwork-related modules like `hypernet/`, `attention.py`, `lilora.py` are removed.
 * Uncompleted GLoKr are removed.
-* code copied from kohya-ss/sd-scripts are removed. The original sd-scripts repo is now a optional dependency.
-
-#### Fixes, Slight Changes
-
-* The definition of dropout and rank_dropout in each algorithm are changed. Since some concept of original rank_dropout is hard to applied to other algorithm. We can only design the dropout for each module seperatedly.
-
-#### Annotations
-
-* dylora, glora, ia3 are outdated and need to be rewriten. (If you see this on final change note, it means the refactor of these algo will be in next version)
+* code copied from kohya-ss/sd-scripts are removed. The original sd-scripts repo is now an optional dependency.
 
 ---
 
