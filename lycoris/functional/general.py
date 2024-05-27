@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+FUNC_LIST = [None, None, F.linear, F.conv1d, F.conv2d, F.conv3d]
+
+
 def rebuild_tucker(t, wa, wb):
     rebuild2 = torch.einsum("i j ..., i p, j r -> p r ...", t, wa, wb)
     return rebuild2
