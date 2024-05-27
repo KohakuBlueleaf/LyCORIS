@@ -1,4 +1,6 @@
 import re
+import hashlib
+from io import BytesIO
 from typing import Dict, Tuple, Union
 
 import numpy as np
@@ -6,11 +8,37 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 import torch.linalg as linalg
+
+import safetensors.torch
 
 from tqdm import tqdm
 from .general import *
+
+
+def load_bytes_in_safetensors(tensors):
+    bytes = safetensors.torch.save(tensors)
+    b = BytesIO(bytes)
+
+    b.seek(0)
+    header = b.read(8)
+    n = int.from_bytes(header, "little")
+
+    offset = n + 8
+    b.seek(offset)
+
+    return b.read()
+
+
+def precalculate_safetensors_hashes(state_dict):
+    # calculate each tensor one by one to reduce memory usage
+    hash_sha256 = hashlib.sha256()
+    for tensor in state_dict.values():
+        single_tensor_sd = {"tensor": tensor}
+        bytes_for_tensor = load_bytes_in_safetensors(single_tensor_sd)
+        hash_sha256.update(bytes_for_tensor)
+
+    return f"0x{hash_sha256.hexdigest()}"
 
 
 def str_bool(val):

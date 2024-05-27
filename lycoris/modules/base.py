@@ -256,7 +256,7 @@ class LycorisBaseModule(ModuleCustomSD):
 
     @torch.no_grad()
     def apply_max_norm(self, max_norm, device=None):
-        raise NotImplementedError
+        return None, None
 
     def bypass_forward_diff(self, x, scale=1):
         raise NotImplementedError

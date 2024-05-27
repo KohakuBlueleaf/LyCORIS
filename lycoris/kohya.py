@@ -1,16 +1,10 @@
-# network module for kohya
-# reference:
-# https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
-# https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
-# https://github.com/kohya-ss/sd-scripts/blob/main/networks/lora.py
-
 import os
 import re
 from typing import List
 
 import torch
 
-from library.train_util import *
+from .utils import precalculate_safetensors_hashes
 from .wrapper import LycorisNetwork
 from .modules.locon import LoConModule
 from .modules.loha import LohaModule
@@ -149,10 +143,6 @@ def create_network(
             rs_lora=rs_lora,
             unbalanced_factorization=unbalanced_factorization,
         )
-
-    if algo == "dylora":
-        # dylora didn't support scale weight norm yet
-        delattr(type(network), "apply_max_norm_regularization")
 
     return network
 
