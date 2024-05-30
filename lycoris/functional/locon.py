@@ -4,21 +4,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .general import rebuild_tucker
+from .general import rebuild_tucker, FUNC_LIST
 
 
 def lora_weight_gen(org_weight, rank, tucker=True):
     """### lora_weight_gen
 
     Args:
-        out_dim (int): output dimension
-        in_dim (int): input dimension
+        org_weight (torch.Tensor): the weight tensor
         rank (int): low rank
 
     Returns:
-        torch.Tensor: down proj weight
-        torch.Tensor: up proj weight
-        torch.Tensor(optional): mid proj weight
+        torch.Tensor: down, up[, mid]
     """
     out_dim, in_dim, *k = org_weight.shape
     if k and tucker:
@@ -45,14 +42,12 @@ def lora_diff_weight(d, u, m=None, gamma=1.0):
     Args:
         d (torch.Tensor): weight of down proj linear/conv layer
         u (torch.Tensor): weight of up proj linear/conv layer
-        m (torch.Tensor, optional): weight of mid proj linear/conv layer, \
-            for tucker deomposition
+        m (torch.Tensor, optional): middle weight of tucker decomposition
         gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: ΔW
     """
-    assert d.size(0) == u.size(1)
     R, I, *k = d.shape
     O, R, *_ = u.shape
     u = u * gamma
@@ -67,9 +62,6 @@ def lora_diff_weight(d, u, m=None, gamma=1.0):
     return result.reshape(O, I, *k)
 
 
-FUNC_LIST = [None, None, F.linear, F.conv1d, F.conv2d, F.conv3d]
-
-
 def lora_bypass_forward_diff(x, d, u, m=None, gamma=1.0, extra_args={}):
     """### lora_bypass_forward_diff
 
@@ -77,9 +69,10 @@ def lora_bypass_forward_diff(x, d, u, m=None, gamma=1.0, extra_args={}):
         x (torch.Tensor): input tensor
         d (torch.Tensor): weight of down proj linear/conv layer
         u (torch.Tensor): weight of up proj linear/conv layer
-        m (torch.Tensor, optional): weight of mid proj linear/conv layer, \
-            for tucker deomposition
+        m (torch.Tensor, optional): middle weight of tucker decomposition
         gamma (float, optional): scale factor, normally alpha/rank here
+        extra_args (dict, optional): extra args for forward func, \
+            e.g. padding, stride for Conv1/2/3d
 
     Returns:
         torch.Tensor: output tensor

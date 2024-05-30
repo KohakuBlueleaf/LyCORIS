@@ -468,11 +468,12 @@ class LycorisNetwork(torch.nn.Module):
     def apply_max_norm_regularization(self, max_norm_value, device):
         key_scaled = 0
         norms = []
-        for model in self.loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+        for module in self.loras:
+            scaled, norm = module.apply_max_norm(max_norm_value, device)
+            if scaled is None:
+                continue
+            norms.append(norm)
+            key_scaled += scaled
 
         if key_scaled == 0:
             return key_scaled, 0, 0
