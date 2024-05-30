@@ -154,12 +154,12 @@ class LoConModule(LycorisBaseModule):
             )
 
     def make_weight(self, device=None):
-        wa = self.lora_up.weight.to(device)
-        wb = self.lora_down.weight.to(device)
+        wa = self.lora_up.weight
+        wb = self.lora_down.weight
         if self.tucker:
-            t = self.lora_mid.weight.to(device)
-            wa = wa.reshape(wa.size(0), -1).transpose(0, 1)
-            wb = wb.reshape(wb.size(0), -1)
+            t = self.lora_mid.weight
+            wa = wa.view(wa.size(0), -1).transpose(0, 1)
+            wb = wb.view(wb.size(0), -1)
             weight = rebuild_tucker(t, wa, wb)
         else:
             weight = wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)
