@@ -154,8 +154,8 @@ class LoConModule(LycorisBaseModule):
             )
 
     def make_weight(self, device=None):
-        wa = self.lora_up.weight
-        wb = self.lora_down.weight
+        wa = self.lora_up.weight.to(device)
+        wb = self.lora_down.weight.to(device)
         if self.tucker:
             t = self.lora_mid.weight
             wa = wa.view(wa.size(0), -1).transpose(0, 1)
@@ -174,7 +174,7 @@ class LoConModule(LycorisBaseModule):
                 drop /= drop.mean()
             weight *= drop
 
-        return weight * self.scalar
+        return weight * self.scalar.to(device)
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         scale = self.scale * multiplier
