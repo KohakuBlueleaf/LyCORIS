@@ -612,7 +612,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             if metadata is None:
                 metadata = {}
             model_hash, legacy_hash = precalculate_safetensors_hashes(
-                state_dict, metadata
+                state_dict
             )
             metadata["sshs_model_hash"] = model_hash
             metadata["sshs_legacy_hash"] = legacy_hash
@@ -846,7 +846,7 @@ class IA3Network(torch.nn.Module):
             if metadata is None:
                 metadata = {}
             model_hash, legacy_hash = precalculate_safetensors_hashes(
-                state_dict, metadata
+                state_dict
             )
             metadata["sshs_model_hash"] = model_hash
             metadata["sshs_legacy_hash"] = legacy_hash
