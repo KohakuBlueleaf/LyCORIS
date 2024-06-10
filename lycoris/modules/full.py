@@ -1,3 +1,4 @@
+from typing import Mapping
 import torch
 import torch.nn as nn
 
@@ -75,6 +76,9 @@ class FullModule(LycorisBaseModule):
             delattr(self.org_module[0], "bias")
         else:
             self.org_bias = None
+
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
+        return
 
     def custom_state_dict(self):
         sd = {"diff": self.weight.data.cpu() - self._org_weight[0]}

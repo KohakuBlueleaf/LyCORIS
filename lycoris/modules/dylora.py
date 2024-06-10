@@ -80,6 +80,9 @@ class DyLoraModule(LycorisBaseModule):
         for v in self.up_list:
             torch.nn.init.zeros_(v)
 
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
+        return
+
     def custom_state_dict(self):
         destination = {}
         destination["alpha"] = self.alpha
