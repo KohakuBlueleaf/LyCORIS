@@ -58,7 +58,7 @@ class LohaModule(LycorisBaseModule):
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             self.shape = (out_dim, in_dim, *k_size)
-            self.tucker = use_tucker and any(i!=1 for i in k_size)
+            self.tucker = use_tucker and any(i != 1 for i in k_size)
             if self.tucker:
                 w_shape = (out_dim, in_dim, *k_size)
             else:

@@ -58,7 +58,7 @@ def make_module(lyco_type, params, lora_name, orig_module):
             module.dora_scale.copy_(dora_scale)
     elif lyco_type == "kron":
         w1, w1a, w1b, w2, w2a, w2b, _, t2, alpha, dora_scale = params
-        full_matrix=False
+        full_matrix = False
         if w1a is not None:
             lora_dim = w1a.size(1)
         elif w2a is not None:

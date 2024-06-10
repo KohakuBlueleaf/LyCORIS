@@ -93,7 +93,7 @@ class LokrModule(LycorisBaseModule):
             if unbalanced_factorization:
                 out_l, out_k = out_k, out_l
             shape = ((out_l, out_k), (in_m, in_n), *k_size)  # ((a, b), (c, d), *k_size)
-            self.tucker = use_tucker and any(i!=1 for i in k_size)
+            self.tucker = use_tucker and any(i != 1 for i in k_size)
             if (
                 decompose_both
                 and lora_dim < max(shape[0][0], shape[1][0]) / 2

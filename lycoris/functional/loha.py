@@ -174,9 +174,7 @@ def loha_bypass_forward_diff(
 
 if __name__ == "__main__":
     w = torch.randn(128, 128, 3, 3, 3)
-    w1d, w2d, w1u, w2u, t1, t2 = loha_weight_gen(
-        w, 4, tucker=True
-    )
+    w1d, w2d, w1u, w2u, t1, t2 = loha_weight_gen(w, 4, tucker=True)
     w1u += 0.01
     extra_args = {"padding": 1}
 

@@ -611,9 +611,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             # Precalculate model hashes to save time on indexing
             if metadata is None:
                 metadata = {}
-            model_hash = precalculate_safetensors_hashes(
-                state_dict
-            )
+            model_hash = precalculate_safetensors_hashes(state_dict)
             metadata["sshs_model_hash"] = model_hash
 
             save_file(state_dict, file, metadata)
@@ -844,9 +842,7 @@ class IA3Network(torch.nn.Module):
             # Precalculate model hashes to save time on indexing
             if metadata is None:
                 metadata = {}
-            model_hash = precalculate_safetensors_hashes(
-                state_dict
-            )
+            model_hash = precalculate_safetensors_hashes(state_dict)
             metadata["sshs_model_hash"] = model_hash
 
             save_file(state_dict, file, metadata)

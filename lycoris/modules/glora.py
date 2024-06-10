@@ -66,7 +66,7 @@ class GLoRAModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.tucker = use_tucker and all(i==1 for i in k_size)
+            self.tucker = use_tucker and all(i == 1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
 
@@ -75,7 +75,7 @@ class GLoRAModule(LycorisBaseModule):
             self.a1 = self.module(lora_dim, in_dim, 1, bias=False)
 
             # B
-            if use_tucker and any(i!=1 for i in k_size):
+            if use_tucker and any(i != 1 for i in k_size):
                 self.b2 = self.module(in_dim, lora_dim, 1, bias=False)
                 self.bm = self.module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False
