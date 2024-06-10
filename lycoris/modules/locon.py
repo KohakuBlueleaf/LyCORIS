@@ -70,10 +70,10 @@ class LoConModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.tucker = use_tucker and k_size != (1, 1)
+            self.tucker = use_tucker and any(i!=1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
-            if use_tucker and k_size != (1, 1):
+            if use_tucker and any(i!=1 for i in k_size):
                 self.lora_down = self.module(in_dim, lora_dim, (1, 1), bias=False)
                 self.lora_mid = self.module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False

@@ -66,17 +66,17 @@ class GLoRAModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.tucker = use_tucker and k_size != (1, 1)
+            self.tucker = use_tucker and all(i==1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
 
             # A
-            self.a2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
-            self.a1 = self.module(lora_dim, in_dim, (1, 1), bias=False)
+            self.a2 = self.module(in_dim, lora_dim, 1, bias=False)
+            self.a1 = self.module(lora_dim, in_dim, 1, bias=False)
 
             # B
-            if use_tucker and k_size != (1, 1):
-                self.b2 = self.module(in_dim, lora_dim, (1, 1), bias=False)
+            if use_tucker and any(i!=1 for i in k_size):
+                self.b2 = self.module(in_dim, lora_dim, 1, bias=False)
                 self.bm = self.module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False
                 )
@@ -85,7 +85,7 @@ class GLoRAModule(LycorisBaseModule):
                 self.b2 = self.module(
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
-            self.b1 = self.module(lora_dim, out_dim, (1, 1), bias=False)
+            self.b1 = self.module(lora_dim, out_dim, 1, bias=False)
         else:
             self.isconv = False
             self.down_op = F.linear
@@ -123,6 +123,7 @@ class GLoRAModule(LycorisBaseModule):
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
+        orig = self.org_weight
 
         if self.tucker:
             wb = tucker_weight_from_conv(self.b1.weight, self.b2.weight, self.bm.weight)
@@ -130,7 +131,7 @@ class GLoRAModule(LycorisBaseModule):
             wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
             wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
             wb = wb1 @ wb2
-        orig = self.org_weight
+            wb = wb.view(*orig.shape)
         if orig.dim() > 2:
             w_wa1 = torch.einsum("o i ..., i j -> o j ...", orig, wa1)
             w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
