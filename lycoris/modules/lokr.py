@@ -166,7 +166,7 @@ class LokrModule(LycorisBaseModule):
 
         self.wd = weight_decompose
         if self.wd:
-            org_weight: nn.Parameter = org_module.weight
+            org_weight = org_module.weight.cpu().clone().float()
             self.dora_norm_dims = org_weight.dim() - 1
             self.dora_scale = nn.Parameter(
                 torch.norm(

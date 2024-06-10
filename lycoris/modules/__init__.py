@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from .base import LycorisBaseModule
 from .locon import LoConModule
 from .loha import LohaModule
 from .lokr import LokrModule
