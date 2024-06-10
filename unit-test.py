@@ -30,7 +30,7 @@ modules: list[LycorisBaseModule] = [
 base_module_and_input = [
     lambda dim: (nn.Linear(dim, dim), torch.randn(1, dim)),
     lambda dim: (nn.Conv1d(dim, dim, 3, 1, 1), torch.randn(1, dim, 7)),
-    lambda dim: (nn.Conv2d(dim, dim, (3, 2), 1, 1), torch.randn(1, dim, 7, 7)),
+    lambda dim: (nn.Conv2d(dim, dim, (3, 3), 1, 1), torch.randn(1, dim, 7, 7)),
     lambda dim: (nn.Conv3d(dim, dim, (3, 2, 1), 1, 1), torch.randn(1, dim, 7, 7, 7)),
 ]
 device_and_dtype = [
