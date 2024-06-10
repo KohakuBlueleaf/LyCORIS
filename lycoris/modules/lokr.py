@@ -232,6 +232,8 @@ class LokrModule(LycorisBaseModule):
                 del missing_keys[missing_keys.index(key)]
         if isinstance(self.scalar, nn.Parameter):
             self.scalar.data.copy_(torch.ones_like(self.scalar))
+        elif getattr(self, "scalar", None) is not None:
+            self.scalar.copy_(torch.ones_like(self.scalar))
         else:
             self.register_buffer(
                 "scalar", torch.ones_like(self.scalar), persistent=False

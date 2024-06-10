@@ -63,7 +63,6 @@ class LohaModule(LycorisBaseModule):
                 w_shape = (out_dim, in_dim, *k_size)
             else:
                 w_shape = (out_dim, in_dim * torch.tensor(k_size).prod().item())
-            self.op = F.conv2d
 
         if self.tucker:
             self.hada_t1 = nn.Parameter(torch.empty(lora_dim, lora_dim, *w_shape[2:]))
@@ -140,6 +139,8 @@ class LohaModule(LycorisBaseModule):
                 del missing_keys[missing_keys.index(key)]
         if isinstance(self.scalar, nn.Parameter):
             self.scalar.data.copy_(torch.ones_like(self.scalar))
+        elif getattr(self, "scalar", None) is not None:
+            self.scalar.copy_(torch.ones_like(self.scalar))
         else:
             self.register_buffer(
                 "scalar", torch.ones_like(self.scalar), persistent=False
