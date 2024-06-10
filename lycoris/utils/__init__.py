@@ -469,12 +469,12 @@ def get_module(lyco_state_dict: Dict, lora_name):
 def tucker_weight_from_conv(up, down, mid):
     up = up.reshape(up.size(0), up.size(1))
     down = down.reshape(down.size(0), down.size(1))
-    return torch.einsum("m n w h, i m, n j -> i j w h", mid, up, down)
+    return torch.einsum("m n ..., i m, n j -> i j ...", mid, up, down)
 
 
 def tucker_weight(wa, wb, t):
-    temp = torch.einsum("i j k l, j r -> i r k l", t, wb)
-    return torch.einsum("i j k l, i r -> r j k l", temp, wa)
+    temp = torch.einsum("i j ..., j r -> i r ...", t, wb)
+    return torch.einsum("i j ..., i r -> r j ...", temp, wa)
 
 
 def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
