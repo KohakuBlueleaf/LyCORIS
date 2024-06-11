@@ -153,7 +153,14 @@ for module, base, (device, dtype), wd, tucker, scalar in product(
     base = base.to(device, dtype)
     test_input = test_input.to(device, dtype)
     net = module.parametrize(
-        base, "weight", 1, 4, 1, weight_decompose=wd, use_tucker=tucker, use_scalar=scalar
+        base,
+        "weight",
+        1,
+        4,
+        1,
+        weight_decompose=wd,
+        use_tucker=tucker,
+        use_scalar=scalar,
     ).to(device, dtype)
 
     with torch.autocast("cuda", dtype=dtype):

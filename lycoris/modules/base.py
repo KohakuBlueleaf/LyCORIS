@@ -185,6 +185,7 @@ class LycorisBaseModule(ModuleCustomSD):
     @classmethod
     def parametrize(cls, org_module, attr, *args, **kwargs):
         from .full import FullModule
+
         if cls is FullModule:
             raise RuntimeError("FullModule cannot be used for parametrize.")
         target_param = getattr(org_module, attr)
@@ -209,7 +210,7 @@ class LycorisBaseModule(ModuleCustomSD):
                 target_param.shape[0],
                 target_param.shape[1],
                 *target_param.shape[2:],
-                bias=False
+                bias=False,
             )
             proxy_module.weight = target_param
         module_obj = cls("", proxy_module, *args, **kwargs)
