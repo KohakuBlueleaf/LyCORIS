@@ -184,6 +184,9 @@ class LycorisBaseModule(ModuleCustomSD):
 
     @classmethod
     def parametrize(cls, org_module, attr, *args, **kwargs):
+        from .full import FullModule
+        if cls is FullModule:
+            raise RuntimeError("FullModule cannot be used for parametrize.")
         target_param = getattr(org_module, attr)
         kwargs["bypass_mode"] = False
         if target_param.dim() == 2:
@@ -206,11 +209,12 @@ class LycorisBaseModule(ModuleCustomSD):
                 target_param.shape[0],
                 target_param.shape[1],
                 *target_param.shape[2:],
+                bias=False
             )
             proxy_module.weight = target_param
         module_obj = cls("", proxy_module, *args, **kwargs)
         module_obj.forward = module_obj.parametrize_forward
-        module_obj.to(target_param.device)
+        module_obj.to(target_param)
         parametrize.register_parametrization(org_module, attr, module_obj)
         return module_obj
 

@@ -74,7 +74,7 @@ class LoConModule(LycorisBaseModule):
             self.down_op = self.op
             self.up_op = self.op
             if use_tucker and any(i != 1 for i in k_size):
-                self.lora_down = self.module(in_dim, lora_dim, (1, 1), bias=False)
+                self.lora_down = self.module(in_dim, lora_dim, 1, bias=False)
                 self.lora_mid = self.module(
                     lora_dim, lora_dim, k_size, stride, padding, bias=False
                 )
@@ -83,7 +83,7 @@ class LoConModule(LycorisBaseModule):
                 self.lora_down = self.module(
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
-            self.lora_up = self.module(lora_dim, out_dim, (1, 1), bias=False)
+            self.lora_up = self.module(lora_dim, out_dim, 1, bias=False)
         elif isinstance(org_module, nn.Linear):
             self.isconv = False
             self.down_op = F.linear
