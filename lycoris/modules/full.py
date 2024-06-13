@@ -77,6 +77,12 @@ class FullModule(LycorisBaseModule):
         else:
             self.org_bias = None
 
+    def restore(self):
+        self.org_module[0].forward = self.org_forward
+        self.org_module[0].weight = nn.Parameter(self._org_weight[0])
+        if self.org_bias is not None:
+            self.org_module[0].bias = nn.Parameter(self.org_bias[0])
+
     def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
         return
 
@@ -141,7 +147,7 @@ class FullModule(LycorisBaseModule):
         if shape is not None:
             weight = weight.view(shape)
             if bias is not None:
-                bias = bias.view(shape[0], 1)
+                bias = bias.view(shape[0])
         return weight, bias
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
@@ -159,36 +165,3 @@ class FullModule(LycorisBaseModule):
         weight, bias = self.make_weight(scale, x.device)
         kw_dict = self.kw_dict | {"weight": weight, "bias": bias}
         return self.op(x, **kw_dict)
-
-
-if __name__ == "__main__":
-    device = torch.device("cuda")
-    module = FullModule
-    with torch.autocast("cuda" if torch.cuda.is_available() else "cpu"):
-        base = nn.Linear(128, 128).to(device).half()
-        net = module("test", base, 1, 4, 1, weight_decompose=True).to(device)
-        print(net)
-        test_input = torch.randn(1, 128).to(device).half()
-        test_output = net(test_input)
-        torch.sum(test_output).backward()
-        print(test_output.shape)
-
-        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = module("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True).to(
-            device
-        )
-        print(net)
-        test_input = torch.randn(1, 128, 16, 16).to(device).half()
-        test_output = net(test_input)
-        torch.sum(test_output).backward()
-        print(test_output.shape)
-
-        base = nn.Conv2d(128, 128, 3, 1, 1).to(device).half()
-        net = module.parametrize(
-            base, "weight", 1, 4, 1, weight_decompose=True, use_tucker=True
-        ).to(device)
-        print(base)
-        test_input = torch.randn(1, 128, 16, 16).to(device).half()
-        test_output = base(test_input)
-        torch.sum(test_output).backward()
-        print(test_output.shape)
