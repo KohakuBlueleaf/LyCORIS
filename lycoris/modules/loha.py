@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .base import LycorisBaseModule
 from ..functional.loha import loha_diff_weight

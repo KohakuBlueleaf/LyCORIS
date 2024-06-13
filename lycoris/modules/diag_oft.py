@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange
-
 from .base import LycorisBaseModule
 from ..functional import factorization
 from ..logging import logger
