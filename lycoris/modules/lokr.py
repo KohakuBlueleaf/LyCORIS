@@ -9,6 +9,7 @@ from einops import rearrange
 
 from .base import LycorisBaseModule
 from ..functional import factorization, rebuild_tucker
+from ..functional.lokr import make_kron
 from ..logging import logger
 from ..utils.bnb import LinearNF4
 
@@ -20,15 +21,6 @@ def logging_force_full_matrix(lora_dim, dim, factor):
         f" dim={dim} and {factor=}"
         ", using full matrix mode."
     )
-
-
-def make_kron(w1, w2, scale):
-    if len(w2.shape) == 4:
-        w1 = w1.unsqueeze(2).unsqueeze(2)
-    w2 = w2.contiguous()
-    rebuild = torch.kron(w1, w2)
-
-    return rebuild * scale
 
 
 class LokrModule(LycorisBaseModule):
@@ -339,40 +331,74 @@ class LokrModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, h, scale=1):
-        if len(self.shape) > 2 and self.shape[2] > 1:
-            return (
-                self.op(h, self.get_weight(self.shape), **self.kw_dict)
-                * self.multiplier
-            )
-        if self.module_type.startswith("conv"):
-            h = h.transpose(1, -1)
+        is_conv = self.module_type.startswith("conv")
         if self.use_w2:
             ba = self.lokr_w2
         else:
             a = self.lokr_w2_b
             b = self.lokr_w2_a
+
+            if self.tucker:
+                t = self.lokr_t2
+                a = a.view(*a.shape, *[1] * (len(t.shape) - 2))
+                b = b.view(*b.shape, *[1] * (len(t.shape) - 2))
+            elif is_conv:
+                a = a.view(*a.shape, *self.shape[2:])
+                b = b.view(*b.shape, *[1] * (len(self.shape) - 2))
+
         if self.use_w1:
             c = self.lokr_w1
         else:
             c = self.lokr_w1_a @ self.lokr_w1_b
         uq = c.size(1)
 
-        if self.use_w2:
-            vq = ba.size(1)
-            h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
-            hb = F.linear(h_in_group, ba)
+        if is_conv:
+            # (b, uq), vq, ...
+            b, _, *rest = h.shape
+            h_in_group = h.reshape(b * uq, -1, *rest)
         else:
-            vq = a.size(1)
-            h_in_group = rearrange(h, "b ... (uq vq) -> b ... uq vq", uq=uq, vq=vq)
-            ha = F.linear(h_in_group, a)
-            hb = F.linear(ha, b)
+            # b, ..., uq, vq
+            h_in_group = h.reshape(*h.shape[:-1], uq, -1)
 
-        h_cross_group = hb.transpose(-1, -2)
+        if self.use_w2:
+            hb = self.op(h_in_group, ba, **self.kw_dict)
+        else:
+            if is_conv:
+                if self.tucker:
+                    ha = self.op(h_in_group, a)
+                    ht = self.op(ha, t, **self.kw_dict)
+                    hb = self.op(ht, b)
+                else:
+                    ha = self.op(h_in_group, a, **self.kw_dict)
+                    hb = self.op(ha, b)
+            else:
+                ha = self.op(h_in_group, a, **self.kw_dict)
+                hb = self.op(ha, b)
+
+        if is_conv:
+            # (b, uq), vp, ..., f
+            # -> b, uq, vp, ..., f
+            # -> b, f, vp, ..., uq
+            hb = hb.view(b, -1, *hb.shape[1:])
+            h_cross_group = hb.transpose(1, -1)
+        else:
+            # b, ..., uq, vq
+            # -> b, ..., vq, uq
+            h_cross_group = hb.transpose(-1, -2)
+
         hc = F.linear(h_cross_group, c)
-
-        h = rearrange(hc, "b ... vp up -> b ... (up vp)")
-        if self.module_type.startswith("conv"):
-            h = h.transpose(1, -1)
+        if is_conv:
+            # b, f, vp, ..., up
+            # -> b, up, vp, ... ,f
+            # -> b, c, ..., f
+            hc = hc.transpose(1, -1)
+            h = hc.reshape(b, -1, *hc.shape[3:])
+        else:
+            # b, ..., vp, up
+            # -> b, ..., up, vp
+            # -> b, ..., c
+            hc = hc.transpose(-1, -2)
+            h = hc.reshape(*hc.shape[:-2], -1)
 
         return self.drop(h * scale)
 
@@ -399,3 +425,47 @@ class LokrModule(LycorisBaseModule):
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
             return self.op(x, weight, bias, **self.kw_dict)
+
+
+if __name__ == "__main__":
+    base = nn.Conv2d(128, 128, 3, 1, 1)
+    net = LokrModule(
+        "",
+        base,
+        multiplier=1,
+        lora_dim=4,
+        alpha=1,
+        weight_decompose=False,
+        use_tucker=False,
+        use_scalar=False,
+        decompose_both=True
+    )
+    net.apply_to()
+    sd = net.state_dict()
+    for key in sd:
+        if key != "alpha":
+            sd[key] = torch.randn_like(sd[key])
+    net.load_state_dict(sd)
+
+    test_input = torch.randn(1, 128, 16, 16)
+    test_output = net(test_input)
+    print(test_output.shape)
+
+    net2 = LokrModule(
+        "",
+        base,
+        multiplier=1,
+        lora_dim=4,
+        alpha=1,
+        weight_decompose=False,
+        use_tucker=False,
+        use_scalar=False,
+        bypass_mode=True,
+        decompose_both=True
+    )
+    net2.apply_to()
+    net2.load_state_dict(sd)
+    print(net2)
+
+    test_output2 = net(test_input)
+    print(F.mse_loss(test_output, test_output2))
