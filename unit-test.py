@@ -186,7 +186,7 @@ class LycorisModuleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     suite = unittest.TestLoader().loadTestsFromTestCase(LycorisModuleTests)
-    runner = unittest.TextTestRunner(verbosity=1)
+    runner = unittest.TextTestRunner(verbosity=0)
     result = runner.run(suite)
 
     cov.stop()
