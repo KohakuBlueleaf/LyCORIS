@@ -74,7 +74,7 @@ In any case, please install this package in the corresponding virtual environmen
 - through pip
 
   ```bash
-  pip install lycoris_lora
+  pip install lycoris-lora
   ```
 - or from source
 
@@ -110,6 +110,8 @@ You can use this package's kohya module to run kohya's training script to train 
   For your convenience, some example `toml` files for kohya LyCORIS training are provided in [example/training_configs/kohya](example_configs/training_configs/kohya).
 
 #### HCP-Diffusion
+
+**The support for HCP-Diffusion has been dropped on LyCORIS3.0.0, we will wait until HCP side finish the implementation of new wrapper**
 
 You can use this package's hcp module to run HCP-Diffusion's training script to train lycoris module for SD models
 
@@ -155,6 +157,11 @@ forward_with_lyco = your_model(x)
 ```
 
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
+
+#### Other method
+After LyCORIS3.0.0, Parametrize API and Functional API have been added, which provide more different ways on utilizing LyCORIS library.
+
+Check [xxx] for more informations.
 
 #### Bitsandbytes support
 
