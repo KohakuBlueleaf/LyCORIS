@@ -438,7 +438,7 @@ if __name__ == "__main__":
         weight_decompose=False,
         use_tucker=False,
         use_scalar=False,
-        decompose_both=True
+        decompose_both=True,
     )
     net.apply_to()
     sd = net.state_dict()
@@ -461,7 +461,7 @@ if __name__ == "__main__":
         use_tucker=False,
         use_scalar=False,
         bypass_mode=True,
-        decompose_both=True
+        decompose_both=True,
     )
     net2.apply_to()
     net2.load_state_dict(sd)

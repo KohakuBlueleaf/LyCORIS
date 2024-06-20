@@ -128,7 +128,9 @@ def lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
     return make_kron(w1, w2, scale)
 
 
-def lokr_bypass_forward_diff(x, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}):
+def lokr_bypass_forward_diff(
+    x, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}
+):
     """### lokr_bypass_forward_diff
 
     Args:

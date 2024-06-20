@@ -2,6 +2,7 @@ from functools import cache
 
 try:
     from bitsandbytes.nn import LinearNF4, Linear8bitLt, LinearFP4
+
     SUPPORT_BNB = True
 except:
     SUPPORT_BNB = False
