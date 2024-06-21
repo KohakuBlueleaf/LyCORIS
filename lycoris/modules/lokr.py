@@ -107,9 +107,7 @@ class LokrModule(LycorisBaseModule):
                     torch.empty(shape[0][1], shape[1][1], *k_size)
                 )
             elif self.tucker:
-                self.lokr_t2 = nn.Parameter(
-                    torch.empty(lora_dim, lora_dim, *shape[2:])
-                )
+                self.lokr_t2 = nn.Parameter(torch.empty(lora_dim, lora_dim, *shape[2:]))
                 self.lokr_w2_a = nn.Parameter(
                     torch.empty(lora_dim, shape[0][1])
                 )  # b, 1-mode
