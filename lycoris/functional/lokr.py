@@ -9,15 +9,15 @@ from .general import factorization
 
 
 def make_kron(w1, w2, scale):
-    if len(w2.shape) == 4:
-        w1 = w1.unsqueeze(2).unsqueeze(2)
+    for _ in range(w2.dim() - w1.dim()):
+        w1 = w1.unsqueeze(-1)
     w2 = w2.contiguous()
     rebuild = torch.kron(w1, w2)
 
     return rebuild * scale
 
 
-def lokr_weight_gen(
+def weight_gen(
     org_weight,
     rank,
     tucker=True,
@@ -26,7 +26,7 @@ def lokr_weight_gen(
     full_matrix=False,
     unbalanced_factorization=False,
 ):
-    """### lokr_weight_gen
+    """### weight_gen
 
     Args:
         org_weight (torch.Tensor): the weight tensor
@@ -36,9 +36,10 @@ def lokr_weight_gen(
         torch.Tensor | None: w1, w1a, w1b, w2, w2a, w2b, t2
     """
     out_dim, in_dim, *k = org_weight.shape
-    lokr_w1 = lokr_w1_a = lokr_w1_b = None
-    lokr_w2 = lokr_w2_a = lokr_w2_b = None
+    w1 = w1a = w1b = None
+    w2 = w2a = w2b = None
     t2 = None
+    use_w1 = use_w2 = False
 
     if k:
         k_size = k
@@ -55,25 +56,24 @@ def lokr_weight_gen(
             and rank < max(shape[0][0], shape[1][0]) / 2
             and not full_matrix
         ):
-            lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], rank))
-            lokr_w1_b = nn.Parameter(torch.empty(rank, shape[1][0]))
+            w1a = torch.empty(shape[0][0], rank)
+            w1b = torch.empty(rank, shape[1][0])
         else:
-            lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0]))  # a*c, 1-mode
+            use_w1 = True
+            w1 = torch.empty(shape[0][0], shape[1][0])  # a*c, 1-mode
 
         if rank >= max(shape[0][1], shape[1][1]) / 2 or full_matrix:
             use_w2 = True
-            lokr_w2 = nn.Parameter(torch.empty(shape[0][1], shape[1][1], *k_size))
+            w2 = torch.empty(shape[0][1], shape[1][1], *k_size)
         elif tucker:
-            lokr_t2 = nn.Parameter(torch.empty(rank, rank, shape[2], shape[3]))
-            lokr_w2_a = nn.Parameter(torch.empty(rank, shape[0][1]))  # b, 1-mode
-            lokr_w2_b = nn.Parameter(torch.empty(rank, shape[1][1]))  # d, 2-mode
+            t2 = torch.empty(rank, rank, *shape[2:])
+            w2a = torch.empty(rank, shape[0][1])  # b, 1-mode
+            w2b = torch.empty(rank, shape[1][1])  # d, 2-mode
         else:  # Conv2d not tucker
             # bigger part. weight and LoRA. [b, dim] x [dim, d*k1*k2]
-            lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], rank))
-            lokr_w2_b = nn.Parameter(
-                torch.empty(rank, shape[1][1] * torch.tensor(shape[2:]).prod().item())
-            )
-            # w1 ⊗ (w2_a x w2_b) = (a, b)⊗((c, dim)x(dim, d*k1*k2)) = (a, b)⊗(c, d*k1*k2) = (ac, bd*k1*k2)
+            w2a = torch.empty(shape[0][1], rank)
+            w2b = torch.empty(rank, shape[1][1], *shape[2:])
+            # w1 ⊗ (w2a x w2b) = (a, b)⊗((c, dim)x(dim, d*k1*k2)) = (a, b)⊗(c, d*k1*k2) = (ac, bd*k1*k2)
     else:  # Linear
         shape = (out_dim, in_dim)
 
@@ -87,19 +87,35 @@ def lokr_weight_gen(
         )  # ((a, b), (c, d)), out_dim = a*c, in_dim = b*d
         # smaller part. weight scale
         if decompose_both and rank < max(shape[0][0], shape[1][0]) / 2:
-            lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], rank))
-            lokr_w1_b = nn.Parameter(torch.empty(rank, shape[1][0]))
+            w1a = torch.empty(shape[0][0], rank)
+            w1b = torch.empty(rank, shape[1][0])
         else:
-            lokr_w1 = nn.Parameter(torch.empty(shape[0][0], shape[1][0]))  # a*c, 1-mode
+            use_w1 = True
+            w1 = torch.empty(shape[0][0], shape[1][0])  # a*c, 1-mode
         if rank < max(shape[0][1], shape[1][1]) / 2:
             # bigger part. weight and LoRA. [b, dim] x [dim, d]
-            lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], rank))
-            lokr_w2_b = nn.Parameter(torch.empty(rank, shape[1][1]))
-            # w1 ⊗ (w2_a x w2_b) = (a, b)⊗((c, dim)x(dim, d)) = (a, b)⊗(c, d) = (ac, bd)
+            w2a = torch.empty(shape[0][1], rank)
+            w2b = torch.empty(rank, shape[1][1])
+            # w1 ⊗ (w2a x w2b) = (a, b)⊗((c, dim)x(dim, d)) = (a, b)⊗(c, d) = (ac, bd)
         else:
-            lokr_w2 = nn.Parameter(torch.empty(shape[0][1], shape[1][1]))
+            use_w2 = True
+            w2 = torch.empty(shape[0][1], shape[1][1])
 
-    return lokr_w1, lokr_w1_a, lokr_w1_b, lokr_w2, lokr_w2_a, lokr_w2_b, t2
+    if use_w2:
+        torch.nn.init.constant_(w2, 1)
+    else:
+        if tucker:
+            torch.nn.init.kaiming_uniform_(t2, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(w2a, a=math.sqrt(5))
+        torch.nn.init.constant_(w2b, 1)
+
+    if use_w1:
+        torch.nn.init.kaiming_uniform_(w1, a=math.sqrt(5))
+    else:
+        torch.nn.init.kaiming_uniform_(w1a, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(w1b, a=math.sqrt(5))
+
+    return w1, w1a, w1b, w2, w2a, w2b, t2
 
 
 def lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
@@ -122,22 +138,20 @@ def lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
         w1 = w1a @ w1b
     if w2 is None:
         if t is None:
-            w2 = w2a @ w2b
+            r, o, *k = w2b.shape
+            w2 = w2a @ w2b.view(r, -1)
+            w2 = w2.view(-1, o, *k)
         else:
             w2 = rebuild_tucker(t, w2a, w2b)
     return make_kron(w1, w2, scale)
 
 
 def lokr_bypass_forward_diff(
-    x, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}
+    h, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}
 ):
     """### lokr_bypass_forward_diff
 
     Args:
-        x (torch.Tensor): input tensor
-        d (torch.Tensor): weight of down proj linear/conv layer
-        u (torch.Tensor): weight of up proj linear/conv layer
-        m (torch.Tensor, optional): middle weight of tucker decomposition
         gamma (float, optional): scale factor, normally alpha/rank here
         extra_args (dict, optional): extra args for forward func, \
             e.g. padding, stride for Conv1/2/3d
@@ -145,19 +159,101 @@ def lokr_bypass_forward_diff(
     Returns:
         torch.Tensor: output tensor
     """
-    pass
+    use_w1 = w1 is not None
+    use_w2 = w2 is not None
+    tucker = t is not None
+    dim = t.dim() if tucker else w2.dim() if w2 is not None else w2b.dim()
+    print(dim)
+    rank = w1b.size(0) if not use_w1 else w2b.size(0) if not use_w2 else gamma
+    scale = gamma / rank
+    is_conv = dim > 2
+    op = FUNC_LIST[dim]
+
+    if is_conv:
+        kw_dict = extra_args
+    else:
+        kw_dict = {}
+
+    if use_w2:
+        ba = w2
+    else:
+        a = w2b
+        b = w2a
+
+        if t is not None:
+            a = a.view(*a.shape, *[1] * (dim - 2))
+            b = b.view(*b.shape, *[1] * (dim - 2))
+        elif is_conv:
+            b = b.view(*b.shape, *[1] * (dim - 2))
+
+    if use_w1:
+        c = w1
+    else:
+        c = w1a @ w1b
+    uq = c.size(1)
+
+    if is_conv:
+        # (b, uq), vq, ...
+        B, _, *rest = h.shape
+        h_in_group = h.reshape(B * uq, -1, *rest)
+    else:
+        # b, ..., uq, vq
+        h_in_group = h.reshape(*h.shape[:-1], uq, -1)
+
+    if use_w2:
+        hb = op(h_in_group, ba, **kw_dict)
+    else:
+        if is_conv:
+            if tucker:
+                ha = op(h_in_group, a)
+                ht = op(ha, t, **kw_dict)
+                hb = op(ht, b)
+            else:
+                ha = op(h_in_group, a, **kw_dict)
+                hb = op(ha, b)
+        else:
+            ha = op(h_in_group, a, **kw_dict)
+            hb = op(ha, b)
+
+    if is_conv:
+        # (b, uq), vp, ..., f
+        # -> b, uq, vp, ..., f
+        # -> b, f, vp, ..., uq
+        hb = hb.view(B, -1, *hb.shape[1:])
+        h_cross_group = hb.transpose(1, -1)
+    else:
+        # b, ..., uq, vq
+        # -> b, ..., vq, uq
+        h_cross_group = hb.transpose(-1, -2)
+
+    hc = F.linear(h_cross_group, c)
+    if is_conv:
+        # b, f, vp, ..., up
+        # -> b, up, vp, ... ,f
+        # -> b, c, ..., f
+        hc = hc.transpose(1, -1)
+        h = hc.reshape(B, -1, *hc.shape[3:])
+    else:
+        # b, ..., vp, up
+        # -> b, ..., up, vp
+        # -> b, ..., c
+        hc = hc.transpose(-1, -2)
+        h = hc.reshape(*hc.shape[:-2], -1)
+
+    return h * scale
 
 
 if __name__ == "__main__":
     w = torch.randn(32, 32, 3, 3, 3)
-    d, u, m = lokr_weight_gen(w, 4)
-    u = u + 0.01
+    w1, w1a, w1b, w2, w2a, w2b, t = weight_gen(w, 2, tucker=False)
     extra_args = {"padding": 1}
 
     x = torch.randn(1, 32, 8, 8, 8)
-    y = FUNC_LIST[d.dim()](x, w, **extra_args)
-    diff_w = lokr_diff_weight(d, u, m, 1)
-    diff_y = lokr_bypass_forward_diff(x, d, u, m, 1, extra_args)
+    y = FUNC_LIST[w.dim()](x, w, **extra_args)
+    diff_w = lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, 1)
+    diff_y_w = FUNC_LIST[w.dim()](x, diff_w, **extra_args)
+    diff_y = lokr_bypass_forward_diff(x, w1, w1a, w1b, w2, w2a, w2b, t, 1, extra_args)
 
     print(F.mse_loss(y, y + diff_y))
     print(F.mse_loss(w, w + diff_w))
+    print(F.mse_loss(diff_y, diff_y_w))
