@@ -238,6 +238,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "ResnetBlock2D",
         "Downsample2D",
         "Upsample2D",
+        "HunYuanDiTBlock",
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -245,7 +246,12 @@ class LycorisNetworkKohya(LycorisNetwork):
         "time_embedding.linear_1",
         "time_embedding.linear_2",
     ]
-    TEXT_ENCODER_TARGET_REPLACE_MODULE = ["CLIPAttention", "CLIPMLP"]
+    TEXT_ENCODER_TARGET_REPLACE_MODULE = [
+        "CLIPAttention",
+        "CLIPMLP",
+        "MT5Block",
+        "BertLayer",
+    ]
     TEXT_ENCODER_TARGET_REPLACE_NAME = []
     LORA_PREFIX_UNET = "lora_unet"
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
