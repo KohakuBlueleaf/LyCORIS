@@ -80,6 +80,7 @@ class LycorisBaseModule(ModuleCustomSD):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
         super().__init__()
         self.lora_name = lora_name
+        self.not_supported = False
 
         self.module = type(org_module)
         if isinstance(org_module, nn.Linear):
@@ -150,6 +151,7 @@ class LycorisBaseModule(ModuleCustomSD):
             self.dim = org_module.num_channels
             self.kw_dict = {"num_groups": org_module.num_groups, "eps": org_module.eps}
         else:
+            self.not_supported = True
             self.module_type = "unknown"
 
         self.register_buffer("dtype_tensor", torch.tensor(0.0), persistent=False)
@@ -236,13 +238,19 @@ class LycorisBaseModule(ModuleCustomSD):
         self.org_module[0].weight.data.copy_(value)
 
     def apply_to(self, **kwargs):
+        if self.not_supported:
+            return
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward
 
     def restore(self):
+        if self.not_supported:
+            return
         self.org_module[0].forward = self.org_forward
 
     def merge_to(self, multiplier=1.0):
+        if self.not_supported:
+            return
         weight, bias = self.get_merged_weight(
             multiplier, self.org_weight.shape, self.org_weight.device
         )

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..logging import warning_once
 
 
 class NormModule(LycorisBaseModule):
@@ -30,15 +31,31 @@ class NormModule(LycorisBaseModule):
             rank_dropout_scale=rank_dropout_scale,
             **kwargs,
         )
-        if self.module_type not in self.support_module:
-            raise ValueError(f"{self.module_type} is not supported in Norm algo.")
+        if self.module_type == "unknown":
+            if not hasattr(org_module, "weight") or not hasattr(org_module, "_norm"):
+                warning_once(f"{type(org_module)} is not supported in Norm algo.")
+                return
+            else:
+                self.dim = org_module.weight.numel()
+                self.not_supported = False
+        elif self.module_type not in self.support_module:
+            warning_once(f"{self.module_type} is not supported in Norm algo.")
+            return
 
         self.w_norm = nn.Parameter(torch.zeros(self.dim))
-        self.b_norm = nn.Parameter(torch.zeros(self.dim))
+        if hasattr(org_module, "bias"):
+            self.b_norm = nn.Parameter(torch.zeros(self.dim))
+        if hasattr(org_module, "_norm"):
+            self.org_norm = org_module._norm
+        else:
+            self.org_norm = None
 
     def make_weight(self, scale=1, device=None):
         org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
-        org_bias = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+        if hasattr(self.org_module[0], "bias"):
+            org_bias = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+        else:
+            org_bias = None
         if self.rank_dropout and self.training:
             drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(
                 self.w_norm.device
@@ -53,35 +70,58 @@ class NormModule(LycorisBaseModule):
             else 1
         )
         weight = self.w_norm.to(device) * drop * scale
-        bias = self.b_norm.to(device) * drop * scale
-        return org_weight + weight, org_bias + bias
+        if org_bias is not None:
+            bias = self.b_norm.to(device) * drop * scale
+        return org_weight + weight, org_bias + bias if org_bias is not None else None
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        if self.not_supported:
+            return 0, 0
         w = self.w_norm * multiplier
-        b = self.b_norm * multiplier
         if device is not None:
             w = w.to(device)
-            b = b.to(device)
         if shape is not None:
             w = w.view(shape)
-            b = b.view(shape)
+        if self.b_norm is not None:
+            b = self.b_norm * multiplier
+            if device is not None:
+                b = b.to(device)
+            if shape is not None:
+                b = b.view(shape)
+        else:
+            b = None
         return w, b
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        org_w = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
-        org_b = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+        if self.not_supported:
+            return None, None
         diff_w, diff_b = self.get_diff_weight(multiplier, shape, device)
+        org_w = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
         weight = org_w + diff_w
-        bias = org_b + diff_b
+        if diff_b is not None:
+            org_b = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
+            bias = org_b + diff_b
+        else:
+            bias = None
         return weight, bias
 
     def forward(self, x):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
+        if self.not_supported or (
+            self.module_dropout
+            and self.training
+            and torch.rand(1) < self.module_dropout
+        ):
+            return self.org_forward(x)
         scale = self.multiplier
 
         w, b = self.make_weight(scale, x.device)
+        if self.org_norm is not None:
+            normed = self.org_norm(x)
+            scaled = normed * w
+            if b is not None:
+                scaled += b
+            return scaled
+
         kw_dict = self.kw_dict | {"weight": w, "bias": b}
         return self.op(x, **kw_dict)
 

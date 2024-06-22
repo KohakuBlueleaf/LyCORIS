@@ -63,7 +63,11 @@ PRESET = {
             "SelfAttention",
         ],
         "unet_target_name": [],
-        "text_encoder_target_module": ["CLIPAttention", "BertAttention", "MT5LayerSelfAttention"],
+        "text_encoder_target_module": [
+            "CLIPAttention",
+            "BertAttention",
+            "MT5LayerSelfAttention",
+        ],
         "text_encoder_target_name": [],
     },
     "unet-only": {
