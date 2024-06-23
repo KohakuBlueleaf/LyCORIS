@@ -155,6 +155,8 @@ class LokrModule(LycorisBaseModule):
                 self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1]))
                 # w1 ⊗ (w2_a x w2_b) = (a, b)⊗((c, dim)x(dim, d)) = (a, b)⊗(c, d) = (ac, bd)
             else:
+                if not self.full_matrix:
+                    logging_force_full_matrix(lora_dim, max(in_dim, out_dim), factor)
                 self.use_w2 = True
                 self.lokr_w2 = nn.Parameter(torch.empty(shape[0][1], shape[1][1]))
 
