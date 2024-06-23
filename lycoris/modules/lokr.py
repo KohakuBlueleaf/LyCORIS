@@ -137,7 +137,11 @@ class LokrModule(LycorisBaseModule):
                 (in_m, in_n),
             )  # ((a, b), (c, d)), out_dim = a*c, in_dim = b*d
             # smaller part. weight scale
-            if decompose_both and lora_dim < max(shape[0][0], shape[1][0]) / 2:
+            if (
+                decompose_both
+                and lora_dim < max(shape[0][0], shape[1][0]) / 2
+                and not self.full_matrix
+            ):
                 self.lokr_w1_a = nn.Parameter(torch.empty(shape[0][0], lora_dim))
                 self.lokr_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1][0]))
             else:
@@ -145,7 +149,7 @@ class LokrModule(LycorisBaseModule):
                 self.lokr_w1 = nn.Parameter(
                     torch.empty(shape[0][0], shape[1][0])
                 )  # a*c, 1-mode
-            if lora_dim < max(shape[0][1], shape[1][1]) / 2:
+            if lora_dim < max(shape[0][1], shape[1][1]) / 2 and not self.full_matrix:
                 # bigger part. weight and LoRA. [b, dim] x [dim, d]
                 self.lokr_w2_a = nn.Parameter(torch.empty(shape[0][1], lora_dim))
                 self.lokr_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1][1]))
