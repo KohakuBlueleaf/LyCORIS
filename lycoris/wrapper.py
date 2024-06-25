@@ -1,11 +1,8 @@
 # General LyCORIS wrapper based on kohya-ss/sd-scripts' style
-
-import math
 import os
 import regex as re
-import sys
+import logging
 
-sys.setrecursionlimit(10000)
 from typing import List
 
 import torch
@@ -166,10 +163,13 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         if lora_name in loras:
             loras[lora_name] = modules
 
+    logger.setLevel(logging.ERROR)
     network = LycorisNetwork(module, init_only=True)
     network.multiplier = multiplier
     network.loras = []
+    logger.setLevel(logging.INFO)
 
+    logger.info("Loading Modules from state dict...")
     for lora_name, orig_modules in loras.items():
         if orig_modules is None:
             continue
@@ -180,6 +180,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
             network.algo_table[module.__class__.__name__] = (
                 network.algo_table.get(module.__class__.__name__, 0) + 1
             )
+    logger.info(f"{len(network.loras)} Modules Loaded")
 
     for lora in network.loras:
         lora.multiplier = multiplier

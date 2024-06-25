@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from typing import List
 
 import torch
@@ -200,10 +201,13 @@ def create_network_from_weights(
             if lora_name in te_loras:
                 te_loras[lora_name] = modules
 
+    logger.setLevel(logging.ERROR)
     network = LycorisNetworkKohya(text_encoder, unet)
     network.unet_loras = []
     network.text_encoder_loras = []
+    logger.setLevel(logging.INFO)
 
+    logger.info("Loading UNet Modules from state dict...")
     for lora_name, orig_modules in unet_loras.items():
         if orig_modules is None:
             continue
@@ -211,7 +215,9 @@ def create_network_from_weights(
         module = make_module(lyco_type, params, lora_name, orig_modules)
         if module is not None:
             network.unet_loras.append(module)
+    logger.info(f"{len(network.unet_loras)} Modules Loaded")
 
+    logger.info("Loading TE Modules from state dict...")
     for lora_name, orig_modules in te_loras.items():
         if orig_modules is None:
             continue
@@ -219,6 +225,7 @@ def create_network_from_weights(
         module = make_module(lyco_type, params, lora_name, orig_modules)
         if module is not None:
             network.text_encoder_loras.append(module)
+    logger.info(f"{len(network.text_encoder_loras)} Modules Loaded")
 
     for lora in network.unet_loras + network.text_encoder_loras:
         lora.multiplier = multiplier
