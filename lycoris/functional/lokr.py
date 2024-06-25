@@ -17,7 +17,7 @@ def make_kron(w1, w2, scale):
     return rebuild * scale
 
 
-def weight_gen(
+def lokr_weight_gen(
     org_weight,
     rank,
     tucker=True,
@@ -245,7 +245,7 @@ def lokr_bypass_forward_diff(
 
 if __name__ == "__main__":
     w = torch.randn(32, 32, 3, 3, 3)
-    w1, w1a, w1b, w2, w2a, w2b, t = weight_gen(w, 2, tucker=False)
+    w1, w1a, w1b, w2, w2a, w2b, t = lokr_weight_gen(w, 2, tucker=False)
     extra_args = {"padding": 1}
 
     x = torch.randn(1, 32, 8, 8, 8)
