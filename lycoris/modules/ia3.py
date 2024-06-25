@@ -6,12 +6,15 @@ from ..utils.bnb import LinearNF4
 
 
 class IA3Module(LycorisBaseModule):
+    name = "ia3"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = ["weight", "on_input"]
+    weight_list_det = ["on_input"]
 
     def __init__(
         self,

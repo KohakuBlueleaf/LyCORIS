@@ -5,12 +5,15 @@ from .base import LycorisBaseModule
 
 
 class FullModule(LycorisBaseModule):
+    name = "full"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = ["weight", "bias"]
+    weight_list_det = ["weight"]
 
     def __init__(
         self,

@@ -34,12 +34,19 @@ def butterfly_factor(dimension: int, factor: int = -1) -> tuple[int, int]:
 
 
 class ButterflyOFTModule(LycorisBaseModule):
+    name = "boft"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "oft_blocks",
+        "rescale",
+        "alpha",
+    ]
+    weight_list_det = ["oft_blocks"]
 
     def __init__(
         self,

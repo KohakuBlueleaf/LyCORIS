@@ -20,12 +20,21 @@ def log_wd():
 
 
 class LoConModule(LycorisBaseModule):
+    name = "locon"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "lora_up.weight",
+        "lora_down.weight",
+        "lora_mid.weight",
+        "alpha",
+        "dora_scale",
+    ]
+    weight_list_det = ["lora_up.weight"]
 
     def __init__(
         self,

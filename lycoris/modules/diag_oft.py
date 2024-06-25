@@ -20,12 +20,19 @@ def log_oft_factorize(dim, factor, num, bdim):
 
 
 class DiagOFTModule(LycorisBaseModule):
+    name = "diag-oft"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "oft_blocks",
+        "rescale",
+        "alpha",
+    ]
+    weight_list_det = ["oft_blocks"]
 
     def __init__(
         self,

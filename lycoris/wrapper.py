@@ -17,11 +17,11 @@ from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
-from .modules import make_module
+from .modules import get_module, make_module
 
 from .config import PRESET
 from .utils.preset import read_preset
-from .utils import get_module, str_bool
+from .utils import str_bool
 from .logging import logger
 
 

@@ -6,10 +6,13 @@ from ..logging import warning_once
 
 
 class NormModule(LycorisBaseModule):
+    name = "norm"
     support_module = {
         "layernorm",
         "groupnorm",
     }
+    weight_list = ["w_norm", "b_norm"]
+    weight_list_det = ["w_norm"]
 
     def __init__(
         self,

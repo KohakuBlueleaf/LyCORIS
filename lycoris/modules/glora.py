@@ -10,12 +10,22 @@ from ..utils.bnb import LinearNF4
 
 
 class GLoRAModule(LycorisBaseModule):
+    name = "glora"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "a1.weight",
+        "a2.weight",
+        "b1.weight",
+        "b2.weight",
+        "bm.weight",
+        "alpha",
+    ]
+    weight_list_det = ["a1.weight"]
 
     def __init__(
         self,

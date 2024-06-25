@@ -62,8 +62,11 @@ class ModuleCustomSD(nn.Module):
 
 
 class LycorisBaseModule(ModuleCustomSD):
+    name: str
     dtype_tensor: torch.Tensor
     support_module = {}
+    weight_list = []
+    weight_list_det = []
 
     def __init__(
         self,
@@ -220,6 +223,14 @@ class LycorisBaseModule(ModuleCustomSD):
         module_obj.to(target_param)
         parametrize.register_parametrization(org_module, attr, module_obj)
         return module_obj
+
+    @classmethod
+    def algo_check(cls, state_dict, lora_name):
+        return any(f"{lora_name}.{k}" in state_dict for k in cls.weight_list_det)
+
+    @classmethod
+    def extract_state_dict(cls, state_dict, lora_name):
+        return [state_dict.get(f"{lora_name}.{k}", None) for k in cls.weight_list]
 
     @property
     def dtype(self):

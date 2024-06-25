@@ -24,12 +24,26 @@ def logging_force_full_matrix(lora_dim, dim, factor):
 
 
 class LokrModule(LycorisBaseModule):
+    name = "lokr"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "lokr_w1",
+        "lokr_w1_a",
+        "lokr_w1_b",
+        "lokr_w2",
+        "lokr_w2_a",
+        "lokr_w2_b",
+        "lokr_t1",
+        "lokr_t2",
+        "alpha",
+        "dora_scale",
+    ]
+    weight_list_det = ["lokr_w1", "lokr_w1_a"]
 
     def __init__(
         self,

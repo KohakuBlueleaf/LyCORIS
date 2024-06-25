@@ -16,6 +16,27 @@ from .ia3 import IA3Module
 from ..functional.general import factorization
 
 
+MODULE_LIST = [
+    LoConModule,
+    LohaModule,
+    IA3Module,
+    LokrModule,
+    FullModule,
+    NormModule,
+    DiagOFTModule,
+    ButterflyOFTModule,
+    GLoRAModule,
+    DyLoraModule,
+]
+
+
+def get_module(lyco_state_dict, lora_name):
+    for module in MODULE_LIST:
+        if module.algo_check(lyco_state_dict, lora_name):
+            return module.name, tuple(module.extract_state_dict)
+    return None
+
+
 @torch.no_grad()
 def make_module(lyco_type, params, lora_name, orig_module):
     module = None

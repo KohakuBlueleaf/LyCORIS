@@ -417,55 +417,6 @@ def convert_diffusers_name_to_compvis(key):
     return key
 
 
-def get_module(lyco_state_dict: Dict, lora_name):
-    if f"{lora_name}.lora_up.weight" in lyco_state_dict:
-        up = lyco_state_dict[f"{lora_name}.lora_up.weight"]
-        down = lyco_state_dict[f"{lora_name}.lora_down.weight"]
-        mid = lyco_state_dict.get(f"{lora_name}.lora_mid.weight", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "locon", (up, down, mid, alpha, dora_scale)
-    elif f"{lora_name}.hada_w1_a" in lyco_state_dict:
-        w1a = lyco_state_dict[f"{lora_name}.hada_w1_a"]
-        w1b = lyco_state_dict[f"{lora_name}.hada_w1_b"]
-        w2a = lyco_state_dict[f"{lora_name}.hada_w2_a"]
-        w2b = lyco_state_dict[f"{lora_name}.hada_w2_b"]
-        t1 = lyco_state_dict.get(f"{lora_name}.hada_t1", None)
-        t2 = lyco_state_dict.get(f"{lora_name}.hada_t2", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "hada", (w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale)
-    elif f"{lora_name}.weight" in lyco_state_dict:
-        weight = lyco_state_dict[f"{lora_name}.weight"]
-        on_input = lyco_state_dict.get(f"{lora_name}.on_input", False)
-        return "ia3", (weight, on_input)
-    elif (
-        f"{lora_name}.lokr_w1" in lyco_state_dict
-        or f"{lora_name}.lokr_w1_a" in lyco_state_dict
-    ):
-        w1 = lyco_state_dict.get(f"{lora_name}.lokr_w1", None)
-        w1a = lyco_state_dict.get(f"{lora_name}.lokr_w1_a", None)
-        w1b = lyco_state_dict.get(f"{lora_name}.lokr_w1_b", None)
-        w2 = lyco_state_dict.get(f"{lora_name}.lokr_w2", None)
-        w2a = lyco_state_dict.get(f"{lora_name}.lokr_w2_a", None)
-        w2b = lyco_state_dict.get(f"{lora_name}.lokr_w2_b", None)
-        t1 = lyco_state_dict.get(f"{lora_name}.lokr_t1", None)
-        t2 = lyco_state_dict.get(f"{lora_name}.lokr_t2", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "kron", (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, dora_scale)
-    elif f"{lora_name}.diff" in lyco_state_dict:
-        diff = lyco_state_dict[f"{lora_name}.diff"]
-        diff_b = lyco_state_dict.get(f"{lora_name}.diff_b", None)
-        return "full", (diff, diff_b)
-    elif f"{lora_name}.w_norm" in lyco_state_dict:
-        w_norm = lyco_state_dict[f"{lora_name}.w_norm"]
-        b_norm = lyco_state_dict.get(f"{lora_name}.b_norm", None)
-        return "norm", (w_norm, b_norm)
-    else:
-        return "None", ()
-
-
 def tucker_weight_from_conv(up, down, mid):
     up = up.reshape(up.size(0), up.size(1))
     down = down.reshape(down.size(0), down.size(1))

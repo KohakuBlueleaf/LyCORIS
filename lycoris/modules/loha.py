@@ -9,12 +9,24 @@ from ..utils.bnb import LinearNF4
 
 
 class LohaModule(LycorisBaseModule):
+    name = "loha"
     support_module = {
         "linear",
         "conv1d",
         "conv2d",
         "conv3d",
     }
+    weight_list = [
+        "hada_w1_a",
+        "hada_w1_b",
+        "hada_w2_a",
+        "hada_w2_b",
+        "hada_t1",
+        "hada_t2",
+        "alpha",
+        "dora_scale",
+    ]
+    weight_list_det = ["hada_w1_a"]
 
     def __init__(
         self,
