@@ -237,7 +237,19 @@ class LokrModule(LycorisBaseModule):
 
     @classmethod
     def make_module_from_state_dict(
-        cls, lora_name, orig_module, w1, w1a, w1b, w2, w2a, w2b, _, t2, alpha, dora_scale
+        cls,
+        lora_name,
+        orig_module,
+        w1,
+        w1a,
+        w1b,
+        w2,
+        w2a,
+        w2b,
+        _,
+        t2,
+        alpha,
+        dora_scale,
     ):
         full_matrix = False
         if w1a is not None:

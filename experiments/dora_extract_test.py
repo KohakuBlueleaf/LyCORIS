@@ -13,8 +13,8 @@ def input_norm(x):
 RANK = 1
 
 
-w1 = torch.randn(128, 144) * math.sqrt(2/144)
-w2 = torch.randn(128, 144) * math.sqrt(2/144)
+w1 = torch.randn(128, 144) * math.sqrt(2 / 144)
+w2 = torch.randn(128, 144) * math.sqrt(2 / 144)
 diff_w = w2 - w1
 u, s, vh = torch.linalg.svd(diff_w)
 low_rank_diff = u[:, :RANK] @ torch.diag(s[:RANK]) @ vh[:RANK, :]
@@ -29,7 +29,7 @@ normed_diff_w = normed_w2 - normed_w1
 
 u, s, vh = torch.linalg.svd(normed_diff_w)
 low_rank_normed_diff = u[:, :RANK] @ torch.diag(s[:RANK]) @ vh[:RANK, :]
-normed_reconstruction = (normed_w1 + low_rank_normed_diff)
+normed_reconstruction = normed_w1 + low_rank_normed_diff
 reconstruction2 = normed_reconstruction / input_norm(normed_reconstruction) * w2_norm
 
 

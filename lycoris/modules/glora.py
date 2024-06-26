@@ -131,7 +131,9 @@ class GLoRAModule(LycorisBaseModule):
         torch.nn.init.zeros_(self.b2.weight)
 
     @classmethod
-    def make_module_from_state_dict(cls, lora_name, orig_module, a1, a2, b1, b2, bm, alpha):
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, a1, a2, b1, b2, bm, alpha
+    ):
         module = cls(
             lora_name,
             orig_module,

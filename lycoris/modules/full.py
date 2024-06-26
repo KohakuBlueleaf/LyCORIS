@@ -59,9 +59,7 @@ class FullModule(LycorisBaseModule):
             self.bias = None
 
     @classmethod
-    def make_module_from_state_dict(
-        cls, lora_name, orig_module, diff, diff_b
-    ):
+    def make_module_from_state_dict(cls, lora_name, orig_module, diff, diff_b):
         module = cls(
             lora_name,
             orig_module,

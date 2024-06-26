@@ -54,9 +54,7 @@ class NormModule(LycorisBaseModule):
             self.org_norm = None
 
     @classmethod
-    def make_module_from_state_dict(
-        cls, lora_name, orig_module, w_norm, b_norm
-    ):
+    def make_module_from_state_dict(cls, lora_name, orig_module, w_norm, b_norm):
         module = cls(
             lora_name,
             orig_module,

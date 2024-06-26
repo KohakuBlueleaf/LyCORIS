@@ -40,9 +40,7 @@ def get_module(lyco_state_dict, lora_name):
 @torch.no_grad()
 def make_module(lyco_type: LycorisBaseModule, params, lora_name, orig_module):
     try:
-        module = lyco_type.make_module_from_state_dict(
-            lora_name, orig_module, *params
-        )
+        module = lyco_type.make_module_from_state_dict(lora_name, orig_module, *params)
     except NotImplementedError:
         module = None
     return module

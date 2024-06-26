@@ -13,7 +13,7 @@ from .loha import (
     loha_diff_weight,
     loha_bypass_forward_diff,
 )
-from .lokr import(
+from .lokr import (
     lokr_weight_gen,
     lokr_diff_weight,
     lokr_bypass_forward_diff,

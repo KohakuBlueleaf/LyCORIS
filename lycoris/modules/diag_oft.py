@@ -95,15 +95,17 @@ class DiagOFTModule(LycorisBaseModule):
         return False
 
     @classmethod
-    def make_module_from_state_dict(cls, lora_name, orig_module, oft_blocks, rescale, alpha):
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, oft_blocks, rescale, alpha
+    ):
         n, s, _ = oft_blocks.shape
         module = cls(
             lora_name,
             orig_module,
             1,
-            lora_dim = s,
+            lora_dim=s,
             alpha=float(alpha),
-            rescale=rescale is not None
+            rescale=rescale is not None,
         )
         return module
 
