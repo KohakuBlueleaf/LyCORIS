@@ -15,6 +15,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * New Module API
 * Add Parametrize API
 * Add Functional API
+  * LoCon/LoHa/LoKr/Diag-OFT/BOFT only.
 * Remove optional deps from install_requires
 * Remove lot of redundant/deprecated modules
 * Better testing
