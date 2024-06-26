@@ -6,6 +6,7 @@ cov = coverage.Coverage()
 cov.start()
 
 from lycoris.logging import logger
+
 logger.setLevel(logging.ERROR)
 
 from test.module import LycorisModuleTests

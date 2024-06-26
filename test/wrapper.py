@@ -121,7 +121,7 @@ class LycorisWrapperTests(unittest.TestCase):
         test_lycoris_from_weights.apply_to()
         test_lycoris_from_weights.to(device, dtype)
         test_output_from_weights = test_net(test_input)
-        
+
         test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
         self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
