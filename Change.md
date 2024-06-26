@@ -18,6 +18,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * Remove optional deps from install_requires
 * Remove lot of redundant/deprecated modules
 * Better testing
+* HunYuan DiT Support
 
 ### Full change log
 
@@ -30,6 +31,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * LyCORIS now have functional API. Developers who prefer functional more than Module things can utilize this feature.
   * Functional API also allow developers who don't want to introduce new dependencies. Just copy-paste the source code and utilizing it. (with Apache-2 License, directly copy-paste is totally allowed)
 * Add support for Conv1d and Conv3d module on LoCon/LoHa/LoKr/Full/OFT/BOFT/GLoRA (not All algo in LyCORIS support them, you may receive error when apply unsopported algo), support inherited module (for example: `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
+* HunYuan DiT support.
 
 #### Improvements, Fixes, Slight Changes
 
@@ -39,6 +41,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * The definition of dropout and rank_dropout in each algorithm are changed. Since some concept of original rank_dropout in the lora of kohya-ss/sd-script is hard to applied to other algorithm. We can only design the dropout for each module seperatedly.
 * `apply_max_norm` issue are all fixed.
 * DyLoRA, (IA)^3, GLoRA are all rewritten and support Linear/Conv1,2,3d.
+* `get_module` and `make_module` are moved into modules' API.
 
 #### Deprecation
 
