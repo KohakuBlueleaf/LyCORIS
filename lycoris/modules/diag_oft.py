@@ -86,6 +86,27 @@ class DiagOFTModule(LycorisBaseModule):
             bdim=self.block_size,
         )
 
+    @classmethod
+    def algo_check(cls, state_dict, lora_name):
+        if f"{lora_name}.oft_blocks" in state_dict:
+            oft_blocks = state_dict[f"{lora_name}.oft_blocks"]
+            if oft_blocks.ndim == 3:
+                return True
+        return False
+
+    @classmethod
+    def make_module_from_state_dict(cls, lora_name, orig_module, oft_blocks, rescale, alpha):
+        n, s, _ = oft_blocks.shape
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            lora_dim = s,
+            alpha=float(alpha),
+            rescale=rescale is not None
+        )
+        return module
+
     @property
     def I(self):
         return torch.eye(self.block_size, device=self.device)

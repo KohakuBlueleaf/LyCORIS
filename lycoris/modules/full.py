@@ -58,6 +58,23 @@ class FullModule(LycorisBaseModule):
         else:
             self.bias = None
 
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, diff, diff_b
+    ):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+        )
+        module.weight.copy_(diff + orig_module[0].weight.data)
+        if diff_b is not None:
+            if orig_module[0].bias is not None:
+                module.bias.copy_(diff_b + orig_module[0].bias.data)
+            else:
+                module.bias = nn.Parameter(diff_b)
+        return module
+
     @property
     def org_weight(self):
         return self._org_weight[0]

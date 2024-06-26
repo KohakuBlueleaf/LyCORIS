@@ -130,6 +130,24 @@ class GLoRAModule(LycorisBaseModule):
         torch.nn.init.kaiming_uniform_(self.b1.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.b2.weight)
 
+    @classmethod
+    def make_module_from_state_dict(cls, lora_name, orig_module, a1, a2, b1, b2, bm, alpha):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            a2.size(0),
+            float(alpha),
+            use_tucker=bm is not None,
+        )
+        module.a1.weight.data.copy_(a1)
+        module.a2.weight.data.copy_(a2)
+        module.b1.weight.data.copy_(b1)
+        module.b2.weight.data.copy_(b2)
+        if bm is not None:
+            module.bm.weight.data.copy_(bm)
+        return module
+
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)

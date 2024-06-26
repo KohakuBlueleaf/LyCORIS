@@ -53,6 +53,20 @@ class NormModule(LycorisBaseModule):
         else:
             self.org_norm = None
 
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, w_norm, b_norm
+    ):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+        )
+        module.w_norm.copy_(w_norm)
+        if b_norm is not None:
+            module.b_norm.copy_(b_norm)
+        return module
+
     def make_weight(self, scale=1, device=None):
         org_weight = self.org_module[0].weight.to(device, dtype=self.w_norm.dtype)
         if hasattr(self.org_module[0], "bias"):

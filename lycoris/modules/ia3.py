@@ -75,6 +75,16 @@ class IA3Module(LycorisBaseModule):
         self.train_input = train_on_input
         self.register_buffer("on_input", torch.tensor(int(train_on_input)))
 
+    @classmethod
+    def make_module_from_state_dict(cls, lora_name, orig_module, weight):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+        )
+        module.weight.data.copy_(weight)
+        return module
+
     def apply_to(self):
         self.org_forward = self.org_module[0].forward
         self.org_module[0].forward = self.forward

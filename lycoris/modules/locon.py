@@ -150,6 +150,26 @@ class LoConModule(LycorisBaseModule):
         if self.tucker:
             torch.nn.init.kaiming_uniform_(self.lora_mid.weight, a=math.sqrt(5))
 
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, up, down, mid, alpha, dora_scale
+    ):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            down.size(0),
+            float(alpha),
+            use_tucker=mid is not None,
+            weight_decompose=dora_scale is not None,
+        )
+        module.lora_up.weight.data.copy_(up)
+        module.lora_down.weight.data.copy_(down)
+        if mid is not None:
+            module.lora_mid.weight.data.copy_(mid)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
+
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
         for key in missing_keys:

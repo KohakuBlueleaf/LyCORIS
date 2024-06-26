@@ -232,6 +232,10 @@ class LycorisBaseModule(ModuleCustomSD):
     def extract_state_dict(cls, state_dict, lora_name):
         return [state_dict.get(f"{lora_name}.{k}", None) for k in cls.weight_list]
 
+    @classmethod
+    def make_module_from_state_dict(cls, lora_name, orig_module, *weights):
+        raise NotImplementedError
+
     @property
     def dtype(self):
         return self.dtype_tensor.dtype

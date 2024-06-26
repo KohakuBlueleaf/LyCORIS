@@ -24,7 +24,7 @@ def logging_force_full_matrix(lora_dim, dim, factor):
 
 
 class LokrModule(LycorisBaseModule):
-    name = "lokr"
+    name = "kron"
     support_module = {
         "linear",
         "conv1d",
@@ -234,6 +234,70 @@ class LokrModule(LycorisBaseModule):
         else:
             torch.nn.init.kaiming_uniform_(self.lokr_w1_a, a=math.sqrt(5))
             torch.nn.init.kaiming_uniform_(self.lokr_w1_b, a=math.sqrt(5))
+
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, w1, w1a, w1b, w2, w2a, w2b, _, t2, alpha, dora_scale
+    ):
+        full_matrix = False
+        if w1a is not None:
+            lora_dim = w1a.size(1)
+        elif w2a is not None:
+            lora_dim = w2a.size(1)
+        else:
+            full_matrix = True
+            lora_dim = 1
+
+        if w1 is None:
+            out_dim = w1a.size(0)
+            in_dim = w1b.size(1)
+        else:
+            out_dim, in_dim = w1.shape
+
+        shape_s = [out_dim, in_dim]
+
+        if w2 is None:
+            out_dim *= w2a.size(0)
+            in_dim *= w2b.size(1)
+        else:
+            out_dim *= w2.size(0)
+            in_dim *= w2.size(1)
+
+        if (
+            shape_s[0] == factorization(out_dim, -1)[0]
+            and shape_s[1] == factorization(in_dim, -1)[0]
+        ):
+            factor = -1
+        else:
+            factor = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
+
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            lora_dim,
+            float(alpha),
+            use_tucker=t2 is not None,
+            decompose_both=w1 is None and w2 is None,
+            factor=factor,
+            weight_decompose=dora_scale is not None,
+            full_matrix=full_matrix,
+        )
+        if w1 is not None:
+            module.lokr_w1.copy_(w1)
+        else:
+            module.lokr_w1_a.copy_(w1a)
+            module.lokr_w1_b.copy_(w1b)
+        if w2 is not None:
+            module.lokr_w2.copy_(w2)
+        else:
+            module.lokr_w2_a.copy_(w2a)
+            module.lokr_w2_b.copy_(w2b)
+        if t2 is not None:
+            module.lokr_t2.copy_(t2)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
+        return module
 
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys

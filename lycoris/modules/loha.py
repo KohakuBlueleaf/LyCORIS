@@ -143,6 +143,30 @@ class LohaModule(LycorisBaseModule):
         else:
             torch.nn.init.constant_(self.hada_w2_a, 0)
 
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale
+    ):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            w1b.size(0),
+            float(alpha),
+            use_tucker=t1 is not None,
+            weight_decompose=dora_scale is not None,
+        )
+        module.hada_w1_a.copy_(w1a)
+        module.hada_w1_b.copy_(w1b)
+        module.hada_w2_a.copy_(w2a)
+        module.hada_w2_b.copy_(w2b)
+        if t1 is not None:
+            module.hada_t1.copy_(t1)
+            module.hada_t2.copy_(t2)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
+        return module
+
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
         for key in missing_keys:
