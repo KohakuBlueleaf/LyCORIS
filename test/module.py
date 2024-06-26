@@ -34,7 +34,7 @@ base_module_and_input = [
     lambda dim: (nn.Linear(dim, dim), torch.randn(1, dim)),
     lambda dim: (nn.Conv1d(dim, dim, 3, 1, 1), torch.randn(1, dim, 16)),
     lambda dim: (nn.Conv2d(dim, dim, (3, 3), 1, 1), torch.randn(1, dim, 16, 16)),
-    # lambda dim: (nn.Conv3d(dim, dim, (3, 3, 3), 1, 1), torch.randn(1, dim, 16, 16, 16)),
+    lambda dim: (nn.Conv3d(dim, dim, (3, 3, 3), 1, 1), torch.randn(1, dim, 16, 16, 16)),
 ]
 device_and_dtype = [
     (torch.device("cpu"), torch.float32),
