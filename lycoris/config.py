@@ -108,4 +108,19 @@ PRESET = {
         "text_encoder_target_module": [],
         "text_encoder_target_name": [],
     },
+    "ia3": {
+        "enable_conv": False,
+        "unet_target_module": [],
+        "unet_target_name": ["to_k", "to_v", "ff.net.2"],
+        "text_encoder_target_module": [],
+        "text_encoder_target_name": ["k_proj", "v_proj", "mlp.fc2"],
+        "name_algo_map": {
+            "mlp.fc2": {
+                "train_on_input": True
+            },
+            "ff.net.2": {
+                "train_on_input": True
+            }
+        }
+    }
 }
