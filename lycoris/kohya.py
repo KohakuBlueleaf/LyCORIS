@@ -201,11 +201,12 @@ def create_network_from_weights(
             if lora_name in te_loras:
                 te_loras[lora_name] = modules
 
+    original_level = logger.level
     logger.setLevel(logging.ERROR)
     network = LycorisNetworkKohya(text_encoder, unet)
     network.unet_loras = []
     network.text_encoder_loras = []
-    logger.setLevel(logging.INFO)
+    logger.setLevel(original_level)
 
     logger.info("Loading UNet Modules from state dict...")
     for lora_name, orig_modules in unet_loras.items():
@@ -359,7 +360,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             if isinstance(module, torch.nn.Linear) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
-            elif isinstance(module, torch.nn.Conv2d):
+            elif isinstance(module, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)):
                 k_size, *_ = module.kernel_size
                 if k_size == 1 and lora_dim > 0:
                     dim = dim or lora_dim
@@ -394,10 +395,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             loras = {}
             lora_names = []
             for name, module in root_module.named_modules():
-                if module is root_module:
-                    continue
                 module_name = module.__class__.__name__
-                if module_name in self.MODULE_ALGO_MAP:
+                if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
                     next_algo = next_config.get("algo", algo)
                     new_loras, new_lora_names = create_modules_(
@@ -408,7 +407,10 @@ class LycorisNetworkKohya(LycorisNetwork):
                             loras[lora_name] = lora
                             lora_names.append(lora_name)
                     continue
-                lora_name = prefix + "." + name
+                if name:
+                    lora_name = prefix + "." + name
+                else:
+                    lora_name = prefix
                 lora_name = lora_name.replace(".", "_")
                 if lora_name in loras:
                     continue

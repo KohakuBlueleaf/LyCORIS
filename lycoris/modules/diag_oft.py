@@ -141,7 +141,7 @@ class DiagOFTModule(LycorisBaseModule):
             weight = self.rescale * weight
             if diff:
                 weight = weight + (self.rescale - 1) * org_weight
-        return weight
+        return weight.to(self.oft_blocks.dtype)
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device, diff=True)

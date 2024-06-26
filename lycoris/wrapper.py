@@ -133,10 +133,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         unbalanced_factorization=unbalanced_factorization,
     )
 
-    if algo == "dylora":
-        # dylora didn't support scale weight norm yet
-        delattr(type(network), "apply_max_norm_regularization")
-
     return network
 
 
@@ -163,11 +159,12 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         if lora_name in loras:
             loras[lora_name] = modules
 
+    original_level = logger.level
     logger.setLevel(logging.ERROR)
     network = LycorisNetwork(module, init_only=True)
     network.multiplier = multiplier
     network.loras = []
-    logger.setLevel(logging.INFO)
+    logger.setLevel(original_level)
 
     logger.info("Loading Modules from state dict...")
     for lora_name, orig_modules in loras.items():
@@ -190,7 +187,14 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
 
 class LycorisNetwork(torch.nn.Module):
     ENABLE_CONV = True
-    TARGET_REPLACE_MODULE = []
+    TARGET_REPLACE_MODULE = [
+        "Linear",
+        "Conv1d",
+        "Conv2d",
+        "Conv3d",
+        "GroupNorm",
+        "LayerNorm",
+    ]
     TARGET_REPLACE_NAME = []
     LORA_PREFIX = "lycoris"
     MODULE_ALGO_MAP = {}
@@ -230,6 +234,7 @@ class LycorisNetwork(torch.nn.Module):
     ) -> None:
         super().__init__()
         root_kwargs = kwargs
+        self.weights_sd = None
         if init_only:
             self.multiplier = 1
             self.lora_dim = 0
@@ -297,7 +302,7 @@ class LycorisNetwork(torch.nn.Module):
             if isinstance(module, torch.nn.Linear) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
-            elif isinstance(module, torch.nn.Conv2d):
+            elif isinstance(module, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)):
                 k_size, *_ = module.kernel_size
                 if k_size == 1 and lora_dim > 0:
                     dim = dim or lora_dim
@@ -332,10 +337,8 @@ class LycorisNetwork(torch.nn.Module):
             loras = {}
             lora_names = []
             for name, module in root_module.named_modules():
-                if module is root_module:
-                    continue
                 module_name = module.__class__.__name__
-                if module_name in self.MODULE_ALGO_MAP:
+                if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
                     next_algo = next_config.get("algo", algo)
                     new_loras, new_lora_names = create_modules_(
@@ -346,7 +349,10 @@ class LycorisNetwork(torch.nn.Module):
                             loras[lora_name] = lora
                             lora_names.append(lora_name)
                     continue
-                lora_name = prefix + "." + name
+                if name:
+                    lora_name = prefix + "." + name
+                else:
+                    lora_name = prefix
                 lora_name = lora_name.replace(".", "_")
                 if lora_name in loras:
                     continue
@@ -414,8 +420,6 @@ class LycorisNetwork(torch.nn.Module):
                 algo_table.get(lora.__class__.__name__, 0) + 1
             )
         logger.info(f"module type table: {algo_table}")
-
-        self.weights_sd = None
 
         # assertion
         names = set()

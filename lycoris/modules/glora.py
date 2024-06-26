@@ -126,9 +126,13 @@ class GLoRAModule(LycorisBaseModule):
 
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.a1.weight, a=math.sqrt(5))
-        torch.nn.init.zeros_(self.a2.weight)
         torch.nn.init.kaiming_uniform_(self.b1.weight, a=math.sqrt(5))
-        torch.nn.init.zeros_(self.b2.weight)
+        if use_scalar:
+            torch.nn.init.kaiming_uniform_(self.a2.weight, a=math.sqrt(5))
+            torch.nn.init.kaiming_uniform_(self.b2.weight, a=math.sqrt(5))
+        else:
+            torch.nn.init.zeros_(self.a2.weight)
+            torch.nn.init.zeros_(self.b2.weight)
 
     @classmethod
     def make_module_from_state_dict(
@@ -150,6 +154,31 @@ class GLoRAModule(LycorisBaseModule):
             module.bm.weight.data.copy_(bm)
         return module
 
+    def custom_state_dict(self):
+        destination = {}
+        destination["alpha"] = self.alpha
+        destination["a1.weight"] = self.a1.weight
+        destination["a2.weight"] = self.a2.weight * self.scalar
+        destination["b1.weight"] = self.b1.weight
+        destination["b2.weight"] = self.b2.weight * self.scalar
+        if self.tucker:
+            destination["bm.weight"] = self.bm.weight
+        return destination
+
+    def load_weight_hook(self, module: nn.Module, incompatible_keys):
+        missing_keys = incompatible_keys.missing_keys
+        for key in missing_keys:
+            if "scalar" in key:
+                del missing_keys[missing_keys.index(key)]
+        if isinstance(self.scalar, nn.Parameter):
+            self.scalar.data.copy_(torch.ones_like(self.scalar))
+        elif getattr(self, "scalar", None) is not None:
+            self.scalar.copy_(torch.ones_like(self.scalar))
+        else:
+            self.register_buffer(
+                "scalar", torch.ones_like(self.scalar), persistent=False
+            )
+
     def make_weight(self, device=None):
         wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
         wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
@@ -167,7 +196,7 @@ class GLoRAModule(LycorisBaseModule):
             w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
         else:
             w_wa2 = (orig @ wa1) @ wa2
-        return (wb + w_wa2) * self.scale
+        return (wb + w_wa2) * self.scale * self.scalar
 
     def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
         weight = self.make_weight(device) * multiplier

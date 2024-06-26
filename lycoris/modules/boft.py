@@ -159,7 +159,7 @@ class ButterflyOFTModule(LycorisBaseModule):
             inp = rearrange(inp, "d b ... -> (d b) ...")
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
 
-        return inp
+        return inp.to(self.oft_blocks.dtype)
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device, diff=True)

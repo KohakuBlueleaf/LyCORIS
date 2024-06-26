@@ -169,6 +169,7 @@ class LoConModule(LycorisBaseModule):
             module.lora_mid.weight.data.copy_(mid)
         if dora_scale is not None:
             module.dora_scale.copy_(dora_scale)
+        return module
 
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys

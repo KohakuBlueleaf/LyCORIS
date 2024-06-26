@@ -12,8 +12,8 @@ class FullModule(LycorisBaseModule):
         "conv2d",
         "conv3d",
     }
-    weight_list = ["weight", "bias"]
-    weight_list_det = ["weight"]
+    weight_list = ["diff", "diff_b"]
+    weight_list_det = ["diff"]
 
     def __init__(
         self,
@@ -65,10 +65,10 @@ class FullModule(LycorisBaseModule):
             orig_module,
             1,
         )
-        module.weight.copy_(diff + orig_module[0].weight.data)
+        module.weight.copy_(diff)
         if diff_b is not None:
-            if orig_module[0].bias is not None:
-                module.bias.copy_(diff_b + orig_module[0].bias.data)
+            if orig_module.bias is not None:
+                module.bias.copy_(diff_b)
             else:
                 module.bias = nn.Parameter(diff_b)
         return module
@@ -100,9 +100,6 @@ class FullModule(LycorisBaseModule):
         if self.org_bias is not None:
             self.org_module[0].bias = nn.Parameter(self.org_bias[0])
 
-    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
-        return
-
     def custom_state_dict(self):
         sd = {"diff": self.weight.data.cpu() - self._org_weight[0]}
         if self.bias is not None:
@@ -119,11 +116,11 @@ class FullModule(LycorisBaseModule):
         unexpected_keys,
         error_msgs,
     ):
-        diff_weight = state_dict["diff"]
-        self.weight.data.add_(diff_weight)
-        if "diff_b" in state_dict:
-            diff_bias = state_dict["diff_b"]
-            self.bias.data.add_(diff_bias)
+        diff_weight = state_dict.pop(f"{prefix}diff")
+        state_dict[f"{prefix}weight"] = diff_weight + self.weight.data.to(diff_weight)
+        if f"{prefix}diff_b" in state_dict:
+            diff_bias = state_dict.pop(f"{prefix}diff_b")
+            state_dict[f"{prefix}bias"] = diff_bias + self.bias.data.to(diff_bias)
 
     def make_weight(self, scale=1, device=None):
         drop = (
