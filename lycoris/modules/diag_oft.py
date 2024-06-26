@@ -171,7 +171,7 @@ class DiagOFTModule(LycorisBaseModule):
     def _bypass_forward(self, x, scale=1, diff=False):
         r = self.get_r()
         org_out = self.org_forward(x)
-        if self.op == F.conv2d:
+        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
             org_out = org_out.transpose(1, -1)
         *shape, _ = org_out.shape
         org_out = org_out.view(*shape, self.block_num, self.block_size)
@@ -188,7 +188,7 @@ class DiagOFTModule(LycorisBaseModule):
         if diff:
             out = out - org_out
         out = oft_out.view(*shape, -1)
-        if self.op == F.conv2d:
+        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
             out = out.transpose(1, -1)
         return out
 

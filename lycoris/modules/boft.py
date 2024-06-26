@@ -3,6 +3,7 @@ from math import log2
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from einops import rearrange
 
@@ -192,6 +193,8 @@ class ButterflyOFTModule(LycorisBaseModule):
         r_b = b // 2
         r = self.get_r()
         inp = self.org_forward(x)
+        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
+            org_out = org_out.transpose(1, -1)
 
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size
@@ -206,6 +209,8 @@ class ButterflyOFTModule(LycorisBaseModule):
             inp = rearrange(inp, "... d b -> ... (d b)")
             inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
 
+        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
+            org_out = org_out.transpose(1, -1)
         return inp
 
     def bypass_forward_diff(self, x, scale=1):
