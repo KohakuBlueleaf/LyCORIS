@@ -149,16 +149,16 @@ class ButterflyOFTModule(LycorisBaseModule):
 
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size
-            if i == 0:
-                # Apply multiplier/scale and rescale into first weight
-                if self.rescaled:
-                    bi = bi * self.rescale
-            bi = bi * scale + (1 - scale) * self.I
+            if scale != 1:
+                bi = bi * scale + (1 - scale) * self.I
             inp = rearrange(inp, "(c g k) ... -> (c k g) ...", g=2, k=2**i * r_b)
             inp = rearrange(inp, "(d b) ... -> d b ...", b=b)
             inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
             inp = rearrange(inp, "d b ... -> (d b) ...")
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
+
+        if self.rescaled:
+            inp = inp * self.rescale
 
         if diff:
             inp = inp - org
@@ -201,16 +201,16 @@ class ButterflyOFTModule(LycorisBaseModule):
 
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size
-            if i == 0:
-                # Apply multiplier/scale and rescale into first weight
-                if self.rescaled:
-                    bi = bi * self.rescale
-            bi = bi * scale + ( 1 - scale) * self.I
+            if scale != 1:
+                bi = bi * scale + ( 1 - scale) * self.I
             inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
             inp = rearrange(inp, "... (d b) -> ... d b", b=b)
             inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
             inp = rearrange(inp, "... d b -> ... (d b)")
             inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
+
+        if self.rescaled:
+            inp = inp * self.rescale.transpose(0, -1)
 
         if self.op in {F.conv2d, F.conv1d, F.conv3d}:
             inp = inp.transpose(1, -1)
