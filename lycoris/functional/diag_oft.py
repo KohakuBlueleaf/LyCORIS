@@ -7,16 +7,19 @@ import torch.nn.functional as F
 from .general import factorization, FUNC_LIST
 
 
-def get_r(oft_blocks, I=None, constrain=0):
+def get_r(oft_blocks, I=None, constraint=0):
     if I is None:
-        I = torch.eye(oft_blocks.shape[1], device=oft_blocks.device)
+        I = torch.eye(oft_blocks.shape[-1], device=oft_blocks.device)
+    if I.ndim < oft_blocks.ndim:
+        for _ in range(oft_blocks.ndim - I.ndim):
+            I = I.unsqueeze(0)
     # for Q = -Q^T
-    q = oft_blocks - oft_blocks.transpose(1, 2)
+    q = oft_blocks - oft_blocks.transpose(-1, -2)
     normed_q = q
-    if constrain > 0:
+    if constraint > 0:
         q_norm = torch.norm(q) + 1e-8
-        if q_norm > constrain:
-            normed_q = q * constrain / q_norm
+        if q_norm > constraint:
+            normed_q = q * constraint / q_norm
     # use float() to prevent unsupported type
     r = (I + normed_q) @ (I - normed_q).float().inverse()
     return r
