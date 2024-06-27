@@ -6,7 +6,7 @@ from typing import List
 import torch
 
 from .utils import precalculate_safetensors_hashes
-from .wrapper import LycorisNetwork
+from .wrapper import LycorisNetwork, network_module_dict, deprecated_arg_dict
 from .modules.locon import LoConModule
 from .modules.loha import LohaModule
 from .modules.ia3 import IA3Module
@@ -23,7 +23,6 @@ from .config import PRESET
 from .utils.preset import read_preset
 from .utils import str_bool
 from .logging import logger
-from .wrapper import network_module_dict, deprecated_arg_dict
 
 
 def create_network(
