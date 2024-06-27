@@ -202,7 +202,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size
             if scale != 1:
-                bi = bi * scale + ( 1 - scale) * self.I
+                bi = bi * scale + (1 - scale) * self.I
             inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
             inp = rearrange(inp, "... (d b) -> ... d b", b=b)
             inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)

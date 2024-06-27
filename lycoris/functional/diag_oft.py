@@ -64,7 +64,8 @@ def daig_oft_diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
     # Init R=0, so add I on it to ensure the output of step0 is original model output
     weight = torch.einsum(
         "k n m, k n ... -> k m ...",
-        r - I, org_weight,
+        r - I,
+        org_weight,
     ).view(-1, *shape)
     if rescale is None:
         weight = rescale * weight
@@ -90,8 +91,7 @@ def daig_oft_bypass_forward_diff(
         org_out = org_out.transpose(1, -1)
     *shape, _ = org_out.shape
     oft_out = torch.einsum(
-        "k n m, ... k n -> ... k m", 
-        r - I, org_out.view(*shape, block_num, block_size)
+        "k n m, ... k n -> ... k m", r - I, org_out.view(*shape, block_num, block_size)
     )
     out = oft_out.view(*shape, -1)
     if rescale is not None:
@@ -105,14 +105,14 @@ def daig_oft_bypass_forward_diff(
 if __name__ == "__main__":
     w = torch.randn(32, 32, 3, 3, 3)
     blocks, rescale = daig_oft_weight_gen(w, 4, True)
-    blocks = blocks + torch.randn_like(blocks)*0.01
+    blocks = blocks + torch.randn_like(blocks) * 0.01
     extra_args = {"padding": 1}
 
     x = torch.randn(1, 32, 8, 8, 8)
     y = FUNC_LIST[x.dim()](x, w, **extra_args)
     diff_w = daig_oft_diff_weight(w, blocks, rescale, 0.1)
     diff_y_rebuild = FUNC_LIST[x.dim()](x, diff_w, **extra_args)
-    diff_y = daig_oft_bypass_forward_diff(y, w.dim()>2, blocks, rescale, 0.1)
+    diff_y = daig_oft_bypass_forward_diff(y, w.dim() > 2, blocks, rescale, 0.1)
 
     print(F.mse_loss(y, y + diff_y))
     print(F.mse_loss(w, w + diff_w))

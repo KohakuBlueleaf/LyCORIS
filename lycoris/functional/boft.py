@@ -23,7 +23,7 @@ def boft_weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
     """
     out_dim, *rest = org_weight.shape
     block_size, block_num = power2factorization(out_dim, max_block_size)
-    max_boft_m = sum(int(i) for i in f"{block_num-1:b}")+1
+    max_boft_m = sum(int(i) for i in f"{block_num-1:b}") + 1
     if boft_m == -1:
         boft_m = max_boft_m
     boft_m = min(boft_m, max_boft_m)
@@ -96,15 +96,15 @@ def boft_bypass_forward_diff(
 if __name__ == "__main__":
     w = torch.randn(32, 32, 3, 3, 3)
     blocks, rescale = boft_weight_gen(w, 4, -1, True)
-    blocks = blocks + torch.randn_like(blocks)*0.01
+    blocks = blocks + torch.randn_like(blocks) * 0.01
     extra_args = {"padding": 1}
 
     x = torch.randn(1, 32, 8, 8, 8)
     y = FUNC_LIST[x.dim()](x, w, **extra_args)
     diff_w = boft_diff_weight(w, blocks, rescale, 0.1)
     diff_y_rebuild = FUNC_LIST[x.dim()](x, diff_w, **extra_args)
-    diff_y = boft_bypass_forward_diff(y, w.dim()>2, blocks, rescale, 0.1)
-    
+    diff_y = boft_bypass_forward_diff(y, w.dim() > 2, blocks, rescale, 0.1)
+
     print(y.shape, diff_y.shape, diff_y_rebuild.shape)
     print(w.shape, diff_w.shape)
 

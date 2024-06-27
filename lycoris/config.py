@@ -115,12 +115,8 @@ PRESET = {
         "text_encoder_target_module": [],
         "text_encoder_target_name": ["k_proj", "v_proj", "mlp.fc2"],
         "name_algo_map": {
-            "mlp.fc2": {
-                "train_on_input": True
-            },
-            "ff.net.2": {
-                "train_on_input": True
-            }
-        }
-    }
+            "mlp.fc2": {"train_on_input": True},
+            "ff.net.2": {"train_on_input": True},
+        },
+    },
 }
