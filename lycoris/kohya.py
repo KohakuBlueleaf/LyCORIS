@@ -64,7 +64,7 @@ def create_network(
     use_scalar = str_bool(kwargs.get("use_scalar", False))
     block_size = int(kwargs.get("block_size", 4) or 4)
     train_norm = str_bool(kwargs.get("train_norm", False))
-    constrain = float(kwargs.get("constrain", 0) or 0)
+    constraint = float(kwargs.get("constraint", 0) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
@@ -132,7 +132,7 @@ def create_network(
         decompose_both=kwargs.get("decompose_both", False),
         factor=kwargs.get("factor", -1),
         block_size=block_size,
-        constrain=constrain,
+        constraint=constraint,
         rescaled=rescaled,
         weight_decompose=weight_decompose,
         full_matrix=full_matrix,

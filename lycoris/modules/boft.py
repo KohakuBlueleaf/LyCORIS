@@ -27,7 +27,7 @@ def butterfly_factor(dimension: int, factor: int = -1) -> tuple[int, int]:
 
     if n == 0:
         raise ValueError(
-            f"It is impossible to decompose {dimension} with factor {factor} under BOFT constrains."
+            f"It is impossible to decompose {dimension} with factor {factor} under BOFT constraints."
         )
 
     log_butterfly_factorize(dimension, factor, (m, n))
@@ -62,7 +62,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
-        constrain=0,
+        constraint=0,
         rescaled=False,
         bypass_mode=False,
         **kwargs,
@@ -89,8 +89,8 @@ class ButterflyOFTModule(LycorisBaseModule):
         self.boft_m = sum(int(i) for i in f"{m_exp-1:b}") + 1
         # block_num > block_size
         self.rescaled = rescaled
-        self.constrain = constrain * out_dim
-        self.register_buffer("alpha", torch.tensor(constrain))
+        self.constraint = constraint * out_dim
+        self.register_buffer("alpha", torch.tensor(constraint))
         self.oft_blocks = nn.Parameter(
             torch.zeros(self.boft_m, self.block_num, self.block_size, self.block_size)
         )
@@ -132,10 +132,10 @@ class ButterflyOFTModule(LycorisBaseModule):
         q = self.oft_blocks - self.oft_blocks.transpose(-1, -2)
         normed_q = q
         # Diag OFT style constrain
-        if self.constrain > 0:
+        if self.constraint > 0:
             q_norm = torch.norm(q) + 1e-8
-            if q_norm > self.constrain:
-                normed_q = q * self.constrain / q_norm
+            if q_norm > self.constraint:
+                normed_q = q * self.constraint / q_norm
         # use float() to prevent unsupported type
         r = (I + normed_q) @ (I - normed_q).float().inverse()
         return r
@@ -145,7 +145,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         b = self.boft_b
         r_b = b // 2
         r = self.get_r()
-        inp = self.org_weight.to(device, dtype=r.dtype)
+        inp = org = self.org_weight.to(device, dtype=r.dtype)
 
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size
@@ -153,12 +153,15 @@ class ButterflyOFTModule(LycorisBaseModule):
                 # Apply multiplier/scale and rescale into first weight
                 if self.rescaled:
                     bi = bi * self.rescale
-            bi = bi * scale - scale * self.I + (self.I if diff else 0)
+            bi = bi * scale + (1 - scale) * self.I
             inp = rearrange(inp, "(c g k) ... -> (c k g) ...", g=2, k=2**i * r_b)
             inp = rearrange(inp, "(d b) ... -> d b ...", b=b)
             inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
             inp = rearrange(inp, "d b ... -> (d b) ...")
             inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
+
+        if diff:
+            inp = inp - org
 
         return inp.to(self.oft_blocks.dtype)
 
@@ -192,7 +195,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         b = self.boft_b
         r_b = b // 2
         r = self.get_r()
-        inp = self.org_forward(x)
+        inp = org = self.org_forward(x)
         if self.op in {F.conv2d, F.conv1d, F.conv3d}:
             org_out = org_out.transpose(1, -1)
 
@@ -202,7 +205,7 @@ class ButterflyOFTModule(LycorisBaseModule):
                 # Apply multiplier/scale and rescale into first weight
                 if self.rescaled:
                     bi = bi * self.rescale
-            bi = bi * scale - scale * self.I + (self.I if diff else 0)
+            bi = bi * scale + ( 1 - scale) * self.I
             inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
             inp = rearrange(inp, "... (d b) -> ... d b", b=b)
             inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
@@ -210,7 +213,10 @@ class ButterflyOFTModule(LycorisBaseModule):
             inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
 
         if self.op in {F.conv2d, F.conv1d, F.conv3d}:
-            org_out = org_out.transpose(1, -1)
+            inp = inp.transpose(1, -1)
+
+        if diff:
+            inp = inp - org
         return inp
 
     def bypass_forward_diff(self, x, scale=1):

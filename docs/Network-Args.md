@@ -91,5 +91,5 @@ Arguments to put in `network_args` for kohya sd scripts
 
 ### Constrained OFT
 
-- Enabled with `constrain=FLOAT`
+- Enabled with `constraint=FLOAT`
 - Valid for Diag-OFT

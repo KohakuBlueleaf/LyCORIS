@@ -47,7 +47,7 @@ class DiagOFTModule(LycorisBaseModule):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
-        constrain=0,
+        constraint=0,
         rescaled=False,
         bypass_mode=False,
         **kwargs,
@@ -69,8 +69,8 @@ class DiagOFTModule(LycorisBaseModule):
         self.block_size, self.block_num = factorization(out_dim, lora_dim)
         # block_num > block_size
         self.rescaled = rescaled
-        self.constrain = constrain * out_dim
-        self.register_buffer("alpha", torch.tensor(constrain))
+        self.constraint = constraint * out_dim
+        self.register_buffer("alpha", torch.tensor(constraint))
         self.oft_blocks = nn.Parameter(
             torch.zeros(self.block_num, self.block_size, self.block_size)
         )
@@ -118,10 +118,10 @@ class DiagOFTModule(LycorisBaseModule):
         # for Q = -Q^T
         q = self.oft_blocks - self.oft_blocks.transpose(1, 2)
         normed_q = q
-        if self.constrain > 0:
+        if self.constraint > 0:
             q_norm = torch.norm(q) + 1e-8
-            if q_norm > self.constrain:
-                normed_q = q * self.constrain / q_norm
+            if q_norm > self.constraint:
+                normed_q = q * self.constraint / q_norm
         # use float() to prevent unsupported type
         r = (I + normed_q) @ (I - normed_q).float().inverse()
         return r
