@@ -23,25 +23,19 @@ from .config import PRESET
 from .utils.preset import read_preset
 from .utils import str_bool
 from .logging import logger
-
-
-network_module_dict = {
-    "lora": LoConModule,
-    "locon": LoConModule,
-    "loha": LohaModule,
-    "ia3": IA3Module,
-    "lokr": LokrModule,
-    "dylora": DyLoraModule,
-    "glora": GLoRAModule,
-    "full": FullModule,
-    "diag-oft": DiagOFTModule,
-    "boft": ButterflyOFTModule,
-}
+from .wrapper import network_module_dict, deprecated_arg_dict
 
 
 def create_network(
     multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs
 ):
+    for key, value in kwargs.items():
+        if key in deprecated_arg_dict:
+            logger.warning(
+                f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
+                stacklevel=2,
+            )
+            kwargs[deprecated_arg_dict[key]] = value
     if network_dim is None:
         network_dim = 4  # default
     conv_dim = int(kwargs.get("conv_dim", network_dim) or network_dim)
@@ -56,15 +50,10 @@ def create_network(
         or kwargs.get("use_cp", False)
         or kwargs.get("use_tucker", False)
     )
-    if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        logger.warning(
-            "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
-            stacklevel=2,
-        )
     use_scalar = str_bool(kwargs.get("use_scalar", False))
-    block_size = int(kwargs.get("block_size", 4) or 4)
+    block_size = int(kwargs.get("block_size", None) or 4)
     train_norm = str_bool(kwargs.get("train_norm", False))
-    constraint = float(kwargs.get("constraint", 0) or 0)
+    constraint = float(kwargs.get("constraint", None) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
@@ -84,10 +73,6 @@ def create_network(
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
 
-    if algo == "glora" and conv_dim > 0:
-        conv_dim = 0
-        logger.info("Disable conv layer for GLoRA")
-
     preset_str = kwargs.get("preset", "full")
     if preset_str not in PRESET:
         preset = read_preset(preset_str)
@@ -97,19 +82,6 @@ def create_network(
     LycorisNetworkKohya.apply_preset(preset)
 
     logger.info(f"Using rank adaptation algo: {algo}")
-
-    if (
-        (algo == "loha")
-        and not kwargs.get("no_dim_warn", False)
-        and (network_dim > 64 or conv_dim > 64)
-    ):
-        warning_type = {"loha": "Hadamard Product representation"}
-        warning_msg = f"""You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n
-            in {warning_type[algo]}!\n
-            Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n
-            If you just want to use high dim {algo}, please consider use lower lr.
-        """
-        logger.warning(warning_msg, stacklevel=2)
 
     if algo == "ia3" and preset_str != "ia3":
         logger.warning("It is recommended to use preset ia3 for IA^3 algorithm")

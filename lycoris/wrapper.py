@@ -36,9 +36,22 @@ network_module_dict = {
     "diag-oft": DiagOFTModule,
     "boft": ButterflyOFTModule,
 }
+deprecated_arg_dict = {
+    "disable_conv_cp": "use_tucker",
+    "use_cp": "use_tucker",
+    "use_conv_cp": "use_tucker",
+    "constrain": "constraint",
+}
 
 
 def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
+    for key, value in kwargs.items():
+        if key in deprecated_arg_dict:
+            logger.warning(
+                f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
+                stacklevel=2,
+            )
+            kwargs[deprecated_arg_dict[key]] = value
     if linear_dim is None:
         linear_dim = 4  # default
     conv_dim = int(kwargs.get("conv_dim", linear_dim) or linear_dim)
@@ -53,11 +66,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         or kwargs.get("use_cp", False)
         or kwargs.get("use_tucker", False)
     )
-    if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        logger.warning(
-            "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
-            stacklevel=2,
-        )
     use_scalar = str_bool(kwargs.get("use_scalar", False))
     block_size = int(kwargs.get("block_size", 4) or 4)
     train_norm = str_bool(kwargs.get("train_norm", False))
@@ -80,10 +88,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
 
-    if algo == "glora" and conv_dim > 0:
-        conv_dim = 0
-        logger.info("Disable conv layer for GLoRA")
-
     preset = kwargs.get("preset", "full")
     if preset not in PRESET:
         preset = read_preset(preset)
@@ -93,20 +97,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     LycorisNetwork.apply_preset(preset)
 
     logger.info(f"Using rank adaptation algo: {algo}")
-
-    if (
-        (algo == "loha")
-        and not kwargs.get("no_dim_warn", False)
-        and (linear_dim > 64 or conv_dim > 64)
-    ):
-        warning_type = {"loha": "Hadamard Product representation"}
-        warning_msg = (
-            "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n"
-            f"in {warning_type[algo]}!\n"
-            "Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n"
-            f"If you just want to use high dim {algo}, please consider use lower lr."
-        )
-        logger.warning(warning_msg, stacklevel=2)
 
     network = LycorisNetwork(
         module,
