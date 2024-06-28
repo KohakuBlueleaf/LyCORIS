@@ -1,6 +1,6 @@
 # LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
-![banner image](docs/images/banner.png)
+![banner image](docs/images/banner2.png)
 
 A project that implements different parameter-efficient fine-tuning algorithms for Stable Diffusion.
 
