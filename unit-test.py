@@ -14,11 +14,7 @@ from test.wrapper import LycorisWrapperTests
 from test.functional import LycorisFunctionalTests
 
 
-TESTS = [
-    LycorisModuleTests,
-    LycorisWrapperTests,
-    LycorisFunctionalTests
-]
+TESTS = [LycorisModuleTests, LycorisWrapperTests, LycorisFunctionalTests]
 
 
 if __name__ == "__main__":

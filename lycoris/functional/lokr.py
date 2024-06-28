@@ -146,9 +146,7 @@ def diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
     return make_kron(w1, w2, scale)
 
 
-def bypass_forward_diff(
-    h, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}
-):
+def bypass_forward_diff(h, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}):
     """### bypass_forward_diff
 
     Args:

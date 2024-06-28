@@ -6,13 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lycoris.functional import (
-    locon,
-    loha,
-    lokr,
-    diag_oft,
-    boft
-)
+from lycoris.functional import locon, loha, lokr, diag_oft, boft
 
 
 EPS_DTYPE = {
@@ -22,18 +16,16 @@ EPS_DTYPE = {
 }
 
 
-modules = [
-    locon,
-    loha,
-    lokr,
-    diag_oft,
-    boft
-]
+modules = [locon, loha, lokr, diag_oft, boft]
 base_module_and_input_adn_weight = [
     lambda dim: (F.linear, torch.randn(dim, dim), torch.randn(1, dim)),
     lambda dim: (F.conv1d, torch.randn(dim, dim, 3), torch.randn(1, dim, 16)),
     lambda dim: (F.conv2d, torch.randn(dim, dim, 3, 3), torch.randn(1, dim, 16, 16)),
-    lambda dim: (F.conv3d, torch.randn(dim, dim, 3, 3, 3), torch.randn(1, dim, 16, 16, 16)),
+    lambda dim: (
+        F.conv3d,
+        torch.randn(dim, dim, 3, 3, 3),
+        torch.randn(1, dim, 16, 16, 16),
+    ),
 ]
 device_and_dtype = [
     (torch.device("cpu"), torch.float32),
@@ -69,27 +61,27 @@ class LycorisFunctionalTests(unittest.TestCase):
             f"dtype={str(dtype): <15}",
             sep="||",
         )
-        
+
         w = test_weight.to(device, dtype)
         x = test_input.to(device, dtype)
         y = func(x, w)
-        
+
         params = list(module.weight_gen(w, 4))
         for idx, param in enumerate(params):
             if param is not None:
                 param = param.to(device, dtype)
-                params[idx] = param + torch.randn_like(param)*0.01
-        
+                params[idx] = param + torch.randn_like(param) * 0.01
+
         if module in {boft, diag_oft}:
             diff_w = module.diff_weight(w, *params)
-            diff_y = module.bypass_forward_diff(y, *params, need_transpose=w.ndim>2)
+            diff_y = module.bypass_forward_diff(y, *params, need_transpose=w.ndim > 2)
         else:
             diff_w = module.diff_weight(*params)
             diff_y = module.bypass_forward_diff(x, *params)
-        
+
         diff_y_from_diff_w = func(x, diff_w.to(x))
         self.assertTrue(
             F.mse_loss(diff_y, diff_y_from_diff_w).item() < EPS_DTYPE[dtype],
             f"Error: {module.__name__} {base.__name__} {device} {dtype} ||"
-            f"{F.mse_loss(diff_y, diff_y_from_diff_w).item()}"
+            f"{F.mse_loss(diff_y, diff_y_from_diff_w).item()}",
         )
