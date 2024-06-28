@@ -66,7 +66,7 @@ However, newer model types may not always be supported. If you encounter this is
 There are three different ways to train LyCORIS models.
 
 - With [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (see a list of compatible graphical interfaces and colabs at the end of the section)
-- With [HCP-Diffusion](https://github.com/IrisRainbowNeko/HCP-Diffusion)
+- With [Naifu-Diffusion](https://github.com/Mikubill/naifu)
 - With your own script by using LyCORIS as standalone wrappers for **ANY** pytorch modules.
 
 In any case, please install this package in the corresponding virtual environment. You can either install it
@@ -161,7 +161,8 @@ You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to
 #### Other method
 After LyCORIS3.0.0, Parametrize API and Functional API have been added, which provide more different ways on utilizing LyCORIS library.
 
-Check [xxx] for more informations.
+Check API reference for more informations.
+You can also take the [test suites](test/) as a kind of examples.
 
 #### Bitsandbytes support
 
