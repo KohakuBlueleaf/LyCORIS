@@ -269,8 +269,9 @@ class LycorisBaseModule(ModuleCustomSD):
         weight, bias = self.get_merged_weight(
             multiplier, self.org_weight.shape, self.org_weight.device
         )
-        self.org_weight = weight
+        self.org_weight = weight.to(self.org_weight)
         if bias is not None:
+            bias = bias.to(self.org_weight)
             if self.org_module[0].bias is not None:
                 self.org_module[0].bias.data.copy_(bias)
             else:

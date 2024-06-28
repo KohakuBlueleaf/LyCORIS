@@ -77,3 +77,30 @@ def power2factorization(dimension: int, factor: int = -1) -> tuple[int, int]:
             n = dimension // m
 
     return dimension // n, n
+
+
+def tucker_weight_from_conv(up, down, mid):
+    up = up.reshape(up.size(0), up.size(1))
+    down = down.reshape(down.size(0), down.size(1))
+    return torch.einsum("m n ..., i m, n j -> i j ...", mid, up, down)
+
+
+def tucker_weight(wa, wb, t):
+    temp = torch.einsum("i j ..., j r -> i r ...", t, wb)
+    return torch.einsum("i j ..., i r -> r j ...", temp, wa)
+
+
+def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
+    dora_norm_dims = org_weight.dim() - 1
+    weight = org_weight + rebuild
+    weight = weight.to(dora_scale.dtype)
+    weight_norm = (
+        weight.transpose(0, 1)
+        .reshape(weight.shape[1], -1)
+        .norm(dim=1, keepdim=True)
+        .reshape(weight.shape[1], *[1] * dora_norm_dims)
+        .transpose(0, 1)
+    )
+    merged_scale1 = weight / weight_norm * dora_scale
+    diff_weight = merged_scale1 - org_weight
+    return org_weight + diff_weight * scale

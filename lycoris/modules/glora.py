@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisBaseModule
-from ..utils import tucker_weight_from_conv
+from ..functional import tucker_weight_from_conv
 from ..utils.bnb import LinearNF4
 
 
