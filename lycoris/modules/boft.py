@@ -197,7 +197,7 @@ class ButterflyOFTModule(LycorisBaseModule):
         r = self.get_r()
         inp = org = self.org_forward(x)
         if self.op in {F.conv2d, F.conv1d, F.conv3d}:
-            org_out = org_out.transpose(1, -1)
+            inp = inp.transpose(1, -1)
 
         for i in range(m):
             bi = r[i]  # b_num, b_size, b_size

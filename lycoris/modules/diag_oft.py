@@ -188,7 +188,7 @@ class DiagOFTModule(LycorisBaseModule):
         if diff:
             out = out - org_out
         out = oft_out.view(*shape, -1)
-        if self.rescale is not None:
+        if self.rescaled:
             out = self.rescale.transpose(-1, 0) * out
             out = out + (self.rescale.transpose(-1, 0) - 1) * org_out
         if self.op in {F.conv2d, F.conv1d, F.conv3d}:
