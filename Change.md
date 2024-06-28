@@ -19,7 +19,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * Remove optional deps from install_requires
 * Remove lot of redundant/deprecated modules
 * Better testing
-* HunYuan DiT Support
+* HunYuan DiT Support ([PR](https://github.com/kohya-ss/sd-scripts/pull/1378) in kohya-ss/sd-scripts)
 
 ### Full change log
 
