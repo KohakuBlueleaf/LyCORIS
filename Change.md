@@ -44,6 +44,7 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * DyLoRA, (IA)^3, GLoRA are all rewritten and support Linear/Conv1,2,3d.
 * (IA)^3, GLoRA, Diag-OFT, BOFT are supported in `create_lycoris_from_weights`
   * `lycoris.kohya.create_network_from_weights` also support them as well.
+* Fix wrong implementation of BOFT.
 * `create_lycoris_from_weights` and `create_network_from_weights` now have correct logging infos.
 * `get_module` and `make_module` are moved into modules' API.
 
