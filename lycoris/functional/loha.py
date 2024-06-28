@@ -83,8 +83,8 @@ def make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, scale):
     return HadaWeightTucker.apply(t1, w1d, w1u, t2, w2d, w2u, scale)
 
 
-def loha_weight_gen(org_weight, rank, tucker=True):
-    """### loha_weight_gen
+def weight_gen(org_weight, rank, tucker=True):
+    """### weight_gen
 
     Args:
         org_weight (torch.Tensor): the weight tensor
@@ -101,27 +101,23 @@ def loha_weight_gen(org_weight, rank, tucker=True):
         w2d = torch.empty(rank, in_dim)
         w2u = torch.empty(rank, out_dim)
         t2 = torch.empty(rank, rank, *k)
-        nn.init.normal_(w1d, std=1)
-        nn.init.constant_(w1u, 0)
-        nn.init.normal_(w2d, std=1)
-        nn.init.normal_(w2u, std=0.1)
         nn.init.normal_(t1, std=0.1)
         nn.init.normal_(t2, std=0.1)
-        return w1d, w2d, w1u, w2u, t1, t2
     else:
         w1d = torch.empty(rank, in_dim)
-        w1u = torch.empty(rank, out_dim)
+        w1u = torch.empty(out_dim, rank)
         w2d = torch.empty(rank, in_dim)
-        w2u = torch.empty(rank, out_dim)
-        nn.init.normal_(w1d, std=1)
-        nn.init.constant_(w1u, 0)
-        nn.init.normal_(w2d, std=1)
-        nn.init.normal_(w2u, std=0.1)
-        return w1d, w2d, w1u, w2u
+        w2u = torch.empty(out_dim, rank)
+        t1 = t2 = None
+    nn.init.normal_(w1d, std=1)
+    nn.init.constant_(w1u, 0)
+    nn.init.normal_(w2d, std=1)
+    nn.init.normal_(w2u, std=0.1)
+    return w1d, w1u, w2d, w2u, t1, t2
 
 
-def loha_diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
-    """### loha_diff_weight
+def diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
+    """### diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
 
@@ -152,10 +148,10 @@ def loha_diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
     return result
 
 
-def loha_bypass_forward_diff(
+def bypass_forward_diff(
     x, w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0, extra_args={}
 ):
-    """### loha_bypass_forward_diff
+    """### bypass_forward_diff
 
     Args:
         x (torch.Tensor): input tensor
@@ -168,20 +164,5 @@ def loha_bypass_forward_diff(
     Returns:
         torch.Tensor: output tensor
     """
-    diff_w = loha_diff_weight(w1d, w1u, w2d, w2u, t1, t2, gamma)
+    diff_w = diff_weight(w1d, w1u, w2d, w2u, t1, t2, gamma)
     return FUNC_LIST[w1d.dim() if t1 is None else t1.dim()](x, diff_w, **extra_args)
-
-
-if __name__ == "__main__":
-    w = torch.randn(128, 128, 3, 3, 3)
-    w1d, w2d, w1u, w2u, t1, t2 = loha_weight_gen(w, 4, tucker=True)
-    w1u += 0.01
-    extra_args = {"padding": 1}
-
-    x = torch.randn(1, 128, 8, 8, 8)
-    y = FUNC_LIST[w.dim()](x, w, **extra_args)
-    diff_w = loha_diff_weight(w1d, w2d, w1u, w2u, t1, t2, 1)
-    diff_y = loha_bypass_forward_diff(x, w1d, w2d, w1u, w2u, t1, t2, 1, extra_args)
-
-    print(F.mse_loss(y, y + diff_y))
-    print(F.mse_loss(w, w + diff_w))

@@ -17,7 +17,7 @@ def make_kron(w1, w2, scale):
     return rebuild * scale
 
 
-def lokr_weight_gen(
+def weight_gen(
     org_weight,
     rank,
     tucker=True,
@@ -118,8 +118,8 @@ def lokr_weight_gen(
     return w1, w1a, w1b, w2, w2a, w2b, t2
 
 
-def lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
-    """### lokr_diff_weight
+def diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
+    """### diff_weight
 
     Args:
         gamma (float, optional): scale factor, normally alpha/rank here
@@ -146,10 +146,10 @@ def lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0):
     return make_kron(w1, w2, scale)
 
 
-def lokr_bypass_forward_diff(
+def bypass_forward_diff(
     h, w1, w1a, w1b, w2, w2a, w2b, t, gamma=1.0, extra_args={}
 ):
-    """### lokr_bypass_forward_diff
+    """### bypass_forward_diff
 
     Args:
         gamma (float, optional): scale factor, normally alpha/rank here
@@ -163,7 +163,6 @@ def lokr_bypass_forward_diff(
     use_w2 = w2 is not None
     tucker = t is not None
     dim = t.dim() if tucker else w2.dim() if w2 is not None else w2b.dim()
-    print(dim)
     rank = w1b.size(0) if not use_w1 else w2b.size(0) if not use_w2 else gamma
     scale = gamma / rank
     is_conv = dim > 2
@@ -241,19 +240,3 @@ def lokr_bypass_forward_diff(
         h = hc.reshape(*hc.shape[:-2], -1)
 
     return h * scale
-
-
-if __name__ == "__main__":
-    w = torch.randn(32, 32, 3, 3, 3)
-    w1, w1a, w1b, w2, w2a, w2b, t = lokr_weight_gen(w, 2, tucker=False)
-    extra_args = {"padding": 1}
-
-    x = torch.randn(1, 32, 8, 8, 8)
-    y = FUNC_LIST[w.dim()](x, w, **extra_args)
-    diff_w = lokr_diff_weight(w1, w1a, w1b, w2, w2a, w2b, t, 1)
-    diff_y_w = FUNC_LIST[w.dim()](x, diff_w, **extra_args)
-    diff_y = lokr_bypass_forward_diff(x, w1, w1a, w1b, w2, w2a, w2b, t, 1, extra_args)
-
-    print(F.mse_loss(y, y + diff_y))
-    print(F.mse_loss(w, w + diff_w))
-    print(F.mse_loss(diff_y, diff_y_w))

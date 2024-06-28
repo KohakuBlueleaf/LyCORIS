@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
-from ..functional.loha import loha_diff_weight
+from ..functional.loha import diff_weight as loha_diff_weight
 from ..utils.bnb import LinearNF4
 
 

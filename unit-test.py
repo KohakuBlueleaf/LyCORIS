@@ -11,11 +11,13 @@ logger.setLevel(logging.ERROR)
 
 from test.module import LycorisModuleTests
 from test.wrapper import LycorisWrapperTests
+from test.functional import LycorisFunctionalTests
 
 
 TESTS = [
     LycorisModuleTests,
     LycorisWrapperTests,
+    LycorisFunctionalTests
 ]
 
 

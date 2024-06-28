@@ -10,7 +10,7 @@ from .general import power2factorization, FUNC_LIST
 from .diag_oft import get_r
 
 
-def boft_weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
+def weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
     """### boft_weight_gen
 
     Args:
@@ -28,13 +28,13 @@ def boft_weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
         boft_m = max_boft_m
     boft_m = min(boft_m, max_boft_m)
     oft_blocks = torch.zeros(boft_m, block_num, block_size, block_size)
-    if rescale:
+    if rescale is not None:
         return oft_blocks, torch.ones(out_dim, *[1] * len(rest))
     else:
         return oft_blocks, None
 
 
-def boft_diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
+def diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
     """### boft_diff_weight
 
     Args:
@@ -57,11 +57,14 @@ def boft_diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
         inp = rearrange(inp, "d b ... -> (d b) ...")
         inp = rearrange(inp, "(c k g) ... -> (c g k) ...", g=2, k=2**i * r_b)
 
-    return inp * rescale - org
+    if rescale is not None:
+        inp = inp * rescale
+
+    return inp - org
 
 
-def boft_bypass_forward_diff(
-    org_out, need_transpose, oft_blocks, rescale=None, constraint=None
+def bypass_forward_diff(
+    org_out, oft_blocks, rescale=None, constraint=None, need_transpose=False
 ):
     """### boft_bypass_forward_diff
 
@@ -75,7 +78,7 @@ def boft_bypass_forward_diff(
     r_b = b // 2
     I = torch.eye(b, device=oft_blocks.device)
     r = get_r(oft_blocks, I, constraint)
-    inp = org_out.to(dtype=r.dtype)
+    inp = org = org_out.to(dtype=r.dtype)
     if need_transpose:
         inp = org = inp.transpose(1, -1)
 
@@ -87,27 +90,10 @@ def boft_bypass_forward_diff(
         inp = rearrange(inp, "... d b -> ... (d b)")
         inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
 
-    inp = inp * rescale.transpose(0, -1) - org
+    if rescale is not None:
+        inp = inp * rescale.transpose(0, -1)
+
+    inp = inp - org
     if need_transpose:
         inp = inp.transpose(1, -1)
     return inp
-
-
-if __name__ == "__main__":
-    w = torch.randn(32, 32, 3, 3, 3)
-    blocks, rescale = boft_weight_gen(w, 4, -1, True)
-    blocks = blocks + torch.randn_like(blocks) * 0.01
-    extra_args = {"padding": 1}
-
-    x = torch.randn(1, 32, 8, 8, 8)
-    y = FUNC_LIST[x.dim()](x, w, **extra_args)
-    diff_w = boft_diff_weight(w, blocks, rescale, 0.1)
-    diff_y_rebuild = FUNC_LIST[x.dim()](x, diff_w, **extra_args)
-    diff_y = boft_bypass_forward_diff(y, w.dim() > 2, blocks, rescale, 0.1)
-
-    print(y.shape, diff_y.shape, diff_y_rebuild.shape)
-    print(w.shape, diff_w.shape)
-
-    print(F.mse_loss(y, y + diff_y))
-    print(F.mse_loss(w, w + diff_w))
-    print(F.mse_loss(diff_y, diff_y_rebuild))
