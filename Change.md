@@ -1,6 +1,6 @@
 # Change Log
 
-## 2024/06/xx update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
+## 2024/06/29 update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
 
 ### The reasons of 3.0.0
 
