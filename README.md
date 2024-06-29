@@ -27,7 +27,7 @@ Please check [List of Implemented Algorithms](docs/Algo-List.md) and [Guidelines
 
 A simple comparison of some of these methods are provided below (to be taken with a grain of salt)
 
-|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor$^+$ |
+|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor $^+$ |
 | --------------------- | ---- | ---- | ---- | --------------- | ---------------------- |
 | Fidelity              | ★   | ●   | ▲   | ◉              | ▲                     |
 | Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$              |
