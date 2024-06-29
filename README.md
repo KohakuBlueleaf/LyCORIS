@@ -1,11 +1,9 @@
-
 ![pypi](https://img.shields.io/pypi/v/lycoris-lora.svg)
 ![versions](https://img.shields.io/pypi/pyversions/lycoris-lora.svg)
 ![PyPI - License](https://img.shields.io/pypi/l/lycoris-lora)
 ![downloads](https://img.shields.io/pypi/dm/lycoris-lora)
 ![commits](https://img.shields.io/github/commit-activity/m/KohakuBlueleaf/LyCORIS/dev)
 ![Discord](https://img.shields.io/discord/1082218577395986452)
-
 
 # LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
@@ -261,7 +259,7 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-### 2024/06/xx update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
+### 2024/06/29 update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
 
 #### The reasons of 3.0.0
 
