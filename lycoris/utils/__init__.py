@@ -1,4 +1,6 @@
 import re
+import hashlib
+from io import BytesIO
 from typing import Dict, Tuple, Union
 
 import numpy as np
@@ -6,10 +8,37 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 import torch.linalg as linalg
 
+import safetensors.torch
+
 from tqdm import tqdm
+from .general import *
+
+
+def load_bytes_in_safetensors(tensors):
+    bytes = safetensors.torch.save(tensors)
+    b = BytesIO(bytes)
+
+    b.seek(0)
+    header = b.read(8)
+    n = int.from_bytes(header, "little")
+
+    offset = n + 8
+    b.seek(offset)
+
+    return b.read()
+
+
+def precalculate_safetensors_hashes(state_dict):
+    # calculate each tensor one by one to reduce memory usage
+    hash_sha256 = hashlib.sha256()
+    for tensor in state_dict.values():
+        single_tensor_sd = {"tensor": tensor}
+        bytes_for_tensor = load_bytes_in_safetensors(single_tensor_sd)
+        hash_sha256.update(bytes_for_tensor)
+
+    return f"0x{hash_sha256.hexdigest()}"
 
 
 def str_bool(val):
@@ -388,179 +417,10 @@ def convert_diffusers_name_to_compvis(key):
     return key
 
 
-def get_module(lyco_state_dict: Dict, lora_name):
-    if f"{lora_name}.lora_up.weight" in lyco_state_dict:
-        up = lyco_state_dict[f"{lora_name}.lora_up.weight"]
-        down = lyco_state_dict[f"{lora_name}.lora_down.weight"]
-        mid = lyco_state_dict.get(f"{lora_name}.lora_mid.weight", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "locon", (up, down, mid, alpha, dora_scale)
-    elif f"{lora_name}.hada_w1_a" in lyco_state_dict:
-        w1a = lyco_state_dict[f"{lora_name}.hada_w1_a"]
-        w1b = lyco_state_dict[f"{lora_name}.hada_w1_b"]
-        w2a = lyco_state_dict[f"{lora_name}.hada_w2_a"]
-        w2b = lyco_state_dict[f"{lora_name}.hada_w2_b"]
-        t1 = lyco_state_dict.get(f"{lora_name}.hada_t1", None)
-        t2 = lyco_state_dict.get(f"{lora_name}.hada_t2", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "hada", (w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale)
-    elif f"{lora_name}.weight" in lyco_state_dict:
-        weight = lyco_state_dict[f"{lora_name}.weight"]
-        on_input = lyco_state_dict.get(f"{lora_name}.on_input", False)
-        return "ia3", (weight, on_input)
-    elif (
-        f"{lora_name}.lokr_w1" in lyco_state_dict
-        or f"{lora_name}.lokr_w1_a" in lyco_state_dict
-    ):
-        w1 = lyco_state_dict.get(f"{lora_name}.lokr_w1", None)
-        w1a = lyco_state_dict.get(f"{lora_name}.lokr_w1_a", None)
-        w1b = lyco_state_dict.get(f"{lora_name}.lokr_w1_b", None)
-        w2 = lyco_state_dict.get(f"{lora_name}.lokr_w2", None)
-        w2a = lyco_state_dict.get(f"{lora_name}.lokr_w2_a", None)
-        w2b = lyco_state_dict.get(f"{lora_name}.lokr_w2_b", None)
-        t1 = lyco_state_dict.get(f"{lora_name}.lokr_t1", None)
-        t2 = lyco_state_dict.get(f"{lora_name}.lokr_t2", None)
-        alpha = lyco_state_dict.get(f"{lora_name}.alpha", None)
-        dora_scale = lyco_state_dict.get(f"{lora_name}.dora_scale", None)
-        return "kron", (w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, dora_scale)
-    elif f"{lora_name}.diff" in lyco_state_dict:
-        diff = lyco_state_dict[f"{lora_name}.diff"]
-        diff_b = lyco_state_dict.get(f"{lora_name}.diff_b", None)
-        return "full", (diff, diff_b)
-    elif f"{lora_name}.w_norm" in lyco_state_dict:
-        w_norm = lyco_state_dict[f"{lora_name}.w_norm"]
-        b_norm = lyco_state_dict.get(f"{lora_name}.b_norm", None)
-        return "norm", (w_norm, b_norm)
-    else:
-        return "None", ()
-
-
-def tucker_weight_from_conv(up, down, mid):
-    up = up.reshape(up.size(0), up.size(1))
-    down = down.reshape(down.size(0), down.size(1))
-    return torch.einsum("m n w h, i m, n j -> i j w h", mid, up, down)
-
-
-def tucker_weight(wa, wb, t):
-    temp = torch.einsum("i j k l, j r -> i r k l", t, wb)
-    return torch.einsum("i j k l, i r -> r j k l", temp, wa)
-
-
-def apply_dora_scale(org_weight, rebuild, dora_scale, scale):
-    dora_mean_dim = tuple(i for i in range(org_weight.dim()) if i != 1)
-    weight = org_weight + rebuild
-    merged_scale1 = weight / weight.mean(dim=dora_mean_dim, keepdim=True) * dora_scale
-    diff_weight = merged_scale1 - org_weight
-    return org_weight + diff_weight * scale
-
-
-@torch.no_grad()
-def rebuild_weight(module_type, params, orig_weight, orig_bias, scale=1):
-    if orig_weight is None:
-        return None, None
-    merged = orig_weight
-    merged_bias = orig_bias
-    if module_type == "locon":
-        up, down, mid, alpha, dora_scale = params
-        if alpha is not None:
-            scale *= alpha / up.size(1)
-        if mid is not None:
-            rebuild = tucker_weight_from_conv(up, down, mid)
-        else:
-            rebuild = up.reshape(up.size(0), -1) @ down.reshape(down.size(0), -1)
-        rebuild = rebuild.reshape(orig_weight.shape)
-        if dora_scale is None:
-            merged = orig_weight + rebuild * scale
-        else:
-            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
-        del up, down, mid, alpha, params, rebuild
-    elif module_type == "hada":
-        w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale = params
-        if alpha is not None:
-            scale *= alpha / w1b.size(0)
-        if t1 is not None:
-            rebuild1 = tucker_weight(w1a, w1b, t1)
-        else:
-            rebuild1 = w1a @ w1b
-        if t2 is not None:
-            rebuild2 = tucker_weight(w2a, w2b, t2)
-        else:
-            rebuild2 = w2a @ w2b
-        rebuild = (rebuild1 * rebuild2).reshape(orig_weight.shape)
-        if dora_scale is None:
-            merged = orig_weight + rebuild * scale
-        else:
-            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
-        del w1a, w1b, w2a, w2b, t1, t2, alpha, params, rebuild, rebuild1, rebuild2
-    elif module_type == "ia3":
-        weight, on_input = params
-        if not on_input:
-            weight = weight.reshape(-1, 1)
-        merged = orig_weight + weight * orig_weight * scale
-        del weight, on_input, params
-    elif module_type == "kron":
-        w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, dora_scale = params
-        if alpha is not None and (w1b is not None or w2b is not None):
-            scale *= alpha / (w1b.size(0) if w1b else w2b.size(0))
-        if w1a is not None and w1b is not None:
-            if t1 is not None:
-                w1 = tucker_weight(w1a, w1b, t1)
-            else:
-                w1 = w1a @ w1b
-        if w2a is not None and w2b is not None:
-            if t2 is not None:
-                w2 = tucker_weight(w2a, w2b, t2)
-            else:
-                w2 = w2a @ w2b
-        if len(w2.shape) == 4:
-            w1 = w1.unsqueeze(2).unsqueeze(2)
-        w2 = w2.contiguous()
-        rebuild = torch.kron(w1, w2).reshape(orig_weight.shape)
-        if dora_scale is None:
-            merged = orig_weight + rebuild * scale
-        else:
-            merged = apply_dora_scale(orig_weight, rebuild, dora_scale, scale)
-        del w1, w1a, w1b, w2, w2a, w2b, t1, t2, alpha, params, rebuild
-    elif module_type == "full":
-        rebuild = params[0].reshape(orig_weight.shape)
-        rebuild_b = (
-            params[1].reshape(orig_bias.shape) if orig_bias is not None else None
-        )
-        merged = orig_weight + rebuild * scale
-        if rebuild_b is not None:
-            merged_bias = orig_bias + rebuild_b * scale
-        del params, rebuild, rebuild_b
-    elif module_type == "norm":
-        rebuild = params[0].reshape(orig_weight.shape)
-        rebuild_b = params[1].reshape(orig_bias.shape)
-        merged = orig_weight + rebuild * scale
-        merged_bias = orig_bias + rebuild_b * scale
-    else:
-        return None, None
-
-    return merged, merged_bias
-
-
 @torch.no_grad()
 def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
-    UNET_TARGET_REPLACE_MODULE = [
-        "Linear",
-        "Conv2d",
-        "LayerNorm",
-        "GroupNorm",
-        "GroupNorm32",
-    ]
-    TEXT_ENCODER_TARGET_REPLACE_MODULE = [
-        "Embedding",
-        "Linear",
-        "Conv2d",
-        "LayerNorm",
-        "GroupNorm",
-        "GroupNorm32",
-        "Embedding",
-    ]
+    from ..modules import make_module, get_module
+
     LORA_PREFIX_UNET = "lora_unet"
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
     merged = 0
@@ -569,29 +429,25 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
         prefix,
         root_module: torch.nn.Module,
         lyco_state_dict: Dict[str, torch.Tensor],
-        target_replace_modules,
     ):
         nonlocal merged
         for child_name, child_module in tqdm(
             list(root_module.named_modules()), desc=f"Merging {prefix}"
         ):
-            if child_module.__class__.__name__ in target_replace_modules:
-                lora_name = prefix + "." + child_name
-                lora_name = lora_name.replace(".", "_")
+            lora_name = prefix + "." + child_name
+            lora_name = lora_name.replace(".", "_")
 
-                result, result_b = rebuild_weight(
-                    *get_module(lyco_state_dict, lora_name),
-                    getattr(child_module, "weight"),
-                    getattr(child_module, "bias", None),
-                    scale,
-                )
-                if result is not None:
-                    key_dict.pop(lora_name)
-                    merged += 1
-                    child_module.requires_grad_(False)
-                    child_module.weight.copy_(result)
-                if result_b is not None:
-                    child_module.bias.copy_(result_b)
+            lyco_type, params = get_module(lyco_state_dict, lora_name)
+            if lyco_type is None:
+                continue
+            module = make_module(lyco_type, params, lora_name, child_module)
+            if module is None:
+                continue
+            module.to(device)
+            module.merge_to(scale)
+            key_dict.pop(convert_diffusers_name_to_compvis(lora_name), None)
+            key_dict.pop(lora_name, None)
+            merged += 1
 
     key_dict = {}
     for k, v in tqdm(list(lyco_state_dict.items()), desc="Converting Dtype and Device"):
@@ -604,12 +460,7 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
             k = f"{convert_key}.{weight_key}"
         else:
             key_dict[module] = key_dict.get(module, []) + [k]
-        if device == "cpu":
-            lyco_state_dict[k] = v.float().cpu()
-        else:
-            lyco_state_dict[k] = v.to(
-                device, dtype=tes[0].parameters().__next__().dtype
-            )
+        lyco_state_dict[k] = v.float().cpu()
 
     for idx, te in enumerate(tes):
         if len(tes) > 1:
@@ -618,15 +469,15 @@ def merge(tes, unet, lyco_state_dict, scale: float = 1.0, device="cpu"):
             prefix = LORA_PREFIX_TEXT_ENCODER
         merge_state_dict(
             prefix,
-            te.to(device),
+            te,
             lyco_state_dict,
-            TEXT_ENCODER_TARGET_REPLACE_MODULE,
         )
+        torch.cuda.empty_cache()
     merge_state_dict(
         LORA_PREFIX_UNET,
-        unet.to(device),
+        unet,
         lyco_state_dict,
-        UNET_TARGET_REPLACE_MODULE,
     )
+    torch.cuda.empty_cache()
     print(f"Unused state dict key: {key_dict}")
     print(f"{merged} Modules been merged")

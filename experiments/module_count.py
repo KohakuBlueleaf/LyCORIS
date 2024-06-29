@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lycoris.kohya.model_utils import load_models_from_stable_diffusion_checkpoint
+from library.model_util import load_models_from_stable_diffusion_checkpoint
 import lycoris.kohya as network_module
 
 

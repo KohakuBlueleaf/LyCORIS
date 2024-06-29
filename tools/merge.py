@@ -47,12 +47,12 @@ args = ARGS = get_args()
 
 
 from lycoris.utils import merge
-from lycoris.kohya.model_utils import (
+from library.model_util import (
     load_models_from_stable_diffusion_checkpoint,
     save_stable_diffusion_checkpoint,
     load_file,
 )
-from lycoris.kohya.sdxl_model_util import (
+from library.sdxl_model_util import (
     load_models_from_sdxl_checkpoint,
     save_stable_diffusion_checkpoint as save_sdxl_checkpoint,
 )
@@ -64,7 +64,7 @@ import torch
 def main():
     if args.is_sdxl:
         base = load_models_from_sdxl_checkpoint(
-            None, args.base_model, map_location=args.device
+            None, args.base_model, map_location="cpu"
         )
     else:
         base = load_models_from_stable_diffusion_checkpoint(args.is_v2, args.base_model)
@@ -105,6 +105,7 @@ def main():
             None,
             base[2],
             getattr(base[1], "logit_scale", None),
+            None,
             dtype,
         )
     else:
@@ -116,6 +117,7 @@ def main():
             None,
             0,
             0,
+            None,
             dtype,
             base[1],
         )

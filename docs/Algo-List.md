@@ -86,7 +86,7 @@ However, newer methods may only be available in the latest release / the dev bra
 * It preserves the hyperspherical energy by training orthogonal transformations that apply to outputs of each layer.
 * It converges faster than LoRA according to the original paper, but experiments are still needed.
 * `dim` corresponds to block size: we fix block size instead of block number here to make it more comparable to LoRA
-* Set `constrain` to get COFT and set `rescaled` to get rescaled OFT
+* Set `constraint` to get COFT and set `rescaled` to get rescaled OFT
 * Ref: [Controlling Text-to-Image Diffusion by Orthogonal Finetuning](https://arxiv.org/abs/2306.07280)
 
 ### BOFT
@@ -94,6 +94,6 @@ However, newer methods may only be available in the latest release / the dev bra
 * Triggered by `algo=boft`
 * An advanced version of Diag-OFT which use butterfly operation to get full orthogonol matrix.
 * With some extreme hyperparameter settings, it can become diag-oft or oft. Its capbility is between this 2 algorithm.
-* constrain and rescaled also supported.
+* constraint and rescaled also supported.
 * TODO
 * Ref: [Parameter-Efficient Orthogonal Finetuning via Butterfly Factorization](https://arxiv.org/abs/2311.06243)

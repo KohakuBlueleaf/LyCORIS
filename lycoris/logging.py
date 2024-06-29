@@ -1,6 +1,7 @@
 import sys
 import copy
 import logging
+from functools import cache
 
 
 class ColoredFormatter(logging.Formatter):
@@ -34,3 +35,18 @@ if not logger.handlers:
         )
     )
     logger.addHandler(handler)
+
+
+@cache
+def info_once(msg):
+    logger.info(msg)
+
+
+@cache
+def warning_once(msg):
+    logger.warning(msg)
+
+
+@cache
+def error_once(msg):
+    logger.error(msg)

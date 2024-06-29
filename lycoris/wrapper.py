@@ -1,11 +1,8 @@
 # General LyCORIS wrapper based on kohya-ss/sd-scripts' style
-
-import math
 import os
 import regex as re
-import sys
+import logging
 
-sys.setrecursionlimit(10000)
 from typing import List
 
 import torch
@@ -20,11 +17,11 @@ from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
-from .modules import make_module
+from .modules import get_module, make_module
 
 from .config import PRESET
 from .utils.preset import read_preset
-from .utils import get_module, str_bool
+from .utils import str_bool
 from .logging import logger
 
 
@@ -39,9 +36,22 @@ network_module_dict = {
     "diag-oft": DiagOFTModule,
     "boft": ButterflyOFTModule,
 }
+deprecated_arg_dict = {
+    "disable_conv_cp": "use_tucker",
+    "use_cp": "use_tucker",
+    "use_conv_cp": "use_tucker",
+    "constrain": "constraint",
+}
 
 
 def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
+    for key, value in kwargs.items():
+        if key in deprecated_arg_dict:
+            logger.warning(
+                f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
+                stacklevel=2,
+            )
+            kwargs[deprecated_arg_dict[key]] = value
     if linear_dim is None:
         linear_dim = 4  # default
     conv_dim = int(kwargs.get("conv_dim", linear_dim) or linear_dim)
@@ -56,19 +66,18 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         or kwargs.get("use_cp", False)
         or kwargs.get("use_tucker", False)
     )
-    if "disable_conv_cp" in kwargs or "use_cp" in kwargs or "use_conv_cp" in kwargs:
-        logger.warning(
-            "disable_conv_cp and use_cp are deprecated. Please use use_tucker instead.",
-            stacklevel=2,
-        )
     use_scalar = str_bool(kwargs.get("use_scalar", False))
     block_size = int(kwargs.get("block_size", 4) or 4)
     train_norm = str_bool(kwargs.get("train_norm", False))
-    constrain = float(kwargs.get("constrain", 0) or 0)
+    constraint = float(kwargs.get("constraint", 0) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+
+    if unbalanced_factorization:
+        logger.info("Unbalanced factorization for LoKr is enabled")
 
     if bypass_mode:
         logger.info("Bypass mode is enabled")
@@ -79,10 +88,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     if full_matrix:
         logger.info("Full matrix mode for LoKr is enabled")
 
-    if algo == "glora" and conv_dim > 0:
-        conv_dim = 0
-        logger.info("Disable conv layer for GLoRA")
-
     preset = kwargs.get("preset", "full")
     if preset not in PRESET:
         preset = read_preset(preset)
@@ -92,20 +97,6 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     LycorisNetwork.apply_preset(preset)
 
     logger.info(f"Using rank adaptation algo: {algo}")
-
-    if (
-        (algo == "loha")
-        and not kwargs.get("no_dim_warn", False)
-        and (linear_dim > 64 or conv_dim > 64)
-    ):
-        warning_type = {"loha": "Hadamard Product representation"}
-        warning_msg = (
-            "You are not supposed to use dim>64 (64*64 = 4096, it already has enough rank)\n"
-            f"in {warning_type[algo]}!\n"
-            "Please consider use lower dim or disable this warning with --network_args no_dim_warn=True\n"
-            f"If you just want to use high dim {algo}, please consider use lower lr."
-        )
-        logger.warning(warning_msg, stacklevel=2)
 
     network = LycorisNetwork(
         module,
@@ -124,16 +115,13 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
         decompose_both=kwargs.get("decompose_both", False),
         factor=kwargs.get("factor", -1),
         block_size=block_size,
-        constrain=constrain,
+        constraint=constraint,
         rescaled=rescaled,
         weight_decompose=weight_decompose,
         full_matrix=full_matrix,
         bypass_mode=bypass_mode,
+        unbalanced_factorization=unbalanced_factorization,
     )
-
-    if algo == "dylora":
-        # dylora didn't support scale weight norm yet
-        delattr(type(network), "apply_max_norm_regularization")
 
     return network
 
@@ -161,10 +149,14 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         if lora_name in loras:
             loras[lora_name] = modules
 
+    original_level = logger.level
+    logger.setLevel(logging.ERROR)
     network = LycorisNetwork(module, init_only=True)
     network.multiplier = multiplier
     network.loras = []
+    logger.setLevel(original_level)
 
+    logger.info("Loading Modules from state dict...")
     for lora_name, orig_modules in loras.items():
         if orig_modules is None:
             continue
@@ -175,6 +167,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
             network.algo_table[module.__class__.__name__] = (
                 network.algo_table.get(module.__class__.__name__, 0) + 1
             )
+    logger.info(f"{len(network.loras)} Modules Loaded")
 
     for lora in network.loras:
         lora.multiplier = multiplier
@@ -184,7 +177,14 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
 
 class LycorisNetwork(torch.nn.Module):
     ENABLE_CONV = True
-    TARGET_REPLACE_MODULE = []
+    TARGET_REPLACE_MODULE = [
+        "Linear",
+        "Conv1d",
+        "Conv2d",
+        "Conv3d",
+        "GroupNorm",
+        "LayerNorm",
+    ]
     TARGET_REPLACE_NAME = []
     LORA_PREFIX = "lycoris"
     MODULE_ALGO_MAP = {}
@@ -224,6 +224,7 @@ class LycorisNetwork(torch.nn.Module):
     ) -> None:
         super().__init__()
         root_kwargs = kwargs
+        self.weights_sd = None
         if init_only:
             self.multiplier = 1
             self.lora_dim = 0
@@ -291,7 +292,9 @@ class LycorisNetwork(torch.nn.Module):
             if isinstance(module, torch.nn.Linear) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
-            elif isinstance(module, torch.nn.Conv2d):
+            elif isinstance(
+                module, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)
+            ):
                 k_size, *_ = module.kernel_size
                 if k_size == 1 and lora_dim > 0:
                     dim = dim or lora_dim
@@ -327,7 +330,7 @@ class LycorisNetwork(torch.nn.Module):
             lora_names = []
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
-                if module_name in self.MODULE_ALGO_MAP:
+                if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
                     next_algo = next_config.get("algo", algo)
                     new_loras, new_lora_names = create_modules_(
@@ -338,7 +341,10 @@ class LycorisNetwork(torch.nn.Module):
                             loras[lora_name] = lora
                             lora_names.append(lora_name)
                     continue
-                lora_name = prefix + "." + name
+                if name:
+                    lora_name = prefix + "." + name
+                else:
+                    lora_name = prefix
                 lora_name = lora_name.replace(".", "_")
                 if lora_name in loras:
                     continue
@@ -407,8 +413,6 @@ class LycorisNetwork(torch.nn.Module):
             )
         logger.info(f"module type table: {algo_table}")
 
-        self.weights_sd = None
-
         # assertion
         names = set()
         for lora in self.loras:
@@ -461,11 +465,12 @@ class LycorisNetwork(torch.nn.Module):
     def apply_max_norm_regularization(self, max_norm_value, device):
         key_scaled = 0
         norms = []
-        for model in self.loras:
-            if hasattr(model, "apply_max_norm"):
-                scaled, norm = model.apply_max_norm(max_norm_value, device)
-                norms.append(norm)
-                key_scaled += scaled
+        for module in self.loras:
+            scaled, norm = module.apply_max_norm(max_norm_value, device)
+            if scaled is None:
+                continue
+            norms.append(norm)
+            key_scaled += scaled
 
         if key_scaled == 0:
             return key_scaled, 0, 0

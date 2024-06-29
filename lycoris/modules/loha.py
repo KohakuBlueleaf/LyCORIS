@@ -1,91 +1,32 @@
+import math
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .base import ModuleCustomSD
-from ..utils.bnb import LinearNF4, QuantLinears, log_bypass
-
-
-class HadaWeight(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, w1a, w1b, w2a, w2b, scale=torch.tensor(1)):
-        ctx.save_for_backward(w1a, w1b, w2a, w2b, scale)
-        diff_weight = ((w1a @ w1b) * (w2a @ w2b)) * scale
-        return diff_weight
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        (w1a, w1b, w2a, w2b, scale) = ctx.saved_tensors
-        grad_out = grad_out * scale
-        temp = grad_out * (w2a @ w2b)
-        grad_w1a = temp @ w1b.T
-        grad_w1b = w1a.T @ temp
-
-        temp = grad_out * (w1a @ w1b)
-        grad_w2a = temp @ w2b.T
-        grad_w2b = w2a.T @ temp
-
-        del temp
-        return grad_w1a, grad_w1b, grad_w2a, grad_w2b, None
+from .base import LycorisBaseModule
+from ..functional.loha import diff_weight as loha_diff_weight
+from ..utils.bnb import LinearNF4
 
 
-class HadaWeightCP(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, t1, w1a, w1b, t2, w2a, w2b, scale=torch.tensor(1)):
-        ctx.save_for_backward(t1, w1a, w1b, t2, w2a, w2b, scale)
-
-        rebuild1 = torch.einsum("i j k l, j r, i p -> p r k l", t1, w1b, w1a)
-        rebuild2 = torch.einsum("i j k l, j r, i p -> p r k l", t2, w2b, w2a)
-
-        return rebuild1 * rebuild2 * scale
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        (t1, w1a, w1b, t2, w2a, w2b, scale) = ctx.saved_tensors
-        grad_out = grad_out * scale
-
-        temp = torch.einsum("i j k l, j r -> i r k l", t2, w2b)
-        rebuild = torch.einsum("i j k l, i r -> r j k l", temp, w2a)
-
-        grad_w = rebuild * grad_out
-        del rebuild
-
-        grad_w1a = torch.einsum("r j k l, i j k l -> r i", temp, grad_w)
-        grad_temp = torch.einsum("i j k l, i r -> r j k l", grad_w, w1a.T)
-        del grad_w, temp
-
-        grad_w1b = torch.einsum("i r k l, i j k l -> r j", t1, grad_temp)
-        grad_t1 = torch.einsum("i j k l, j r -> i r k l", grad_temp, w1b.T)
-        del grad_temp
-
-        temp = torch.einsum("i j k l, j r -> i r k l", t1, w1b)
-        rebuild = torch.einsum("i j k l, i r -> r j k l", temp, w1a)
-
-        grad_w = rebuild * grad_out
-        del rebuild
-
-        grad_w2a = torch.einsum("r j k l, i j k l -> r i", temp, grad_w)
-        grad_temp = torch.einsum("i j k l, i r -> r j k l", grad_w, w2a.T)
-        del grad_w, temp
-
-        grad_w2b = torch.einsum("i r k l, i j k l -> r j", t2, grad_temp)
-        grad_t2 = torch.einsum("i j k l, j r -> i r k l", grad_temp, w2b.T)
-        del grad_temp
-        return grad_t1, grad_w1a, grad_w1b, grad_t2, grad_w2a, grad_w2b, None
-
-
-def make_weight(w1a, w1b, w2a, w2b, scale):
-    return HadaWeight.apply(w1a, w1b, w2a, w2b, scale)
-
-
-def make_weight_tucker(t1, w1a, w1b, t2, w2a, w2b, scale):
-    return HadaWeightCP.apply(t1, w1a, w1b, t2, w2a, w2b, scale)
-
-
-class LohaModule(ModuleCustomSD):
-    """
-    Hadamard product Implementaion for Low Rank Adaptation
-    """
+class LohaModule(LycorisBaseModule):
+    name = "loha"
+    support_module = {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+    }
+    weight_list = [
+        "hada_w1_a",
+        "hada_w1_b",
+        "hada_w2_a",
+        "hada_w2_b",
+        "hada_t1",
+        "hada_t2",
+        "alpha",
+        "dora_scale",
+    ]
+    weight_list_det = ["hada_w1_a"]
 
     def __init__(
         self,
@@ -102,79 +43,64 @@ class LohaModule(ModuleCustomSD):
         rank_dropout_scale=False,
         weight_decompose=False,
         bypass_mode=False,
+        rs_lora=False,
         **kwargs,
     ):
-        """if alpha == 0 or None, alpha is rank (no scaling)."""
-        super().__init__()
+        super().__init__(
+            lora_name,
+            org_module,
+            multiplier,
+            dropout,
+            rank_dropout,
+            module_dropout,
+            rank_dropout_scale,
+            bypass_mode,
+        )
+        if self.module_type not in self.support_module:
+            raise ValueError(f"{self.module_type} is not supported in LoHa algo.")
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.tucker = False
+        self.rs_lora = rs_lora
 
-        self.shape = org_module.weight.shape
-        if org_module.__class__.__name__ == "Conv2d":
+        w_shape = self.shape
+        if self.module_type.startswith("conv"):
             in_dim = org_module.in_channels
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             self.shape = (out_dim, in_dim, *k_size)
-            self.tucker = use_tucker and k_size != (1, 1)
+            self.tucker = use_tucker and any(i != 1 for i in k_size)
             if self.tucker:
-                shape = (out_dim, in_dim, *k_size)
+                w_shape = (out_dim, in_dim, *k_size)
             else:
-                shape = (out_dim, in_dim * k_size[0] * k_size[1])
-            self.op = F.conv2d
-            self.extra_args = {
-                "stride": org_module.stride,
-                "padding": org_module.padding,
-                "dilation": org_module.dilation,
-                "groups": org_module.groups,
-            }
-        else:
-            in_dim = org_module.in_features
-            out_dim = org_module.out_features
-            shape = (out_dim, in_dim)
-            self.shape = shape
-            self.op = F.linear
-            self.extra_args = {}
-
-        if isinstance(org_module, QuantLinears):
-            if not bypass_mode:
-                log_bypass()
-            bypass_mode = True
-        self.bypass_mode = bypass_mode
-        assert not (
-            bypass_mode and weight_decompose
-        ), "bypass_mode and dora_wd cannot be used together"
+                w_shape = (out_dim, in_dim * torch.tensor(k_size).prod().item())
 
         if self.tucker:
-            self.hada_t1 = nn.Parameter(
-                torch.empty(lora_dim, lora_dim, shape[2], shape[3])
-            )
+            self.hada_t1 = nn.Parameter(torch.empty(lora_dim, lora_dim, *w_shape[2:]))
             self.hada_w1_a = nn.Parameter(
-                torch.empty(lora_dim, shape[0])
+                torch.empty(lora_dim, w_shape[0])
             )  # out_dim, 1-mode
             self.hada_w1_b = nn.Parameter(
-                torch.empty(lora_dim, shape[1])
+                torch.empty(lora_dim, w_shape[1])
             )  # in_dim , 2-mode
 
-            self.hada_t2 = nn.Parameter(
-                torch.empty(lora_dim, lora_dim, shape[2], shape[3])
-            )
+            self.hada_t2 = nn.Parameter(torch.empty(lora_dim, lora_dim, *w_shape[2:]))
             self.hada_w2_a = nn.Parameter(
-                torch.empty(lora_dim, shape[0])
+                torch.empty(lora_dim, w_shape[0])
             )  # out_dim, 1-mode
             self.hada_w2_b = nn.Parameter(
-                torch.empty(lora_dim, shape[1])
+                torch.empty(lora_dim, w_shape[1])
             )  # in_dim , 2-mode
         else:
-            self.hada_w1_a = nn.Parameter(torch.empty(shape[0], lora_dim))
-            self.hada_w1_b = nn.Parameter(torch.empty(lora_dim, shape[1]))
+            self.hada_w1_a = nn.Parameter(torch.empty(w_shape[0], lora_dim))
+            self.hada_w1_b = nn.Parameter(torch.empty(lora_dim, w_shape[1]))
 
-            self.hada_w2_a = nn.Parameter(torch.empty(shape[0], lora_dim))
-            self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, shape[1]))
+            self.hada_w2_a = nn.Parameter(torch.empty(w_shape[0], lora_dim))
+            self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, w_shape[1]))
 
         self.wd = weight_decompose
         if self.wd:
-            org_weight: nn.Parameter = org_module.weight
+            org_weight = org_module.weight.cpu().clone().float()
             self.dora_norm_dims = org_weight.dim() - 1
             self.dora_scale = nn.Parameter(
                 torch.norm(
@@ -186,17 +112,19 @@ class LohaModule(ModuleCustomSD):
                 .transpose(1, 0)
             ).float()
 
-        self.dropout = dropout
-        if dropout:
+        if self.dropout:
             print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
-        self.rank_dropout = rank_dropout
-        self.rank_dropout_scale = rank_dropout_scale
-        self.module_dropout = module_dropout
 
         if type(alpha) == torch.Tensor:
             alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
         alpha = lora_dim if alpha is None or alpha == 0 else alpha
-        self.scale = alpha / self.lora_dim
+
+        r_factor = lora_dim
+        if self.rs_lora:
+            r_factor = math.sqrt(r_factor)
+
+        self.scale = alpha / r_factor
+
         self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
 
         if use_scalar:
@@ -215,46 +143,64 @@ class LohaModule(ModuleCustomSD):
         else:
             torch.nn.init.constant_(self.hada_w2_a, 0)
 
-        self.multiplier = multiplier
-        self.org_module = [org_module]  # remove in applying
-        self.org_forward = self.org_module[0].forward
-        self.grad_ckpt = False
+    @classmethod
+    def make_module_from_state_dict(
+        cls, lora_name, orig_module, w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale
+    ):
+        module = cls(
+            lora_name,
+            orig_module,
+            1,
+            w1b.size(0),
+            float(alpha),
+            use_tucker=t1 is not None,
+            weight_decompose=dora_scale is not None,
+        )
+        module.hada_w1_a.copy_(w1a)
+        module.hada_w1_b.copy_(w1b)
+        module.hada_w2_a.copy_(w2a)
+        module.hada_w2_b.copy_(w2b)
+        if t1 is not None:
+            module.hada_t1.copy_(t1)
+            module.hada_t2.copy_(t2)
+        if dora_scale is not None:
+            module.dora_scale.copy_(dora_scale)
+        return module
 
     def load_weight_hook(self, module: nn.Module, incompatible_keys):
         missing_keys = incompatible_keys.missing_keys
         for key in missing_keys:
             if "scalar" in key:
                 del missing_keys[missing_keys.index(key)]
-        self.scalar = nn.Parameter(torch.ones_like(self.scalar))
-
-    def apply_to(self):
-        self.org_module[0].forward = self.forward
-
-    def restore(self):
-        self.org_module[0].forward = self.org_forward
-
-    def merge_to(self, multiplier=1.0):
-        weight = self.get_weight(self.shape)
-        self.org_module[0].weight.data.add_(weight * multiplier)
+        if isinstance(self.scalar, nn.Parameter):
+            self.scalar.data.copy_(torch.ones_like(self.scalar))
+        elif getattr(self, "scalar", None) is not None:
+            self.scalar.copy_(torch.ones_like(self.scalar))
+        else:
+            self.register_buffer(
+                "scalar", torch.ones_like(self.scalar), persistent=False
+            )
 
     def get_weight(self, shape):
         if self.tucker:
-            weight = make_weight_tucker(
-                self.hada_t1,
-                self.hada_w1_a,
+            weight = loha_diff_weight(
                 self.hada_w1_b,
-                self.hada_t2,
-                self.hada_w2_a,
+                self.hada_w1_a,
                 self.hada_w2_b,
-                scale=torch.tensor(self.scale),
+                self.hada_w2_a,
+                self.hada_t1,
+                self.hada_t2,
+                gamma=torch.tensor(self.scale),
             )
         else:
-            weight = make_weight(
-                self.hada_w1_a,
+            weight = loha_diff_weight(
                 self.hada_w1_b,
-                self.hada_w2_a,
+                self.hada_w1_a,
                 self.hada_w2_b,
-                scale=torch.tensor(self.scale),
+                self.hada_w2_a,
+                None,
+                None,
+                gamma=torch.tensor(self.scale),
             )
         if shape is not None:
             weight = weight.reshape(shape)
@@ -266,14 +212,31 @@ class LohaModule(ModuleCustomSD):
             weight *= drop
         return weight
 
+    def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        scale = self.scale * multiplier
+        diff = self.get_weight(shape) * scale
+        if device is not None:
+            diff = diff.to(device)
+        return diff, None
+
+    def get_merged_weight(self, multiplier=1, shape=None, device=None):
+        merged = (
+            self.org_module[0].weight.data
+            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
+        )
+        if self.wd:
+            merged = self.apply_weight_decompose(merged)
+        return merged, None
+
     def apply_weight_decompose(self, weight):
+        weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
             .reshape(weight.shape[1], -1)
             .norm(dim=1, keepdim=True)
             .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
             .transpose(0, 1)
-        )
+        ) + torch.finfo(weight.dtype).eps
 
         return weight * (self.dora_scale / weight_norm)
 
@@ -304,8 +267,14 @@ class LohaModule(ModuleCustomSD):
 
         return scaled, orig_norm * ratio
 
-    @torch.enable_grad()
-    def forward(self, x):
+    def bypass_forward_diff(self, x, scale=1):
+        diff_weight = self.get_weight(self.shape) * self.scalar * scale
+        return self.drop(self.op(x, diff_weight, **self.kw_dict))
+
+    def bypass_forward(self, x, scale=1):
+        return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
+
+    def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.op(
@@ -318,13 +287,10 @@ class LohaModule(ModuleCustomSD):
                     ),
                 )
         if self.bypass_mode:
-            diff_weight = self.get_weight(self.shape) * self.scalar * self.multiplier
-            return self.org_forward(x) + self.op(
-                x, diff_weight.view(self.shape), **self.extra_args
-            )
+            return self.bypass_forward(x, scale=self.multiplier)
         else:
             weight = (
-                self.org_module[0].weight.data.to(x.device, dtype=self.hada_w1_a.dtype)
+                self.org_module[0].weight.data.to(self.dtype)
                 + self.get_weight(self.shape) * self.scalar * self.multiplier
             )
             bias = (
@@ -335,29 +301,4 @@ class LohaModule(ModuleCustomSD):
 
             if self.wd:
                 weight = self.apply_weight_decompose(weight)
-            return self.op(x, weight.view(self.shape), bias, **self.extra_args)
-
-
-if __name__ == "__main__":
-    base = nn.Linear(128, 128).cuda()
-    lokr = LohaModule("test", base, 1, 4, 1, weight_decompose=True).cuda()
-    print(lokr)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = lokr(test_input)
-    print(test_output.shape)
-
-    base_4bit = LinearNF4(128, 128)
-    base_4bit.load_state_dict(base.state_dict())
-    base_4bit.cuda()
-    qlocon = LohaModule("test", base_4bit, 1, 4, 1, weight_decompose=False).cuda()
-    print(qlocon)
-    test_input = torch.randn(1, 128).cuda()
-    test_output = qlocon(test_input)
-    print(test_output.shape)
-
-    base = nn.Conv2d(128, 128, 3, 1, 1)
-    lokr = LohaModule("test", base, 1, 4, 1, weight_decompose=True, use_tucker=True)
-    print(lokr)
-    test_input = torch.randn(1, 128, 16, 16)
-    test_output = lokr(test_input)
-    print(test_output.shape)
+            return self.op(x, weight, bias, **self.kw_dict)

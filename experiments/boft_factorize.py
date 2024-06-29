@@ -29,7 +29,7 @@ def butterfly_factor(dimension: int, factor: int = -1) -> tuple[int, int]:
 
     if n == 0:
         raise ValueError(
-            f"It is impossible to decompose {dimension} with factor {factor} under BOFT constrains."
+            f"It is impossible to decompose {dimension} with factor {factor} under BOFT constraints."
         )
 
     log_butterfly_factorize(dimension, factor, (dimension // n, n))

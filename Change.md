@@ -1,5 +1,62 @@
 # Change Log
 
+## 2024/06/xx update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
+
+### The reasons of 3.0.0
+
+We reconstruct the whole library with new Class definition and brand new Functional API system.
+
+We also removed lot of redundant/unused modules.
+
+Since the whole library are changed significantly. We decide to call it 3.0.0 as a new major version.
+
+### Major Changes
+
+* New Module API
+* Add Parametrize API
+* Add Functional API
+  * LoCon/LoHa/LoKr/Diag-OFT/BOFT only.
+* Remove optional deps from install_requires
+* Remove lot of redundant/deprecated modules
+* Better testing
+* HunYuan DiT Support ([PR](https://github.com/kohya-ss/sd-scripts/pull/1378) in kohya-ss/sd-scripts)
+
+### Full change log
+
+#### New Features
+
+* LyCORIS now have consistent API for different algorithm like `bypass_forward_diff` or `get_diff_weight` method. Developers of other project can utilize these API to do more tricks or integrate LyCORIS into their framework more easily.
+* LyCORIS now have parametrize API which utilize `torch.nn.utils.parametrize.register_parametrization` to directly patch individual parameters. Which can be useful for MHA layer or other tricky modules.
+  * Currently only support 2~5D tensors. And LyCORIS will pretend these weights are weight of Linear/Conv1,2,3D then send it into LyCORIS modules
+  * More native implementation or more detailed control will be added in the future.
+* LyCORIS now have functional API. Developers who prefer functional more than Module things can utilize this feature.
+  * Functional API also allow developers who don't want to introduce new dependencies. Just copy-paste the source code and utilizing it. (with Apache-2 License, directly copy-paste is totally allowed)
+* Add support for Conv1d and Conv3d module on LoCon/LoHa/LoKr/Full/OFT/BOFT/GLoRA (not All algo in LyCORIS support them, you may receive error when apply unsopported algo), support inherited module (for example: `LoRACompatibleConv` or `LoRACompatibleLinear` from [`huggingface/diffusers`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/lora.py))
+* HunYuan DiT support.
+
+#### Improvements, Fixes, Slight Changes
+
+* Drop dependencies related to kohya-ss/sd-scripts:
+  * We now take kohya-ss/sd-scripts as optional dependency
+  * Which means `transformers`, `diffusers` and anything related to kohya are all optional deps now.
+* The definition of dropout and rank_dropout in each algorithm are changed. Since some concept of original rank_dropout in the lora of kohya-ss/sd-script is hard to applied to other algorithm. We can only design the dropout for each module seperatedly.
+* `apply_max_norm` issue are all fixed.
+* DyLoRA, (IA)^3, GLoRA are all rewritten and support Linear/Conv1,2,3d.
+* (IA)^3, GLoRA, Diag-OFT, BOFT are supported in `create_lycoris_from_weights`
+  * `lycoris.kohya.create_network_from_weights` also support them as well.
+* Fix wrong implementation of BOFT.
+* `create_lycoris_from_weights` and `create_network_from_weights` now have correct logging infos.
+* `get_module` and `make_module` are moved into modules' API.
+
+#### Deprecation
+
+* HCP modules are dropped. We will wait until HCP have better wrapper API.
+* HyperNetwork-related modules like `hypernet/`, `attention.py`, `lilora.py` are removed.
+* Uncompleted GLoKr are removed.
+* code copied from kohya-ss/sd-scripts are removed. The original sd-scripts repo is now an optional dependency.
+
+---
+
 ## 2024/03/15 update to 2.2.0 - QLyCORIS and DoRA
 
 #### New Algo
