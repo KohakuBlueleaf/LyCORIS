@@ -1,3 +1,8 @@
+
+![pypi](https://img.shields.io/pypi/v/lycoris-lora.svg)
+![versions](https://img.shields.io/pypi/pyversions/lycoris-lora.svg)
+![downloads](https://img.shields.io/pypi/dm/lycoris-lora)
+
 # LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
 ![banner image](docs/images/banner2.png)
@@ -20,21 +25,21 @@ Please check [List of Implemented Algorithms](docs/Algo-List.md) and [Guidelines
 
 A simple comparison of some of these methods are provided below (to be taken with a grain of salt)
 
-|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor $^+$ |
-| --------------------- | ---- | ---- | ---- | --------------- | ---------------- |
-| Fidelity              | ★   | ●   | ▲   | ◉              | ▲               |
-| Flexibility $^*$     | ★   | ●   | ◉   | ▲              | ● $^†$        |
-| Diversity             | ▲   | ◉   | ★   | ●              | ★               |
-| Size                  | ▲   | ●   | ●   | ●              | ★               |
-| Training Speed Linear | ★   | ●   | ●   | ★              | ★               |
-| Training Speed Conv   | ●   | ★   | ▲   | ●              | ●               |
+|                       | Full | LoRA | LoHa | LoKr low factor | LoKr high factor$^+$ |
+| --------------------- | ---- | ---- | ---- | --------------- | ---------------------- |
+| Fidelity              | ★   | ●   | ▲   | ◉              | ▲                     |
+| Flexibility$^*$     | ★   | ●   | ◉   | ▲              | ●$^†$              |
+| Diversity             | ▲   | ◉   | ★   | ●              | ★                     |
+| Size                  | ▲   | ●   | ●   | ●              | ★                     |
+| Training Speed Linear | ★   | ●   | ●   | ★              | ★                     |
+| Training Speed Conv   | ●   | ★   | ▲   | ●              | ●                     |
 
 ★ > ◉ > ● > ▲
 [> means better and smaller size is better]
 
-$^+$ Usually we take `factor <= 0.5 * sqrt(dim)` as low factor and `factor >= sqrt(dim` as high factor. For example, factor<=8 for SD1.x/SD2.x/SDXL can be seen as low factor, and, factor>=16 can be seen as high factor. <br>
-$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not <br>
-$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation <br>
+$^+$ Usually we take `factor <= 0.5 * sqrt(dim)` as low factor and `factor >= sqrt(dim` as high factor. For example, factor<=8 for SD1.x/SD2.x/SDXL can be seen as low factor, and, factor>=16 can be seen as high factor. `<br>`
+$^*$ Flexibility means anything related to generating images not similar to those in the training set, and combination of multiple concepts, whether they are trained together or not `<br>`
+$^†$ It may become more difficult to switch base model or combine multiple concepts in this situation `<br>`
 
 **The actual performance may vary depending on the datasets, tasks, and hyperparameters used. It is recommended to experiment with different settings to achieve optimal results.**
 
@@ -159,6 +164,7 @@ forward_with_lyco = your_model(x)
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
 #### Other method
+
 After LyCORIS3.0.0, Parametrize API and Functional API have been added, which provide more different ways on utilizing LyCORIS library.
 
 Check API reference for more informations.
@@ -300,9 +306,10 @@ Since the whole library are changed significantly. We decide to call it 3.0.0 as
 * `get_module` and `make_module` are moved into modules' API.
 
 ## Todo list
+
 - [ ] Automatically selecting an algorithm based on the specific rank requirement.
 - [ ] More experiments for different task, not only diffusion models.
-    - [x] LoKr and LoHa have been proven to be useful for Large Language Model.
+  - [X] LoKr and LoHa have been proven to be useful for Large Language Model.
 - [ ] Explore other low-rank representations or parameter-efficient methods to fine-tune either the entire model or specific parts of it.
 - [ ] Documentation for whole library.
 
