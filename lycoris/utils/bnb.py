@@ -4,7 +4,7 @@ try:
     from bitsandbytes.nn import LinearNF4, Linear8bitLt, LinearFP4
 
     SUPPORT_BNB = True
-except:
+except Exception:
     SUPPORT_BNB = False
     import torch.nn as nn
 

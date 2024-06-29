@@ -114,7 +114,7 @@ class DyLoraModule(LycorisBaseModule):
         if rank is None:
             down, up, scale = self.get_random_rank_weight()
         else:
-            down, up, scale = self.get_random_rank_weight()
+            down, up, scale = self.get_weight(rank)
         w = up @ (down * (scale * multiplier))
         if device is not None:
             w = w.to(device)
@@ -132,7 +132,7 @@ class DyLoraModule(LycorisBaseModule):
         if rank is None:
             down, up, gamma = self.get_random_rank_weight()
         else:
-            down, up, gamma = self.get_random_rank_weight()
+            down, up, scale = self.get_weight(rank)
         down = down.view(self.lora_dim, -1, *self.shape[2:])
         up = up.view(-1, self.lora_dim, *(1 for _ in self.shape[2:]))
         scale = scale * gamma

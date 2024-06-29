@@ -1,6 +1,6 @@
 try:
     from . import kohya
-except:
+except Exception:
     pass
 from . import (
     modules,

@@ -178,9 +178,9 @@ class LycorisBaseModule(ModuleCustomSD):
         # g(x) = WX + drop(ΔWX) for any algo except LoCon(lora), bypass
         # g(x) = (W + Brank_drop(A))X for LoCon(lora), rebuid
         # g(x) = (W + rank_drop(ΔW))X for any algo except LoCon(lora), rebuild
-        self.drop = nn.Identity() if dropout == 0.0 else nn.Dropout(dropout)
+        self.drop = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
         self.rank_drop = (
-            nn.Identity() if rank_dropout == 0.0 else nn.Dropout(rank_dropout)
+            nn.Identity() if rank_dropout == 0 else nn.Dropout(rank_dropout)
         )
 
         self.multiplier = multiplier
