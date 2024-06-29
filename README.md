@@ -1,7 +1,11 @@
 
 ![pypi](https://img.shields.io/pypi/v/lycoris-lora.svg)
 ![versions](https://img.shields.io/pypi/pyversions/lycoris-lora.svg)
+![PyPI - License](https://img.shields.io/pypi/l/lycoris-lora)
 ![downloads](https://img.shields.io/pypi/dm/lycoris-lora)
+![commits](https://img.shields.io/github/commit-activity/m/KohakuBlueleaf/LyCORIS/dev)
+![Discord](https://img.shields.io/discord/1082218577395986452)
+
 
 # LyCORIS - Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion. (ICLR'24)
 
