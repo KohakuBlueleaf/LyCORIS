@@ -236,7 +236,7 @@ class LoConModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        scale = (self.dora_scale.to(weight.device) / weight_norm)
+        scale = self.dora_scale.to(weight.device) / weight_norm
         if multiplier != 1:
             scale = multiplier * (scale - 1) + 1
 
@@ -300,7 +300,9 @@ class LoConModule(LycorisBaseModule):
             diff_weight = self.make_weight(x.device).to(dtype) * scale
             weight = self.org_module[0].weight.data.to(dtype)
             if self.wd:
-                weight = self.apply_weight_decompose(weight + diff_weight, self.multiplier)
+                weight = self.apply_weight_decompose(
+                    weight + diff_weight, self.multiplier
+                )
             else:
                 weight = weight + diff_weight * self.multiplier
             bias = (

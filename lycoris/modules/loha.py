@@ -238,7 +238,7 @@ class LohaModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        scale = (self.dora_scale.to(weight.device) / weight_norm)
+        scale = self.dora_scale.to(weight.device) / weight_norm
         if multiplier != 1:
             scale = multiplier * (scale - 1) + 1
 
@@ -296,7 +296,9 @@ class LohaModule(LycorisBaseModule):
             diff_weight = self.get_weight(self.shape).to(self.dtype) * self.scalar
             weight = self.org_module[0].weight.data.to(self.dtype)
             if self.wd:
-                weight = self.apply_weight_decompose(weight + diff_weight, self.multiplier)
+                weight = self.apply_weight_decompose(
+                    weight + diff_weight, self.multiplier
+                )
             else:
                 weight = weight + diff_weight * self.multiplier
             bias = (
