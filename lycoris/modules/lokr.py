@@ -358,15 +358,15 @@ class LokrModule(LycorisBaseModule):
         return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        merged = (
-            self.org_module[0].weight.data
-            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
-        )
+        diff = self.get_diff_weight(multiplier=1, shape=shape, device=device)[0]
+        weight = self.org_weight
         if self.wd:
-            merged = self.apply_weight_decompose(merged)
+            merged = self.apply_weight_decompose(weight + diff, multiplier)
+        else:
+            merged = weight + diff * multiplier
         return merged, None
 
-    def apply_weight_decompose(self, weight):
+    def apply_weight_decompose(self, weight, multiplier=1):
         weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
@@ -376,7 +376,12 @@ class LokrModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale / weight_norm)
+        scale = (self.dora_scale.to(weight.device) / weight_norm)
+        if multiplier != 1:
+            scale = multiplier * (scale - 1) + 1
+
+        return weight * scale
+
 
     def custom_state_dict(self):
         destination = {}
@@ -506,18 +511,17 @@ class LokrModule(LycorisBaseModule):
         if self.bypass_mode:
             return self.bypass_forward(x, self.multiplier)
         else:
-            weight = (
-                self.org_module[0].weight.data.to(self.dtype)
-                + self.get_weight(self.shape) * self.scalar * self.multiplier
-            )
+            diff_weight = self.get_weight(self.shape).to(self.dtype) * self.scalar
+            weight = self.org_module[0].weight.data.to(self.dtype)
+            if self.wd:
+                weight = self.apply_weight_decompose(weight + diff_weight, self.multiplier)
+            else:
+                weight = weight + diff_weight * self.multiplier
             bias = (
                 None
                 if self.org_module[0].bias is None
                 else self.org_module[0].bias.data
             )
-
-            if self.wd:
-                weight = self.apply_weight_decompose(weight)
             return self.op(x, weight, bias, **self.kw_dict)
 
 

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from .base import LycorisBaseModule
 from ..functional.general import rebuild_tucker
-from ..logging import logger
+from ..logging import logger, warning_once
 from ..utils.bnb import LinearNF4
 
 
@@ -218,15 +218,15 @@ class LoConModule(LycorisBaseModule):
         return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        merged = (
-            self.org_module[0].weight.data
-            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
-        )
+        diff = self.get_diff_weight(multiplier=1, shape=shape, device=device)[0]
+        weight = self.org_weight
         if self.wd:
-            merged = self.apply_weight_decompose(merged)
+            merged = self.apply_weight_decompose(weight + diff, multiplier)
+        else:
+            merged = weight + diff * multiplier
         return merged, None
 
-    def apply_weight_decompose(self, weight):
+    def apply_weight_decompose(self, weight, multiplier=1):
         weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
@@ -236,7 +236,11 @@ class LoConModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale.to(weight.device) / weight_norm)
+        scale = (self.dora_scale.to(weight.device) / weight_norm)
+        if multiplier != 1:
+            scale = multiplier * (scale - 1) + 1
+
+        return weight * scale
 
     def custom_state_dict(self):
         destination = {}
@@ -289,16 +293,16 @@ class LoConModule(LycorisBaseModule):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.org_forward(x)
-        scale = self.scale * self.multiplier
+        scale = self.scale
 
         dtype = self.dtype
         if not self.bypass_mode:
-            weight = (
-                self.org_module[0].weight.data.to(dtype)
-                + self.make_weight(x.device).to(dtype) * scale
-            )
+            diff_weight = self.make_weight(x.device).to(dtype) * scale
+            weight = self.org_module[0].weight.data.to(dtype)
             if self.wd:
-                weight = self.apply_weight_decompose(weight)
+                weight = self.apply_weight_decompose(weight + diff_weight, self.multiplier)
+            else:
+                weight = weight + diff_weight * self.multiplier
             bias = (
                 None
                 if self.org_module[0].bias is None
