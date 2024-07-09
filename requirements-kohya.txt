@@ -39,3 +39,4 @@ imagesize==1.4.1
 # For logging
 rich==13.7.0
 # for kohya_ss library
+git+https://github.com/kohya-ss/sd-scripts
