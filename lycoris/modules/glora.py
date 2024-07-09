@@ -76,7 +76,7 @@ class GLoRAModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.tucker = use_tucker and all(i == 1 for i in k_size)
+            use_tucker = use_tucker and all(i == 1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
 
