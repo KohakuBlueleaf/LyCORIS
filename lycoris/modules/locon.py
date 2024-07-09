@@ -79,7 +79,7 @@ class LoConModule(LycorisBaseModule):
             stride = org_module.stride
             padding = org_module.padding
             out_dim = org_module.out_channels
-            self.tucker = use_tucker and any(i != 1 for i in k_size)
+            use_tucker = use_tucker and any(i != 1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
             if use_tucker and any(i != 1 for i in k_size):
@@ -135,7 +135,7 @@ class LoConModule(LycorisBaseModule):
 
         self.scale = alpha / r_factor
 
-        self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
+        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim/r_factor)))
 
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))

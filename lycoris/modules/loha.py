@@ -125,7 +125,7 @@ class LohaModule(LycorisBaseModule):
 
         self.scale = alpha / r_factor
 
-        self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
+        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim/r_factor)))
 
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
