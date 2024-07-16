@@ -135,7 +135,7 @@ class LoConModule(LycorisBaseModule):
 
         self.scale = alpha / r_factor
 
-        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim/r_factor)))
+        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim / r_factor)))
 
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
