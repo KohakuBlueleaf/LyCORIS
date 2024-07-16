@@ -102,6 +102,9 @@ class LycorisModuleTests(unittest.TestCase):
         net.restore()
         net.merge_to()
 
+        # attr access test
+        net.org_weight
+
     @parameterized.expand(patch_forward_param_list)
     def test_lycoris_modules_bypass_mode(
         self, module, base, device_dtype, wd, tucker, scalar

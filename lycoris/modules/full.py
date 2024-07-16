@@ -94,6 +94,21 @@ class FullModule(LycorisBaseModule):
         else:
             self.org_bias = None
 
+    def merge_to(self, multiplier=1.0):
+        need_restore = False
+        if not hasattr(self, "_org_weight"):
+            need_restore = True
+            self.apply_to()
+        result = super().merge_to(multiplier)
+        if need_restore:
+            self.weight = nn.Parameter(torch.zeros_like(self.org_module[0].weight))
+            if self.org_module[0].bias is not None:
+                self.bias = nn.Parameter(torch.zeros_like(self.org_module[0].bias))
+            else:
+                self.bias = None
+            self.org_module[0].forward = self.org_forward
+        return result
+
     def restore(self):
         self.org_module[0].forward = self.org_forward
         self.org_module[0].weight = nn.Parameter(self._org_weight[0])
