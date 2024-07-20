@@ -57,6 +57,12 @@ class FullModule(LycorisBaseModule):
             self.bias = nn.Parameter(torch.zeros_like(org_module.bias))
         else:
             self.bias = None
+        self.is_diff = True
+        self._org_weight = [self.org_module[0].weight.data.cpu().clone()]
+        if self.org_module[0].bias is not None:
+            self.org_bias = [self.org_module[0].bias.data.cpu().clone()]
+        else:
+            self.org_bias = None
 
     @classmethod
     def make_module_from_state_dict(cls, lora_name, orig_module, diff, diff_b):
@@ -71,6 +77,7 @@ class FullModule(LycorisBaseModule):
                 module.bias.copy_(diff_b)
             else:
                 module.bias = nn.Parameter(diff_b)
+        module.is_diff = True
         return module
 
     @property
@@ -93,21 +100,7 @@ class FullModule(LycorisBaseModule):
             delattr(self.org_module[0], "bias")
         else:
             self.org_bias = None
-
-    def merge_to(self, multiplier=1.0):
-        need_restore = False
-        if not hasattr(self, "_org_weight"):
-            need_restore = True
-            self.apply_to()
-        result = super().merge_to(multiplier)
-        if need_restore:
-            self.weight = nn.Parameter(torch.zeros_like(self.org_module[0].weight))
-            if self.org_module[0].bias is not None:
-                self.bias = nn.Parameter(torch.zeros_like(self.org_module[0].bias))
-            else:
-                self.bias = None
-            self.org_module[0].forward = self.org_forward
-        return result
+        self.is_diff = False
 
     def restore(self):
         self.org_module[0].forward = self.org_forward
@@ -143,16 +136,24 @@ class FullModule(LycorisBaseModule):
             if self.rank_dropout and self.training
             else 1
         )
-        if drop != 1 or scale != 1:
+        if drop != 1 or scale != 1 or self.is_diff:
             diff_w, diff_b = self.get_diff_weight(scale, device=device)
-            weight = self.org_module[0].weight + diff_w * drop
-            bias = self.org_module[0].bias + diff_b * drop
+            weight = self._org_weight + diff_w * drop
+            if self.org_bias is not None:
+                bias = self.org_bias + diff_b * drop
+            else:
+                bias = None
         else:
             weight = self.weight
             bias = self.bias
         return weight, bias
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        if self.is_diff:
+            diff_b = None
+            if self.bias is not None:
+                diff_b = self.bias * multiplier
+            return self.weight * multiplier, diff_b
         org_weight = self.org_module[0].weight.to(device, dtype=self.weight.dtype)
         diff = self.weight.to(device) - org_weight
         diff_b = None
