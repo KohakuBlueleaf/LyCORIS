@@ -141,7 +141,7 @@ def diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
         w1d = w1d.reshape(w1d.size(0), -1)
         w1u = w1u.reshape(-1, w1u.size(1))
         w2d = w2d.reshape(w2d.size(0), -1)
-        w2u = w1u.reshape(-1, w2u.size(1))
+        w2u = w2u.reshape(-1, w2u.size(1))
         result = make_weight(w1d, w1u, w2d, w2u, gamma)
 
     result = result.reshape(O, I, *k)
