@@ -159,11 +159,11 @@ class LycorisBaseModule(ModuleCustomSD):
 
         self.register_buffer("dtype_tensor", torch.tensor(0.0), persistent=False)
 
-        self.is_bnb = False
+        self.is_quant = False
         if isinstance(org_module, QuantLinears):
             if not bypass_mode:
                 log_bypass()
-            self.is_bnb = True
+            self.is_quant = True
             bypass_mode = True
         self.bypass_mode = bypass_mode
         self.dropout = dropout

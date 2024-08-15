@@ -1,11 +1,11 @@
 from functools import cache
 
+SUPPORT_QUANT = False
 try:
     from bitsandbytes.nn import LinearNF4, Linear8bitLt, LinearFP4
 
-    SUPPORT_BNB = True
+    SUPPORT_QUANT = True
 except Exception:
-    SUPPORT_BNB = False
     import torch.nn as nn
 
     class LinearNF4(nn.Linear):
@@ -18,12 +18,60 @@ except Exception:
         pass
 
 
+try:
+    from quanto.nn import QLinear, QConv2d, QLayerNorm
+
+    SUPPORT_QUANT = True
+except Exception:
+    import torch.nn as nn
+
+    class QLinear(nn.Linear):
+        pass
+
+    class QConv2d(nn.Conv2d):
+        pass
+
+    class QLayerNorm(nn.LayerNorm):
+        pass
+
+
+try:
+    from optimum.quanto.nn import (
+        QLinear as QLinearOpt,
+        QConv2d as QConv2dOpt,
+        QLayerNorm as QLayerNormOpt,
+    )
+
+    SUPPORT_QUANT = True
+except Exception:
+    import torch.nn as nn
+
+    class QLinearOpt(nn.Linear):
+        pass
+
+    class QConv2dOpt(nn.Conv2d):
+        pass
+
+    class QLayerNormOpt(nn.LayerNorm):
+        pass
+
+
 from ..logging import logger
 
 
-QuantLinears = (Linear8bitLt, LinearFP4, LinearNF4)
+QuantLinears = (
+    Linear8bitLt,
+    LinearFP4,
+    LinearNF4,
+    QLinear,
+    QConv2d,
+    QLayerNorm,
+    QLinearOpt,
+    QConv2dOpt,
+    QLayerNormOpt,
+)
 
 
 @cache
 def log_bypass():
-    return logger.warning("Using bnb with LyCORIS will enable force-bypass mode.")
+    return logger.warning("Using bnb/quanto/optimum-quanto with LyCORIS will enable force-bypass mode.")

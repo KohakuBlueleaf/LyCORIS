@@ -44,7 +44,7 @@ deprecated_arg_dict = {
 }
 
 
-def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
+def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwargs):
     for key, value in kwargs.items():
         if key in deprecated_arg_dict:
             logger.warning(

@@ -44,7 +44,7 @@ class FullModule(LycorisBaseModule):
         if self.module_type not in self.support_module:
             raise ValueError(f"{self.module_type} is not supported in Full algo.")
 
-        if self.is_bnb:
+        if self.is_quant:
             raise ValueError(
                 "Quant Linear is not supported and meaningless in Full algo."
             )
