@@ -6,6 +6,9 @@ unet_target_module = [
   "ResnetBlock2D", 
   "Downsample2D", 
   "Upsample2D",
+  "HunYuanDiTBlock",
+  "DoubleStreamBlock",
+  "SingleStreamBlock",
 ]
 unet_target_name = [
   "conv_in",
@@ -16,6 +19,8 @@ unet_target_name = [
 text_encoder_target_module = [
   "CLIPAttention",
   "CLIPMLP",
+  "MT5Block",
+  "BertLayer",
 ]
 text_encoder_target_name = [
   # "token_embedding", # not supported, Embedding module in CLIP
