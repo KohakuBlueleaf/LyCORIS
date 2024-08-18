@@ -214,6 +214,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         "Downsample2D",
         "Upsample2D",
         "HunYuanDiTBlock",
+        "DoubleStreamBlock",
+        "SingleStreamBlock",
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
