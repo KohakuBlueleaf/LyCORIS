@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from typing import List
+from typing import Any, List
 
 import torch
 
@@ -404,7 +404,9 @@ class LycorisNetworkKohya(LycorisNetwork):
             next_config = {}
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
-                if module_name in target_replace_modules:
+                if module_name in target_replace_modules and not any(
+                    re.match(t, name) for t in target_replace_names
+                ):
                     if module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
                         algo = next_config.get("algo", network_module)
@@ -419,8 +421,9 @@ class LycorisNetworkKohya(LycorisNetwork):
                 elif name in target_replace_names or any(
                     re.match(t, name) for t in target_replace_names
                 ):
-                    if name in self.NAME_ALGO_MAP:
-                        next_config = self.NAME_ALGO_MAP[name]
+                    conf_from_name = self.find_conf_for_name(name)
+                    if conf_from_name is not None:
+                        next_config = conf_from_name
                         algo = next_config.get("algo", network_module)
                     elif module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
@@ -491,6 +494,19 @@ class LycorisNetworkKohya(LycorisNetwork):
                 lora.lora_name not in names
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
+
+    def find_conf_for_name(
+        self,
+        name: str,
+    ) -> dict[str, Any]:
+        if name in self.NAME_ALGO_MAP.keys():
+            return self.NAME_ALGO_MAP[name]
+
+        for key, value in self.NAME_ALGO_MAP.items():
+            if re.match(key, name):
+                return value
+
+        return None
 
     def load_weights(self, file):
         if os.path.splitext(file)[1] == ".safetensors":
