@@ -74,4 +74,6 @@ QuantLinears = (
 
 @cache
 def log_bypass():
-    return logger.warning("Using bnb/quanto/optimum-quanto with LyCORIS will enable force-bypass mode.")
+    return logger.warning(
+        "Using bnb/quanto/optimum-quanto with LyCORIS will enable force-bypass mode."
+    )

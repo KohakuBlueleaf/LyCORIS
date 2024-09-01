@@ -112,7 +112,7 @@ class NamedSequential(nn.Module):
         super().__init__()
         self.name = name
         self.layers = nn.ModuleList(layers)
-    
+
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
@@ -140,7 +140,7 @@ class TestNetwork2(nn.Module):
         x = self.conv_layers(x)
         return x
 
-    def named_modules(self, memo=None, prefix=''):
+    def named_modules(self, memo=None, prefix=""):
         # Call the parent class named_modules method
         for layer_name, layer in super().named_modules(memo, prefix):
             yield layer_name, layer
@@ -208,19 +208,22 @@ class LycorisWrapperTests(unittest.TestCase):
                 "linear_layers.layers.[0-1]..*": {
                     "algo": "lokr",
                     "factor": 4,
-                    "linear_dim":1000000,
-                    "linear_alpha":1,
+                    "linear_dim": 1000000,
+                    "linear_alpha": 1,
                     "full_matrix": True,
                 },
                 "linear_layers.layers.2..*": {
-                    "algo": "lora", "dim": 8,
+                    "algo": "lora",
+                    "dim": 8,
                 },
                 "conv_layers.layers.0..*": {
-                   "algo": "locon", "dim": 8,
+                    "algo": "locon",
+                    "dim": 8,
                 },
                 "conv_layers.layers.[1-2]..*": {
-                    "algo": "glora", "dim": 128,
-                }
+                    "algo": "glora",
+                    "dim": 128,
+                },
             }
         }
 
@@ -242,28 +245,32 @@ class LycorisWrapperTests(unittest.TestCase):
         # Assertions to verify the correct modules were created and configured
         assert len(test_lycoris.loras) == 12
 
-        lora_names = sorted([ lora.lora_name for lora in test_lycoris.loras ])
-        expected = sorted([
-            "lycoris_linear_layers_layers_0_layer_norm",
-            "lycoris_linear_layers_layers_0_linear",
-            "lycoris_linear_layers_layers_1_layer_norm",
-            "lycoris_linear_layers_layers_1_linear",
-            "lycoris_linear_layers_layers_2_layer_norm",
-            "lycoris_linear_layers_layers_2_linear",
-            "lycoris_conv_layers_layers_0_layer_norm",
-            "lycoris_conv_layers_layers_0_conv",
-            "lycoris_conv_layers_layers_1_layer_norm",
-            "lycoris_conv_layers_layers_1_conv",
-            "lycoris_conv_layers_layers_2_layer_norm",
-            "lycoris_conv_layers_layers_2_conv",
-        ])
+        lora_names = sorted([lora.lora_name for lora in test_lycoris.loras])
+        expected = sorted(
+            [
+                "lycoris_linear_layers_layers_0_layer_norm",
+                "lycoris_linear_layers_layers_0_linear",
+                "lycoris_linear_layers_layers_1_layer_norm",
+                "lycoris_linear_layers_layers_1_linear",
+                "lycoris_linear_layers_layers_2_layer_norm",
+                "lycoris_linear_layers_layers_2_linear",
+                "lycoris_conv_layers_layers_0_layer_norm",
+                "lycoris_conv_layers_layers_0_conv",
+                "lycoris_conv_layers_layers_1_layer_norm",
+                "lycoris_conv_layers_layers_1_conv",
+                "lycoris_conv_layers_layers_2_layer_norm",
+                "lycoris_conv_layers_layers_2_conv",
+            ]
+        )
         self.assertEqual(lora_names, expected)
 
         for lora in test_lycoris.loras:
-            if "lycoris_linear_layers_layers_0" in lora.lora_name or \
-                "lycoris_linear_layers_layers_1" in lora.lora_name:
+            if (
+                "lycoris_linear_layers_layers_0" in lora.lora_name
+                or "lycoris_linear_layers_layers_1" in lora.lora_name
+            ):
                 self.assertEqual(lora.dim, 16)
-                if 'norm' in lora.lora_name:
+                if "norm" in lora.lora_name:
                     self.assertEqual(lora.__class__.__name__, "NormModule")
                 else:
                     self.assertEqual(lora.__class__.__name__, "LokrModule")
@@ -271,20 +278,22 @@ class LycorisWrapperTests(unittest.TestCase):
                     self.assertEqual(lora.full_matrix, True)
             elif "lycoris_linear_layers_layers_2" in lora.lora_name:
                 self.assertEqual(lora.dim, 16)
-                if 'norm' in lora.lora_name:
+                if "norm" in lora.lora_name:
                     self.assertEqual(lora.__class__.__name__, "NormModule")
                 else:
                     self.assertEqual(lora.__class__.__name__, "LoConModule")
             elif "lycoris_conv_layers_layers_0" in lora.lora_name:
                 self.assertEqual(lora.dim, 16)
-                if 'norm' in lora.lora_name:
+                if "norm" in lora.lora_name:
                     self.assertEqual(lora.__class__.__name__, "NormModule")
                 else:
                     self.assertEqual(lora.__class__.__name__, "LoConModule")
-            elif "lycoris_linear_layers_layers_1" in lora.lora_name or \
-                "lycoris_linear_layers_layers_2" in lora.lora_name:
+            elif (
+                "lycoris_linear_layers_layers_1" in lora.lora_name
+                or "lycoris_linear_layers_layers_2" in lora.lora_name
+            ):
                 self.assertEqual(lora.dim, 128)
-                if 'norm' in lora.lora_name:
+                if "norm" in lora.lora_name:
                     self.assertEqual(lora.__class__.__name__, "NormModule")
                 else:
                     self.assertEqual(lora.__class__.__name__, "GLoRAModule")

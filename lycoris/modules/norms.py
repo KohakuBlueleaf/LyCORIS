@@ -37,14 +37,14 @@ class NormModule(LycorisBaseModule):
         if self.module_type == "unknown":
             if not hasattr(org_module, "weight") or not hasattr(org_module, "_norm"):
                 warning_once(f"{type(org_module)} is not supported in Norm algo.")
-                self.not_supported=True
+                self.not_supported = True
                 return
             else:
                 self.dim = org_module.weight.numel()
                 self.not_supported = False
         elif self.module_type not in self.support_module:
             warning_once(f"{self.module_type} is not supported in Norm algo.")
-            self.not_supported=True
+            self.not_supported = True
             return
 
         self.w_norm = nn.Parameter(torch.zeros(self.dim))
