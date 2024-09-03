@@ -214,7 +214,8 @@ class LycorisNetwork(torch.nn.Module):
         for preset_key in preset.keys():
             if preset_key not in VALID_PRESET_KEYS:
                 raise KeyError(
-                    f'Unknown preset key "{preset_key}". Valid keys: {VALID_PRESET_KEYS}')
+                    f'Unknown preset key "{preset_key}". Valid keys: {VALID_PRESET_KEYS}'
+                )
 
         if "enable_conv" in preset:
             cls.ENABLE_CONV = preset["enable_conv"]
@@ -372,7 +373,7 @@ class LycorisNetwork(torch.nn.Module):
                         loras,
                         configs=next_config,
                     )
-                    loras = { **loras, **new_lora_map }
+                    loras = {**loras, **new_lora_map}
                     for lora_name, lora in zip(new_lora_names, new_loras):
                         if lora_name not in loras and lora_name not in current_lora_map:
                             loras[lora_name] = lora
@@ -435,7 +436,7 @@ class LycorisNetwork(torch.nn.Module):
                         lora_map,
                         configs=next_config,
                     )
-                    lora_map = { **lora_map, **_lora_map }
+                    lora_map = {**lora_map, **_lora_map}
                     loras.extend(lora_lst)
                     next_config = {}
                 elif name in target_replace_names or any(
@@ -541,9 +542,9 @@ class LycorisNetwork(torch.nn.Module):
         return state
 
     def apply_to(self):
-        '''
+        """
         Register to modules to the subclass so that torch sees them.
-        '''
+        """
         for lora in self.loras:
             lora.apply_to()
             self.add_module(lora.lora_name, lora)

@@ -13,23 +13,25 @@ from lycoris import create_lycoris, create_lycoris_from_weights, LycorisNetwork
 
 
 def reset_globals():
-    LycorisNetwork.apply_preset({
-        'enable_conv': True,
-        'target_module': [
-            "Linear",
-            "Conv1d",
-            "Conv2d",
-            "Conv3d",
-            "GroupNorm",
-            "LayerNorm",
-        ],
-        'target_name': [],
-        'lora_prefix': "lycoris",
-        'module_algo_map': {},
-        'name_algo_map': {},
-        'use_fnmatch': False,
-        'exclude_name': []
-    })
+    LycorisNetwork.apply_preset(
+        {
+            "enable_conv": True,
+            "target_module": [
+                "Linear",
+                "Conv1d",
+                "Conv2d",
+                "Conv3d",
+                "GroupNorm",
+                "LayerNorm",
+            ],
+            "target_name": [],
+            "lora_prefix": "lycoris",
+            "module_algo_map": {},
+            "name_algo_map": {},
+            "use_fnmatch": False,
+            "exclude_name": [],
+        }
+    )
 
 
 class TestNetwork(nn.Module):
@@ -216,7 +218,9 @@ class LycorisWrapperTests(unittest.TestCase):
 
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
-            self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
+            self.assertTrue(
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+            )
             self.assertTrue(torch.allclose(test_output, test_output_from_weights))
         finally:
             reset_globals()
@@ -344,20 +348,18 @@ class LycorisWrapperTests(unittest.TestCase):
             )
 
             # Apply the preset to the LycorisNetwork class
-            LycorisNetwork.apply_preset({
-                "target_module": [
-                    "FluxTransformerBlock",
-                    "FluxSingleTransformerBlock"
-                ],
-                "module_algo_map": {
-                    "Attention": {
-                        "factor": 16
+            LycorisNetwork.apply_preset(
+                {
+                    "target_module": [
+                        "FluxTransformerBlock",
+                        "FluxSingleTransformerBlock",
+                    ],
+                    "module_algo_map": {
+                        "Attention": {"factor": 16},
+                        "FeedForward": {"factor": 8},
                     },
-                    "FeedForward": {
-                        "factor": 8
-                    }
                 }
-            })
+            )
 
             # Create the test network and the Lycoris network wrapper
             test_lycoris: LycorisNetwork = create_lycoris(
@@ -371,38 +373,40 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris.apply_to()
 
             state_dict = test_lycoris.state_dict()
-            assert sorted([
-                'lycoris_transformer_blocks_0_norm1_linear.alpha',
-                'lycoris_transformer_blocks_0_norm1_linear.lokr_w1',
-                'lycoris_transformer_blocks_0_norm1_linear.lokr_w2',
-                'lycoris_transformer_blocks_0_norm1_context_linear.alpha',
-                'lycoris_transformer_blocks_0_norm1_context_linear.lokr_w1',
-                'lycoris_transformer_blocks_0_norm1_context_linear.lokr_w2',
-                'lycoris_transformer_blocks_1_norm1_linear.alpha',
-                'lycoris_transformer_blocks_1_norm1_linear.lokr_w1',
-                'lycoris_transformer_blocks_1_norm1_linear.lokr_w2',
-                'lycoris_transformer_blocks_1_norm1_context_linear.alpha',
-                'lycoris_transformer_blocks_1_norm1_context_linear.lokr_w1',
-                'lycoris_transformer_blocks_1_norm1_context_linear.lokr_w2',
-                'lycoris_single_transformer_blocks_0_norm_linear.alpha',
-                'lycoris_single_transformer_blocks_0_norm_linear.lokr_w1',
-                'lycoris_single_transformer_blocks_0_norm_linear.lokr_w2',
-                'lycoris_single_transformer_blocks_0_proj_mlp.alpha',
-                'lycoris_single_transformer_blocks_0_proj_mlp.lokr_w1',
-                'lycoris_single_transformer_blocks_0_proj_mlp.lokr_w2',
-                'lycoris_single_transformer_blocks_0_proj_out.alpha',
-                'lycoris_single_transformer_blocks_0_proj_out.lokr_w1',
-                'lycoris_single_transformer_blocks_0_proj_out.lokr_w2',
-                'lycoris_single_transformer_blocks_1_norm_linear.alpha',
-                'lycoris_single_transformer_blocks_1_norm_linear.lokr_w1',
-                'lycoris_single_transformer_blocks_1_norm_linear.lokr_w2',
-                'lycoris_single_transformer_blocks_1_proj_mlp.alpha',
-                'lycoris_single_transformer_blocks_1_proj_mlp.lokr_w1',
-                'lycoris_single_transformer_blocks_1_proj_mlp.lokr_w2',
-                'lycoris_single_transformer_blocks_1_proj_out.alpha',
-                'lycoris_single_transformer_blocks_1_proj_out.lokr_w1',
-                'lycoris_single_transformer_blocks_1_proj_out.lokr_w2',
-            ]) == sorted([k for k in state_dict.keys()])
+            assert sorted(
+                [
+                    "lycoris_transformer_blocks_0_norm1_linear.alpha",
+                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w1",
+                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w2",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.alpha",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w1",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w2",
+                    "lycoris_transformer_blocks_1_norm1_linear.alpha",
+                    "lycoris_transformer_blocks_1_norm1_linear.lokr_w1",
+                    "lycoris_transformer_blocks_1_norm1_linear.lokr_w2",
+                    "lycoris_transformer_blocks_1_norm1_context_linear.alpha",
+                    "lycoris_transformer_blocks_1_norm1_context_linear.lokr_w1",
+                    "lycoris_transformer_blocks_1_norm1_context_linear.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_norm_linear.alpha",
+                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.alpha",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_proj_out.alpha",
+                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w2",
+                    "lycoris_single_transformer_blocks_1_norm_linear.alpha",
+                    "lycoris_single_transformer_blocks_1_norm_linear.lokr_w1",
+                    "lycoris_single_transformer_blocks_1_norm_linear.lokr_w2",
+                    "lycoris_single_transformer_blocks_1_proj_mlp.alpha",
+                    "lycoris_single_transformer_blocks_1_proj_mlp.lokr_w1",
+                    "lycoris_single_transformer_blocks_1_proj_mlp.lokr_w2",
+                    "lycoris_single_transformer_blocks_1_proj_out.alpha",
+                    "lycoris_single_transformer_blocks_1_proj_out.lokr_w1",
+                    "lycoris_single_transformer_blocks_1_proj_out.lokr_w2",
+                ]
+            ) == sorted([k for k in state_dict.keys()])
 
             state_dict = test_lycoris.state_dict()
             test_lycoris_from_weights: LycorisNetwork
@@ -412,13 +416,17 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris_from_weights.apply_to()
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
-            self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
-            for lora, lora_loaded in zip(test_lycoris.loras, test_lycoris_from_weights.loras):
+            self.assertTrue(
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+            )
+            for lora, lora_loaded in zip(
+                test_lycoris.loras, test_lycoris_from_weights.loras
+            ):
                 lora_sd = lora.state_dict()
                 lora_loaded_sd = lora_loaded.state_dict()
-                assert torch.equal(lora_sd['alpha'], lora_loaded_sd['alpha'])
-                assert torch.equal(lora_sd['lokr_w1'], lora_loaded_sd['lokr_w1'])
-                assert torch.equal(lora_sd['lokr_w2'], lora_loaded_sd['lokr_w2'])
+                assert torch.equal(lora_sd["alpha"], lora_loaded_sd["alpha"])
+                assert torch.equal(lora_sd["lokr_w1"], lora_loaded_sd["lokr_w1"])
+                assert torch.equal(lora_sd["lokr_w2"], lora_loaded_sd["lokr_w2"])
         finally:
             reset_globals()
 
@@ -439,13 +447,9 @@ class LycorisWrapperTests(unittest.TestCase):
             )
 
             # Apply the preset to the LycorisNetwork class
-            LycorisNetwork.apply_preset({
-                "module_algo_map": {
-                    "FluxTransformer2DModel": {
-                        "factor": 16
-                    }
-                }
-            })
+            LycorisNetwork.apply_preset(
+                {"module_algo_map": {"FluxTransformer2DModel": {"factor": 16}}}
+            )
 
             # Create the test network and the Lycoris network wrapper
             test_lycoris: LycorisNetwork = create_lycoris(
@@ -459,98 +463,100 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris.apply_to()
 
             state_dict = test_lycoris.state_dict()
-            assert sorted([
-                "lycoris_time_text_embed_timestep_embedder_linear_1.alpha",
-                "lycoris_time_text_embed_timestep_embedder_linear_1.lokr_w1",
-                "lycoris_time_text_embed_timestep_embedder_linear_1.lokr_w2",
-                "lycoris_time_text_embed_timestep_embedder_linear_2.alpha",
-                "lycoris_time_text_embed_timestep_embedder_linear_2.lokr_w1",
-                "lycoris_time_text_embed_timestep_embedder_linear_2.lokr_w2",
-                "lycoris_time_text_embed_guidance_embedder_linear_1.alpha",
-                "lycoris_time_text_embed_guidance_embedder_linear_1.lokr_w1",
-                "lycoris_time_text_embed_guidance_embedder_linear_1.lokr_w2",
-                "lycoris_time_text_embed_guidance_embedder_linear_2.alpha",
-                "lycoris_time_text_embed_guidance_embedder_linear_2.lokr_w1",
-                "lycoris_time_text_embed_guidance_embedder_linear_2.lokr_w2",
-                "lycoris_time_text_embed_text_embedder_linear_1.alpha",
-                "lycoris_time_text_embed_text_embedder_linear_1.lokr_w1",
-                "lycoris_time_text_embed_text_embedder_linear_1.lokr_w2",
-                "lycoris_time_text_embed_text_embedder_linear_2.alpha",
-                "lycoris_time_text_embed_text_embedder_linear_2.lokr_w1",
-                "lycoris_time_text_embed_text_embedder_linear_2.lokr_w2",
-                "lycoris_context_embedder.alpha",
-                "lycoris_context_embedder.lokr_w1",
-                "lycoris_context_embedder.lokr_w2",
-                "lycoris_x_embedder.alpha",
-                "lycoris_x_embedder.lokr_w1",
-                "lycoris_x_embedder.lokr_w2",
-                "lycoris_transformer_blocks_0_norm1_linear.alpha",
-                "lycoris_transformer_blocks_0_norm1_linear.lokr_w1",
-                "lycoris_transformer_blocks_0_norm1_linear.lokr_w2",
-                "lycoris_transformer_blocks_0_norm1_context_linear.alpha",
-                "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w1",
-                "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_to_q.alpha",
-                "lycoris_transformer_blocks_0_attn_to_q.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_to_q.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_to_k.alpha",
-                "lycoris_transformer_blocks_0_attn_to_k.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_to_k.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_to_v.alpha",
-                "lycoris_transformer_blocks_0_attn_to_v.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_to_v.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_add_k_proj.alpha",
-                "lycoris_transformer_blocks_0_attn_add_k_proj.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_add_k_proj.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_add_v_proj.alpha",
-                "lycoris_transformer_blocks_0_attn_add_v_proj.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_add_v_proj.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_add_q_proj.alpha",
-                "lycoris_transformer_blocks_0_attn_add_q_proj.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_add_q_proj.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_to_out_0.alpha",
-                "lycoris_transformer_blocks_0_attn_to_out_0.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_to_out_0.lokr_w2",
-                "lycoris_transformer_blocks_0_attn_to_add_out.alpha",
-                "lycoris_transformer_blocks_0_attn_to_add_out.lokr_w1",
-                "lycoris_transformer_blocks_0_attn_to_add_out.lokr_w2",
-                "lycoris_transformer_blocks_0_ff_net_0_proj.alpha",
-                "lycoris_transformer_blocks_0_ff_net_0_proj.lokr_w1",
-                "lycoris_transformer_blocks_0_ff_net_0_proj.lokr_w2",
-                "lycoris_transformer_blocks_0_ff_net_2.alpha",
-                "lycoris_transformer_blocks_0_ff_net_2.lokr_w1",
-                "lycoris_transformer_blocks_0_ff_net_2.lokr_w2",
-                "lycoris_transformer_blocks_0_ff_context_net_0_proj.alpha",
-                "lycoris_transformer_blocks_0_ff_context_net_0_proj.lokr_w1",
-                "lycoris_transformer_blocks_0_ff_context_net_0_proj.lokr_w2",
-                "lycoris_transformer_blocks_0_ff_context_net_2.alpha",
-                "lycoris_transformer_blocks_0_ff_context_net_2.lokr_w1",
-                "lycoris_transformer_blocks_0_ff_context_net_2.lokr_w2",
-                "lycoris_single_transformer_blocks_0_norm_linear.alpha",
-                "lycoris_single_transformer_blocks_0_norm_linear.lokr_w1",
-                "lycoris_single_transformer_blocks_0_norm_linear.lokr_w2",
-                "lycoris_single_transformer_blocks_0_proj_mlp.alpha",
-                "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w1",
-                "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w2",
-                "lycoris_single_transformer_blocks_0_proj_out.alpha",
-                "lycoris_single_transformer_blocks_0_proj_out.lokr_w1",
-                "lycoris_single_transformer_blocks_0_proj_out.lokr_w2",
-                "lycoris_single_transformer_blocks_0_attn_to_q.alpha",
-                "lycoris_single_transformer_blocks_0_attn_to_q.lokr_w1",
-                "lycoris_single_transformer_blocks_0_attn_to_q.lokr_w2",
-                "lycoris_single_transformer_blocks_0_attn_to_k.alpha",
-                "lycoris_single_transformer_blocks_0_attn_to_k.lokr_w1",
-                "lycoris_single_transformer_blocks_0_attn_to_k.lokr_w2",
-                "lycoris_single_transformer_blocks_0_attn_to_v.alpha",
-                "lycoris_single_transformer_blocks_0_attn_to_v.lokr_w1",
-                "lycoris_single_transformer_blocks_0_attn_to_v.lokr_w2",
-                "lycoris_norm_out_linear.alpha",
-                "lycoris_norm_out_linear.lokr_w1",
-                "lycoris_norm_out_linear.lokr_w2",
-                "lycoris_proj_out.alpha",
-                "lycoris_proj_out.lokr_w1",
-                "lycoris_proj_out.lokr_w2"
-            ]) == sorted([k for k in state_dict.keys()])
+            assert sorted(
+                [
+                    "lycoris_time_text_embed_timestep_embedder_linear_1.alpha",
+                    "lycoris_time_text_embed_timestep_embedder_linear_1.lokr_w1",
+                    "lycoris_time_text_embed_timestep_embedder_linear_1.lokr_w2",
+                    "lycoris_time_text_embed_timestep_embedder_linear_2.alpha",
+                    "lycoris_time_text_embed_timestep_embedder_linear_2.lokr_w1",
+                    "lycoris_time_text_embed_timestep_embedder_linear_2.lokr_w2",
+                    "lycoris_time_text_embed_guidance_embedder_linear_1.alpha",
+                    "lycoris_time_text_embed_guidance_embedder_linear_1.lokr_w1",
+                    "lycoris_time_text_embed_guidance_embedder_linear_1.lokr_w2",
+                    "lycoris_time_text_embed_guidance_embedder_linear_2.alpha",
+                    "lycoris_time_text_embed_guidance_embedder_linear_2.lokr_w1",
+                    "lycoris_time_text_embed_guidance_embedder_linear_2.lokr_w2",
+                    "lycoris_time_text_embed_text_embedder_linear_1.alpha",
+                    "lycoris_time_text_embed_text_embedder_linear_1.lokr_w1",
+                    "lycoris_time_text_embed_text_embedder_linear_1.lokr_w2",
+                    "lycoris_time_text_embed_text_embedder_linear_2.alpha",
+                    "lycoris_time_text_embed_text_embedder_linear_2.lokr_w1",
+                    "lycoris_time_text_embed_text_embedder_linear_2.lokr_w2",
+                    "lycoris_context_embedder.alpha",
+                    "lycoris_context_embedder.lokr_w1",
+                    "lycoris_context_embedder.lokr_w2",
+                    "lycoris_x_embedder.alpha",
+                    "lycoris_x_embedder.lokr_w1",
+                    "lycoris_x_embedder.lokr_w2",
+                    "lycoris_transformer_blocks_0_norm1_linear.alpha",
+                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w1",
+                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w2",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.alpha",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w1",
+                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_to_q.alpha",
+                    "lycoris_transformer_blocks_0_attn_to_q.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_to_q.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_to_k.alpha",
+                    "lycoris_transformer_blocks_0_attn_to_k.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_to_k.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_to_v.alpha",
+                    "lycoris_transformer_blocks_0_attn_to_v.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_to_v.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_add_k_proj.alpha",
+                    "lycoris_transformer_blocks_0_attn_add_k_proj.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_add_k_proj.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_add_v_proj.alpha",
+                    "lycoris_transformer_blocks_0_attn_add_v_proj.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_add_v_proj.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_add_q_proj.alpha",
+                    "lycoris_transformer_blocks_0_attn_add_q_proj.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_add_q_proj.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_to_out_0.alpha",
+                    "lycoris_transformer_blocks_0_attn_to_out_0.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_to_out_0.lokr_w2",
+                    "lycoris_transformer_blocks_0_attn_to_add_out.alpha",
+                    "lycoris_transformer_blocks_0_attn_to_add_out.lokr_w1",
+                    "lycoris_transformer_blocks_0_attn_to_add_out.lokr_w2",
+                    "lycoris_transformer_blocks_0_ff_net_0_proj.alpha",
+                    "lycoris_transformer_blocks_0_ff_net_0_proj.lokr_w1",
+                    "lycoris_transformer_blocks_0_ff_net_0_proj.lokr_w2",
+                    "lycoris_transformer_blocks_0_ff_net_2.alpha",
+                    "lycoris_transformer_blocks_0_ff_net_2.lokr_w1",
+                    "lycoris_transformer_blocks_0_ff_net_2.lokr_w2",
+                    "lycoris_transformer_blocks_0_ff_context_net_0_proj.alpha",
+                    "lycoris_transformer_blocks_0_ff_context_net_0_proj.lokr_w1",
+                    "lycoris_transformer_blocks_0_ff_context_net_0_proj.lokr_w2",
+                    "lycoris_transformer_blocks_0_ff_context_net_2.alpha",
+                    "lycoris_transformer_blocks_0_ff_context_net_2.lokr_w1",
+                    "lycoris_transformer_blocks_0_ff_context_net_2.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_norm_linear.alpha",
+                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.alpha",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_proj_out.alpha",
+                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_attn_to_q.alpha",
+                    "lycoris_single_transformer_blocks_0_attn_to_q.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_attn_to_q.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_attn_to_k.alpha",
+                    "lycoris_single_transformer_blocks_0_attn_to_k.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_attn_to_k.lokr_w2",
+                    "lycoris_single_transformer_blocks_0_attn_to_v.alpha",
+                    "lycoris_single_transformer_blocks_0_attn_to_v.lokr_w1",
+                    "lycoris_single_transformer_blocks_0_attn_to_v.lokr_w2",
+                    "lycoris_norm_out_linear.alpha",
+                    "lycoris_norm_out_linear.lokr_w1",
+                    "lycoris_norm_out_linear.lokr_w2",
+                    "lycoris_proj_out.alpha",
+                    "lycoris_proj_out.lokr_w1",
+                    "lycoris_proj_out.lokr_w2",
+                ]
+            ) == sorted([k for k in state_dict.keys()])
 
             state_dict = test_lycoris.state_dict()
             test_lycoris_from_weights: LycorisNetwork
@@ -560,13 +566,17 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris_from_weights.apply_to()
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
-            self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
-            for lora, lora_loaded in zip(test_lycoris.loras, test_lycoris_from_weights.loras):
+            self.assertTrue(
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+            )
+            for lora, lora_loaded in zip(
+                test_lycoris.loras, test_lycoris_from_weights.loras
+            ):
                 lora_sd = lora.state_dict()
                 lora_loaded_sd = lora_loaded.state_dict()
-                assert torch.equal(lora_sd['alpha'], lora_loaded_sd['alpha'])
-                assert torch.equal(lora_sd['lokr_w1'], lora_loaded_sd['lokr_w1'])
-                assert torch.equal(lora_sd['lokr_w2'], lora_loaded_sd['lokr_w2'])
+                assert torch.equal(lora_sd["alpha"], lora_loaded_sd["alpha"])
+                assert torch.equal(lora_sd["lokr_w1"], lora_loaded_sd["lokr_w1"])
+                assert torch.equal(lora_sd["lokr_w2"], lora_loaded_sd["lokr_w2"])
         finally:
             reset_globals()
 
@@ -587,27 +597,29 @@ class LycorisWrapperTests(unittest.TestCase):
             )
 
             # Apply the preset to the LycorisNetwork class
-            LycorisNetwork.apply_preset({
-                "target_module": [
-                    "FluxTransformerBlock",
-                    "FluxSingleTransformerBlock"
-                ],
-                "name_algo_map": {
-                    "transformer_blocks.[2-3]*": {
-                        "algo": "lokr",
-                        "factor": 8,
-                        "linear_alpha": 1,
-                        "full_matrix": True
+            LycorisNetwork.apply_preset(
+                {
+                    "target_module": [
+                        "FluxTransformerBlock",
+                        "FluxSingleTransformerBlock",
+                    ],
+                    "name_algo_map": {
+                        "transformer_blocks.[2-3]*": {
+                            "algo": "lokr",
+                            "factor": 8,
+                            "linear_alpha": 1,
+                            "full_matrix": True,
+                        },
+                        "single_transformer_blocks.[1-3]*": {
+                            "algo": "lokr",
+                            "factor": 12,
+                            "linear_alpha": 1,
+                            "full_matrix": True,
+                        },
                     },
-                    "single_transformer_blocks.[1-3]*": {
-                        "algo": "lokr",
-                        "factor": 12,
-                        "linear_alpha": 1,
-                        "full_matrix": True
-                    },
-                },
-                'use_fnmatch': True,
-            })
+                    "use_fnmatch": True,
+                }
+            )
 
             # Create the test network and the Lycoris network wrapper
             test_lycoris: LycorisNetwork = create_lycoris(
@@ -621,7 +633,7 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris.apply_to()
 
             def check_dims(lora, factor):
-                lokr_w2_shape = lora.state_dict()['lokr_w2'].shape
+                lokr_w2_shape = lora.state_dict()["lokr_w2"].shape
                 return lora.shape[0] // lokr_w2_shape[0] == factor
 
             for lora in test_lycoris.loras:
@@ -635,9 +647,7 @@ class LycorisWrapperTests(unittest.TestCase):
                     or "lycoris_transformer_blocks_3" in lora.lora_name
                 ):
                     self.assertTrue(check_dims(lora, 8))
-                elif (
-                    "lycoris_single_transformer_blocks_0" in lora.lora_name
-                ):
+                elif "lycoris_single_transformer_blocks_0" in lora.lora_name:
                     self.assertTrue(check_dims(lora, 16))
                 elif (
                     "lycoris_single_transformer_blocks_1" in lora.lora_name
@@ -653,13 +663,17 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris_from_weights.apply_to()
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
-            self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
-            for lora, lora_loaded in zip(test_lycoris.loras, test_lycoris_from_weights.loras):
+            self.assertTrue(
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+            )
+            for lora, lora_loaded in zip(
+                test_lycoris.loras, test_lycoris_from_weights.loras
+            ):
                 lora_sd = lora.state_dict()
                 lora_loaded_sd = lora_loaded.state_dict()
-                assert torch.equal(lora_sd['alpha'], lora_loaded_sd['alpha'])
-                assert torch.equal(lora_sd['lokr_w1'], lora_loaded_sd['lokr_w1'])
-                assert torch.equal(lora_sd['lokr_w2'], lora_loaded_sd['lokr_w2'])
+                assert torch.equal(lora_sd["alpha"], lora_loaded_sd["alpha"])
+                assert torch.equal(lora_sd["lokr_w1"], lora_loaded_sd["lokr_w1"])
+                assert torch.equal(lora_sd["lokr_w2"], lora_loaded_sd["lokr_w2"])
 
         finally:
             reset_globals()
@@ -681,31 +695,33 @@ class LycorisWrapperTests(unittest.TestCase):
             )
 
             # Apply the preset to the LycorisNetwork class
-            LycorisNetwork.apply_preset({
-                "target_module": [
-                    "FluxTransformerBlock",
-                    "FluxSingleTransformerBlock"
-                ],
-                "name_algo_map": {
-                    "transformer_blocks.[2-3]*": {
-                        "algo": "lokr",
-                        "factor": 8,
-                        "linear_alpha": 1,
-                        "full_matrix": True
+            LycorisNetwork.apply_preset(
+                {
+                    "target_module": [
+                        "FluxTransformerBlock",
+                        "FluxSingleTransformerBlock",
+                    ],
+                    "name_algo_map": {
+                        "transformer_blocks.[2-3]*": {
+                            "algo": "lokr",
+                            "factor": 8,
+                            "linear_alpha": 1,
+                            "full_matrix": True,
+                        },
+                        "single_transformer_blocks.[1-3]*": {
+                            "algo": "lokr",
+                            "factor": 12,
+                            "linear_alpha": 1,
+                            "full_matrix": True,
+                        },
                     },
-                    "single_transformer_blocks.[1-3]*": {
-                        "algo": "lokr",
-                        "factor": 12,
-                        "linear_alpha": 1,
-                        "full_matrix": True
-                    },
-                },
-                'use_fnmatch': True,
-                'exclude_name': [
-                    'transformer_blocks.1*',
-                    'single_transformer_blocks.[2-3]*',
-                ]
-            })
+                    "use_fnmatch": True,
+                    "exclude_name": [
+                        "transformer_blocks.1*",
+                        "single_transformer_blocks.[2-3]*",
+                    ],
+                }
+            )
 
             # Create the test network and the Lycoris network wrapper
             test_lycoris: LycorisNetwork = create_lycoris(
@@ -719,23 +735,21 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris.apply_to()
 
             def check_dims(lora, factor):
-                lokr_w2_shape = lora.state_dict()['lokr_w2'].shape
+                lokr_w2_shape = lora.state_dict()["lokr_w2"].shape
                 return lora.shape[0] // lokr_w2_shape[0] == factor
 
             for lora in test_lycoris.loras:
                 assert "lycoris_transformer_blocks_1" not in lora.lora_name
                 assert "lycoris_single_transformer_blocks_2" not in lora.lora_name
                 assert "lycoris_single_transformer_blocks_3" not in lora.lora_name
-                if  "lycoris_transformer_blocks_0" in lora.lora_name:
+                if "lycoris_transformer_blocks_0" in lora.lora_name:
                     self.assertTrue(check_dims(lora, 16))
                 elif (
                     "lycoris_transformer_blocks_2" in lora.lora_name
                     or "lycoris_transformer_blocks_3" in lora.lora_name
                 ):
                     self.assertTrue(check_dims(lora, 8))
-                elif (
-                    "lycoris_single_transformer_blocks_0" in lora.lora_name
-                ):
+                elif "lycoris_single_transformer_blocks_0" in lora.lora_name:
                     self.assertTrue(check_dims(lora, 16))
                 elif "lycoris_single_transformer_blocks_1" in lora.lora_name:
                     self.assertTrue(check_dims(lora, 12))
@@ -747,13 +761,17 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris_from_weights.apply_to()
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
-            self.assertTrue(len(test_lycoris.loras) == len(test_lycoris_from_weights.loras))
-            for lora, lora_loaded in zip(test_lycoris.loras, test_lycoris_from_weights.loras):
+            self.assertTrue(
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+            )
+            for lora, lora_loaded in zip(
+                test_lycoris.loras, test_lycoris_from_weights.loras
+            ):
                 lora_sd = lora.state_dict()
                 lora_loaded_sd = lora_loaded.state_dict()
-                assert torch.equal(lora_sd['alpha'], lora_loaded_sd['alpha'])
-                assert torch.equal(lora_sd['lokr_w1'], lora_loaded_sd['lokr_w1'])
-                assert torch.equal(lora_sd['lokr_w2'], lora_loaded_sd['lokr_w2'])
+                assert torch.equal(lora_sd["alpha"], lora_loaded_sd["alpha"])
+                assert torch.equal(lora_sd["lokr_w1"], lora_loaded_sd["lokr_w1"])
+                assert torch.equal(lora_sd["lokr_w2"], lora_loaded_sd["lokr_w2"])
 
         finally:
             reset_globals()
