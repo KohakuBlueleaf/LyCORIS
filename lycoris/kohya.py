@@ -30,7 +30,7 @@ from .logging import logger
 def create_network(
     multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs
 ):
-    for key, value in kwargs.items():
+    for key, value in list(kwargs.items()):
         if key in deprecated_arg_dict:
             logger.warning(
                 f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",

@@ -62,7 +62,7 @@ deprecated_arg_dict = {
 
 
 def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwargs):
-    for key, value in kwargs.items():
+    for key, value in list(kwargs.items()):
         if key in deprecated_arg_dict:
             logger.warning(
                 f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
