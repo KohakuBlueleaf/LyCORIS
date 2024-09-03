@@ -2,6 +2,7 @@
 data/
 
 # test
+models/
 test_model/
 huggingface/
 logs/

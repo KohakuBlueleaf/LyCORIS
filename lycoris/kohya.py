@@ -1,6 +1,8 @@
 import os
+import fnmatch
 import re
 import logging
+
 from typing import Any, List
 
 import torch
@@ -234,6 +236,7 @@ class LycorisNetworkKohya(LycorisNetwork):
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
     MODULE_ALGO_MAP = {}
     NAME_ALGO_MAP = {}
+    USE_FNMATCH = False
 
     @classmethod
     def apply_preset(cls, preset):
@@ -253,6 +256,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             cls.MODULE_ALGO_MAP = preset["module_algo_map"]
         if "name_algo_map" in preset:
             cls.NAME_ALGO_MAP = preset["name_algo_map"]
+        if "use_fnmatch" in preset:
+            cls.USE_FNMATCH = preset["use_fnmatch"]
         return cls
 
     def __init__(
@@ -405,7 +410,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules and not any(
-                    re.match(t, name) for t in target_replace_names
+                    self.match_fn(t, name) for t in target_replace_names
                 ):
                     if module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
@@ -419,7 +424,7 @@ class LycorisNetworkKohya(LycorisNetwork):
                     )
                     next_config = {}
                 elif name in target_replace_names or any(
-                    re.match(t, name) for t in target_replace_names
+                    self.match_fn(t, name) for t in target_replace_names
                 ):
                     conf_from_name = self.find_conf_for_name(name)
                     if conf_from_name is not None:
@@ -495,6 +500,11 @@ class LycorisNetworkKohya(LycorisNetwork):
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
 
+    def match_fn(self, pattern: str, name: str) -> bool:
+        if self.USE_FNMATCH:
+            return fnmatch.fnmatch(name, pattern)
+        return re.match(pattern, name)
+
     def find_conf_for_name(
         self,
         name: str,
@@ -503,7 +513,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             return self.NAME_ALGO_MAP[name]
 
         for key, value in self.NAME_ALGO_MAP.items():
-            if re.match(key, name):
+            if self.match_fn(key, name):
                 return value
 
         return None
