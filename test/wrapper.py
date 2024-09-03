@@ -331,7 +331,7 @@ class LycorisWrapperTests(unittest.TestCase):
         finally:
             reset_globals()
 
-    def test_diffusers_models_and_state_dicts_single_blocks(self):
+    def test_diffusers_models_and_state_dicts_target_module_and_module_algo_map(self):
         try:
             transformer = FluxTransformer2DModel.from_config(
                 {
@@ -340,8 +340,8 @@ class LycorisWrapperTests(unittest.TestCase):
                     "in_channels": 64,
                     "joint_attention_dim": 4096,
                     "num_attention_heads": 24,
-                    "num_layers": 2,
-                    "num_single_layers": 2,
+                    "num_layers": 4,
+                    "num_single_layers": 4,
                     "patch_size": 1,
                     "pooled_projection_dim": 768,
                 }
@@ -355,8 +355,8 @@ class LycorisWrapperTests(unittest.TestCase):
                         "FluxSingleTransformerBlock",
                     ],
                     "module_algo_map": {
-                        "Attention": {"factor": 16},
-                        "FeedForward": {"factor": 8},
+                        "Attention": {"factor": 6},
+                        "FeedForward": {"factor": 4},
                     },
                 }
             )
@@ -368,50 +368,73 @@ class LycorisWrapperTests(unittest.TestCase):
                 multiplier=1.0,
                 linear_dim=10000,
                 linear_alpha=1,
-                factor=16,
+                factor=8,
+                full_matrix=True,
             )
             test_lycoris.apply_to()
 
-            state_dict = test_lycoris.state_dict()
-            assert sorted(
-                [
-                    "lycoris_transformer_blocks_0_norm1_linear.alpha",
-                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w1",
-                    "lycoris_transformer_blocks_0_norm1_linear.lokr_w2",
-                    "lycoris_transformer_blocks_0_norm1_context_linear.alpha",
-                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w1",
-                    "lycoris_transformer_blocks_0_norm1_context_linear.lokr_w2",
-                    "lycoris_transformer_blocks_1_norm1_linear.alpha",
-                    "lycoris_transformer_blocks_1_norm1_linear.lokr_w1",
-                    "lycoris_transformer_blocks_1_norm1_linear.lokr_w2",
-                    "lycoris_transformer_blocks_1_norm1_context_linear.alpha",
-                    "lycoris_transformer_blocks_1_norm1_context_linear.lokr_w1",
-                    "lycoris_transformer_blocks_1_norm1_context_linear.lokr_w2",
-                    "lycoris_single_transformer_blocks_0_norm_linear.alpha",
-                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w1",
-                    "lycoris_single_transformer_blocks_0_norm_linear.lokr_w2",
-                    "lycoris_single_transformer_blocks_0_proj_mlp.alpha",
-                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w1",
-                    "lycoris_single_transformer_blocks_0_proj_mlp.lokr_w2",
-                    "lycoris_single_transformer_blocks_0_proj_out.alpha",
-                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w1",
-                    "lycoris_single_transformer_blocks_0_proj_out.lokr_w2",
-                    "lycoris_single_transformer_blocks_1_norm_linear.alpha",
-                    "lycoris_single_transformer_blocks_1_norm_linear.lokr_w1",
-                    "lycoris_single_transformer_blocks_1_norm_linear.lokr_w2",
-                    "lycoris_single_transformer_blocks_1_proj_mlp.alpha",
-                    "lycoris_single_transformer_blocks_1_proj_mlp.lokr_w1",
-                    "lycoris_single_transformer_blocks_1_proj_mlp.lokr_w2",
-                    "lycoris_single_transformer_blocks_1_proj_out.alpha",
-                    "lycoris_single_transformer_blocks_1_proj_out.lokr_w1",
-                    "lycoris_single_transformer_blocks_1_proj_out.lokr_w2",
-                ]
-            ) == sorted([k for k in state_dict.keys()])
+            def check_dims(lora, factor):
+                lokr_w2_shape = lora.state_dict()["lokr_w2"].shape
+                return lora.shape[0] // lokr_w2_shape[0] == factor
 
-            state_dict = test_lycoris.state_dict()
+            first_block = list(
+                filter(
+                    lambda lor: "lycoris_transformer_blocks_0_" in lor.lora_name,
+                    test_lycoris.loras,
+                )
+            )
+            assert sorted([lor.lora_name for lor in first_block]) == sorted(
+                [
+                    "lycoris_transformer_blocks_0_norm1_linear",
+                    "lycoris_transformer_blocks_0_norm1_context_linear",
+                    "lycoris_transformer_blocks_0_attn_to_q",
+                    "lycoris_transformer_blocks_0_attn_to_k",
+                    "lycoris_transformer_blocks_0_attn_to_v",
+                    "lycoris_transformer_blocks_0_attn_add_k_proj",
+                    "lycoris_transformer_blocks_0_attn_add_v_proj",
+                    "lycoris_transformer_blocks_0_attn_add_q_proj",
+                    "lycoris_transformer_blocks_0_attn_to_out_0",
+                    "lycoris_transformer_blocks_0_attn_to_add_out",
+                    "lycoris_transformer_blocks_0_ff_net_0_proj",
+                    "lycoris_transformer_blocks_0_ff_net_2",
+                    "lycoris_transformer_blocks_0_ff_context_net_0_proj",
+                    "lycoris_transformer_blocks_0_ff_context_net_2",
+                ]
+            )
+            first_single_block = list(
+                filter(
+                    lambda lor: "lycoris_single_transformer_blocks_0_" in lor.lora_name,
+                    test_lycoris.loras,
+                )
+            )
+            assert sorted([lor.lora_name for lor in first_single_block]) == sorted(
+                [
+                    "lycoris_single_transformer_blocks_0_norm_linear",
+                    "lycoris_single_transformer_blocks_0_proj_mlp",
+                    "lycoris_single_transformer_blocks_0_proj_out",
+                    "lycoris_single_transformer_blocks_0_attn_to_q",
+                    "lycoris_single_transformer_blocks_0_attn_to_k",
+                    "lycoris_single_transformer_blocks_0_attn_to_v",
+                ]
+            )
+
+            for lora in test_lycoris.loras:
+                if "_norm1_" in lora.lora_name:
+                    self.assertTrue(check_dims(lora, 8))
+                elif "_norm_" in lora.lora_name:
+                    self.assertTrue(check_dims(lora, 8))
+                elif "_proj_" in lora.lora_name:
+                    self.assertTrue(check_dims(lora, 8))
+                elif "_attn_" in lora.lora_name:
+                    self.assertTrue(check_dims(lora, 6))
+                elif "_ff_" in lora.lora_name:
+                    self.assertTrue(check_dims(lora, 4))
+                else:
+                    raise Exception(f"Unknown layer {lora.lora_name}")
+
             test_lycoris_from_weights: LycorisNetwork
             test_lycoris_from_weights, _ = create_lycoris_from_weights(
-                1, None, transformer, state_dict
+                1, None, transformer, test_lycoris.state_dict()
             )
             test_lycoris_from_weights.apply_to()
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
@@ -427,6 +450,7 @@ class LycorisWrapperTests(unittest.TestCase):
                 assert torch.equal(lora_sd["alpha"], lora_loaded_sd["alpha"])
                 assert torch.equal(lora_sd["lokr_w1"], lora_loaded_sd["lokr_w1"])
                 assert torch.equal(lora_sd["lokr_w2"], lora_loaded_sd["lokr_w2"])
+
         finally:
             reset_globals()
 
