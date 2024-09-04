@@ -377,6 +377,7 @@ class LycorisNetwork(torch.nn.Module):
                     for lora_name, lora in zip(new_lora_names, new_loras):
                         if lora_name not in loras and lora_name not in current_lora_map:
                             loras[lora_name] = lora
+                        if lora_name not in lora_names:
                             lora_names.append(lora_name)
                     continue
 
