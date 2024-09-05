@@ -213,7 +213,7 @@ class LokrModule(LycorisBaseModule):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = torch.tensor(1.0)
+            self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
 
         if self.use_w2:
             if use_scalar:
@@ -498,7 +498,7 @@ class LokrModule(LycorisBaseModule):
             hc = hc.transpose(-1, -2)
             h = hc.reshape(*hc.shape[:-2], -1)
 
-        return self.drop(h * scale)
+        return self.drop(h * scale * self.scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)

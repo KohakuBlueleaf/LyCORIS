@@ -130,7 +130,7 @@ class LohaModule(LycorisBaseModule):
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = torch.tensor(1.0)
+            self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
         # Need more experiments on init method
         if self.tucker:
             torch.nn.init.normal_(self.hada_t1, std=0.1)
