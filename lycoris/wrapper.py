@@ -143,7 +143,7 @@ def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwarg
     return network
 
 
-def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwargs):
+def create_lycoris_from_weights(multiplier, file, module, device="cpu", weights_sd=None, **kwargs):
     if weights_sd is None:
         if os.path.splitext(file)[1] == ".safetensors":
             from safetensors.torch import load_file
@@ -152,6 +152,8 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         else:
             weights_sd = torch.load(file, map_location="cpu")
 
+    device = module.device if hasattr(module, 'device') else device
+    
     # get dim/alpha mapping
     loras = {}
     for key in weights_sd:
@@ -187,6 +189,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
     logger.info(f"{len(network.loras)} Modules Loaded")
 
     for lora in network.loras:
+        lora.to(device)
         lora.multiplier = multiplier
 
     return network, weights_sd
