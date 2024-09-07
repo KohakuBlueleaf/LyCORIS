@@ -135,6 +135,9 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
         else:
             weights_sd = torch.load(file, map_location="cpu")
 
+    device = module.device if hasattr(module, 'device') else device
+    weights_sd = {k: v.to(device) for k, v in weights_sd.items()}
+    
     # get dim/alpha mapping
     loras = {}
     for key in weights_sd:
@@ -170,6 +173,7 @@ def create_lycoris_from_weights(multiplier, file, module, weights_sd=None, **kwa
     logger.info(f"{len(network.loras)} Modules Loaded")
 
     for lora in network.loras:
+        lora.to(device)
         lora.multiplier = multiplier
 
     return network, weights_sd
