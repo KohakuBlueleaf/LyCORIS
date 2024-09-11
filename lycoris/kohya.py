@@ -59,6 +59,7 @@ def create_network(
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+    train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
 
     if unbalanced_factorization:
         logger.info("Unbalanced factorization for LoKr is enabled")
@@ -110,6 +111,7 @@ def create_network(
         bypass_mode=bypass_mode,
         rs_lora=rs_lora,
         unbalanced_factorization=unbalanced_factorization,
+        train_t5xxl=train_t5xxl,
     )
 
     return network
@@ -271,12 +273,14 @@ class LycorisNetworkKohya(LycorisNetwork):
         network_module: str = "locon",
         norm_modules=NormModule,
         train_norm=False,
+        train_t5xxl=False,
         **kwargs,
     ) -> None:
         torch.nn.Module.__init__(self)
         root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
+        self.train_t5xxl = train_t5xxl
 
         if not self.ENABLE_CONV:
             conv_lora_dim = 0
