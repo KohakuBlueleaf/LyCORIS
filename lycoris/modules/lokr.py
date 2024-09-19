@@ -288,9 +288,19 @@ class LokrModule(LycorisBaseModule):
             w_shape = (w1_shape[0] * w2_shape[0], w1_shape[1] * w2_shape[1])
             factor1 = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
             factor2 = max(w2.shape) if w2 is not None else max(w2a.size(0), w2b.size(1))
-            if w_shape[0] % factor1 == 0 and w_shape[1] % factor1 == 0 and factor1 in shape_group_1 and factor1 in shape_group_2:
+            if (
+                w_shape[0] % factor1 == 0
+                and w_shape[1] % factor1 == 0
+                and factor1 in shape_group_1
+                and factor1 in shape_group_2
+            ):
                 factor = factor1
-            elif w_shape[0] % factor2 == 0 and w_shape[1] % factor2 == 0 and factor2 in shape_group_1 and factor2 in shape_group_2:
+            elif (
+                w_shape[0] % factor2 == 0
+                and w_shape[1] % factor2 == 0
+                and factor2 in shape_group_1
+                and factor2 in shape_group_2
+            ):
                 factor = factor2
             else:
                 factor = max(factor1, factor2)
