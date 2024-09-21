@@ -17,8 +17,8 @@ from test.kohya import LycorisKohyaWrapperTests
 
 TESTS = [
     LycorisModuleTests,
-    LycorisWrapperTests,
     LycorisFunctionalTests,
+    LycorisWrapperTests,
     LycorisKohyaWrapperTests,
 ]
 

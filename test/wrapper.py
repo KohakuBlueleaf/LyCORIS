@@ -206,6 +206,7 @@ class LycorisWrapperTests(unittest.TestCase):
             test_input = torch.randn(1, 16, 8, 8, 8).to(device, dtype)
             test_output = test_net(test_input)
             test_lycoris.restore()
+            test_lycoris.merge_to()
 
             state_dict = test_lycoris.state_dict()
             test_lycoris_from_weights: LycorisNetwork

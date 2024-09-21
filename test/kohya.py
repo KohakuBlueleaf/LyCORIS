@@ -104,9 +104,11 @@ class LycorisKohyaWrapperTests(unittest.TestCase):
         )
         network.apply_to([sd_te1, sd_te2], sdxl_unet, True, True)
         network.restore()
-        create_network_from_weights(
+        network = create_network_from_weights(
             1, "", vae, [sd_te1, sd_te2], sdxl_unet, weights_sd=network.state_dict()
         )
+        network.merge_to()
+        del network
         torch.cuda.empty_cache()
 
     @parameterized.expand(extract_param_list)
