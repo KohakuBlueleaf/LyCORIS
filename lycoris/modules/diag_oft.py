@@ -104,9 +104,12 @@ class DiagOFTModule(LycorisBaseModule):
             orig_module,
             1,
             lora_dim=s,
-            alpha=float(alpha),
-            rescale=rescale is not None,
+            constraint=float(alpha),
+            rescaled=rescale is not None,
         )
+        module.oft_blocks.copy_(oft_blocks)
+        if rescale is not None:
+            module.rescale.copy_(rescale)
         return module
 
     @property

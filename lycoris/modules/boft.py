@@ -116,10 +116,13 @@ class ButterflyOFTModule(LycorisBaseModule):
             lora_name,
             orig_module,
             1,
-            lora_dim=n,
-            alpha=float(alpha),
-            rescale=rescale is not None,
+            lora_dim=s,
+            constraint=float(alpha),
+            rescaled=rescale is not None,
         )
+        module.oft_blocks.copy_(oft_blocks)
+        if rescale is not None:
+            module.rescale.copy_(rescale)
         return module
 
     @property
