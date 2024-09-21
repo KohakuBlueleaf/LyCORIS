@@ -182,6 +182,9 @@ class LohaModule(LycorisBaseModule):
             )
 
     def get_weight(self, shape):
+        scale = torch.tensor(
+            self.scale, dtype=self.hada_w1_b.dtype, device=self.hada_w1_b.device
+        )
         if self.tucker:
             weight = loha_diff_weight(
                 self.hada_w1_b,
@@ -190,7 +193,7 @@ class LohaModule(LycorisBaseModule):
                 self.hada_w2_a,
                 self.hada_t1,
                 self.hada_t2,
-                gamma=torch.tensor(self.scale),
+                gamma=scale,
             )
         else:
             weight = loha_diff_weight(
@@ -200,7 +203,7 @@ class LohaModule(LycorisBaseModule):
                 self.hada_w2_a,
                 None,
                 None,
-                gamma=torch.tensor(self.scale),
+                gamma=scale,
             )
         if shape is not None:
             weight = weight.reshape(shape)

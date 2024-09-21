@@ -359,7 +359,7 @@ class LokrModule(LycorisBaseModule):
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
             ),
-            torch.tensor(self.scale),
+            self.scale,
         )
         dtype = weight.dtype
         if shape is not None:
