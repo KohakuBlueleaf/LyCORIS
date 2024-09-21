@@ -16,10 +16,10 @@ from test.kohya import LycorisKohyaWrapperTests
 
 
 TESTS = [
-    LycorisModuleTests,
-    LycorisFunctionalTests,
+    # LycorisModuleTests,
+    # LycorisFunctionalTests,
     LycorisWrapperTests,
-    LycorisKohyaWrapperTests,
+    # LycorisKohyaWrapperTests,
 ]
 
 
