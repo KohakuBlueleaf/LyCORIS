@@ -220,9 +220,13 @@ class LycorisWrapperTests(unittest.TestCase):
             test_lycoris_from_weights.load_state_dict(test_lycoris.state_dict())
 
             self.assertTrue(
-                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras)
+                len(test_lycoris.loras) == len(test_lycoris_from_weights.loras),
+                f"{len(test_lycoris.loras)} != {len(test_lycoris_from_weights.loras)}",
             )
-            self.assertTrue(torch.allclose(test_output, test_output_from_weights))
+            self.assertTrue(
+                torch.allclose(test_output, test_output_from_weights),
+                f"diff: {torch.nn.functional.mse_loss(test_output, test_output_from_weights).item()}",
+            )
         finally:
             reset_globals()
 
