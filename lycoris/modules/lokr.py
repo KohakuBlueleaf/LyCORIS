@@ -538,6 +538,8 @@ class LokrModule(LycorisBaseModule):
                 weight = self.apply_weight_decompose(
                     weight + diff_weight, self.multiplier
                 )
+            elif self.multiplier == 1:
+                weight = weight + diff_weight
             else:
                 weight = weight + diff_weight * self.multiplier
             bias = (

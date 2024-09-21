@@ -14,7 +14,10 @@ def make_kron(w1, w2, scale):
     w2 = w2.contiguous()
     rebuild = torch.kron(w1, w2)
 
-    return rebuild * scale
+    if scale != 1:
+        rebuild = rebuild * scale
+
+    return rebuild
 
 
 def weight_gen(
