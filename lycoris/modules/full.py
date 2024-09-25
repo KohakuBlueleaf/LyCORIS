@@ -28,7 +28,7 @@ class FullModule(LycorisBaseModule):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
-        bypass_mode=False,
+        bypass_mode=None,
         **kwargs,
     ):
         super().__init__(

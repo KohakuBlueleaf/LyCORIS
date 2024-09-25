@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from .base import LycorisBaseModule
 from ..functional import factorization
 from ..logging import logger
-from ..utils.bnb import LinearNF4
 
 
 @cache
@@ -49,7 +48,7 @@ class DiagOFTModule(LycorisBaseModule):
         rank_dropout_scale=False,
         constraint=0,
         rescaled=False,
-        bypass_mode=False,
+        bypass_mode=None,
         **kwargs,
     ):
         super().__init__(

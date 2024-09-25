@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.parametrize as parametrize
 
-from ..utils.bnb import QuantLinears, log_bypass
+from ..utils.quant import QuantLinears, log_bypass, log_suspect
 
 
 class ModuleCustomSD(nn.Module):
@@ -77,7 +77,7 @@ class LycorisBaseModule(ModuleCustomSD):
         rank_dropout=0.0,
         module_dropout=0.0,
         rank_dropout_scale=False,
-        bypass_mode=False,
+        bypass_mode=None,
         **kwargs,
     ):
         """if alpha == 0 or None, alpha is rank (no scaling)."""
@@ -165,6 +165,12 @@ class LycorisBaseModule(ModuleCustomSD):
                 log_bypass()
             self.is_quant = True
             bypass_mode = True
+        if isinstance(org_module, nn.Linear) and org_module.__class__.__name__ != "Linear":
+            if bypass_mode is None:
+                log_suspect()
+                bypass_mode = True
+            if bypass_mode == True:
+                self.is_quant = True
         self.bypass_mode = bypass_mode
         self.dropout = dropout
         self.rank_dropout = rank_dropout

@@ -7,8 +7,7 @@ import torch.nn.functional as F
 
 from .base import LycorisBaseModule
 from ..functional.general import rebuild_tucker
-from ..logging import logger, warning_once
-from ..utils.bnb import LinearNF4
+from ..logging import logger
 
 
 @cache
@@ -50,7 +49,7 @@ class LoConModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         **kwargs,
     ):

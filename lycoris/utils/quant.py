@@ -77,3 +77,12 @@ def log_bypass():
     return logger.warning(
         "Using bnb/quanto/optimum-quanto with LyCORIS will enable force-bypass mode."
     )
+
+
+@cache
+def log_suspect():
+    return logger.warning(
+        "Non-native Linear detected but bypass_mode is not set. "
+        "Automatically using force-bypass mode to avoid possible issues. "
+        "Please set bypass_mode=False explicitly if there are no quantized layers."
+    )

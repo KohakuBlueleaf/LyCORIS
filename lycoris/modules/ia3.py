@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
-from ..utils.bnb import LinearNF4
 
 
 class IA3Module(LycorisBaseModule):
@@ -30,7 +29,7 @@ class IA3Module(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         train_on_input=False,
         **kwargs,

@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from .base import LycorisBaseModule
 from ..functional.loha import diff_weight as loha_diff_weight
-from ..utils.bnb import LinearNF4
 
 
 class LohaModule(LycorisBaseModule):
@@ -42,7 +41,7 @@ class LohaModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         **kwargs,
     ):

@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from .base import LycorisBaseModule
 from ..utils import product
-from ..utils.bnb import LinearNF4
 
 
 class DyLoraModule(LycorisBaseModule):
@@ -32,7 +31,7 @@ class DyLoraModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         train_on_input=False,
         **kwargs,

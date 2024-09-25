@@ -90,7 +90,7 @@ def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwarg
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
-    bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    bypass_mode = str_bool(kwargs.get("bypass_mode", None))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
 
     if unbalanced_factorization:
