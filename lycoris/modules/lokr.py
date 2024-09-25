@@ -5,13 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange
-
 from .base import LycorisBaseModule
 from ..functional import factorization, rebuild_tucker
 from ..functional.lokr import make_kron
 from ..logging import logger
-from ..utils.bnb import LinearNF4
 
 
 @cache
@@ -62,7 +59,7 @@ class LokrModule(LycorisBaseModule):
         rank_dropout_scale=False,
         weight_decompose=False,
         full_matrix=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         unbalanced_factorization=False,
         **kwargs,
@@ -303,7 +300,7 @@ class LokrModule(LycorisBaseModule):
             ):
                 factor = factor2
             else:
-                factor = max(factor1, factor2)
+                factor = min(factor1, factor2)
 
         module = cls(
             lora_name,
