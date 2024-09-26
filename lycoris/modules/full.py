@@ -1,7 +1,19 @@
+from functools import cache
+
 import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..logging import logger
+
+
+@cache
+def log_bypass_override():
+    return logger.warning(
+        "Automatic Bypass-Mode detected in algo=full, "
+        "override with bypass_mode=False since algo=full not support bypass mode. "
+        "If you are using quantized model which require bypass mode, please don't use algo=full. "
+    )
 
 
 class FullModule(LycorisBaseModule):
@@ -31,6 +43,7 @@ class FullModule(LycorisBaseModule):
         bypass_mode=None,
         **kwargs,
     ):
+        org_bypass = bypass_mode
         super().__init__(
             lora_name,
             org_module,
@@ -41,6 +54,10 @@ class FullModule(LycorisBaseModule):
             rank_dropout_scale,
             bypass_mode,
         )
+        if bypass_mode and org_bypass is None:
+            self.bypass_mode = False
+            log_bypass_override()
+
         if self.module_type not in self.support_module:
             raise ValueError(f"{self.module_type} is not supported in Full algo.")
 
@@ -138,7 +155,7 @@ class FullModule(LycorisBaseModule):
         )
         if drop != 1 or scale != 1 or self.is_diff:
             diff_w, diff_b = self.get_diff_weight(scale, device=device)
-            weight = self._org_weight + diff_w * drop
+            weight = self.org_weight + diff_w * drop
             if self.org_bias is not None:
                 bias = self.org_bias + diff_b * drop
             else:
