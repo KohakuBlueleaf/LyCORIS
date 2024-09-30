@@ -31,23 +31,22 @@ def weight_gen(org_weight, rank, tucker=True):
         up = torch.empty(out_dim, rank)
         nn.init.kaiming_uniform_(down, a=math.sqrt(5))
         nn.init.constant_(up, 0)
-        return down, up
+        return down, up, None
 
 
-def diff_weight(d, u, m=None, gamma=1.0):
+def diff_weight(*weights: tuple[torch.Tensor], gamma=1.0):
     """### diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
 
     Args:
-        d (torch.Tensor): weight of down proj linear/conv layer
-        u (torch.Tensor): weight of up proj linear/conv layer
-        m (torch.Tensor, optional): middle weight of tucker decomposition
+        weights (tuple[torch.Tensor]): (down, up[, mid])
         gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: ΔW
     """
+    d, u, m = weights
     R, I, *k = d.shape
     O, R, *_ = u.shape
     u = u * gamma
@@ -62,14 +61,12 @@ def diff_weight(d, u, m=None, gamma=1.0):
     return result.reshape(O, I, *k)
 
 
-def bypass_forward_diff(x, d, u, m=None, gamma=1.0, extra_args={}):
+def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}):
     """### bypass_forward_diff
 
     Args:
         x (torch.Tensor): input tensor
-        d (torch.Tensor): weight of down proj linear/conv layer
-        u (torch.Tensor): weight of up proj linear/conv layer
-        m (torch.Tensor, optional): middle weight of tucker decomposition
+        weights (tuple[torch.Tensor]): (down, up[, mid])
         gamma (float, optional): scale factor, normally alpha/rank here
         extra_args (dict, optional): extra args for forward func, \
             e.g. padding, stride for Conv1/2/3d
@@ -77,6 +74,7 @@ def bypass_forward_diff(x, d, u, m=None, gamma=1.0, extra_args={}):
     Returns:
         torch.Tensor: output tensor
     """
+    d, u, m = weights
     if m is not None:
         down = FUNC_LIST[d.dim()](x, d)
         mid = FUNC_LIST[d.dim()](down, m, **extra_args)
