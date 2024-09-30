@@ -66,9 +66,7 @@ def diff_weight(org_weight, *weights, constraint=None):
     return inp - org
 
 
-def bypass_forward_diff(
-    org_out, *weights, constraint=None, need_transpose=False
-):
+def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False):
     """### boft_bypass_forward_diff
 
     Args:
@@ -76,8 +74,8 @@ def bypass_forward_diff(
         org_out (torch.Tensor): the output tensor from original model
         weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
         constraint (float, optional): constraint for oft
-        need_transpose (bool, optional): 
-            whether to transpose the input and output, 
+        need_transpose (bool, optional):
+            whether to transpose the input and output,
             set to `True` if the original model have "dim" not in the last axis.
             For example: Convolution layers
 

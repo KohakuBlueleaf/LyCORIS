@@ -165,7 +165,10 @@ class LycorisBaseModule(ModuleCustomSD):
                 log_bypass()
             self.is_quant = True
             bypass_mode = True
-        if isinstance(org_module, nn.Linear) and org_module.__class__.__name__ != "Linear":
+        if (
+            isinstance(org_module, nn.Linear)
+            and org_module.__class__.__name__ != "Linear"
+        ):
             if bypass_mode is None:
                 log_suspect()
                 bypass_mode = True

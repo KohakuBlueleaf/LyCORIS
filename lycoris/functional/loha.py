@@ -147,9 +147,7 @@ def diff_weight(*weights, gamma=1.0):
     return result
 
 
-def bypass_forward_diff(
-    x, org_out, *weights, gamma=1.0, extra_args={}
-):
+def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}):
     """### bypass_forward_diff
 
     Args:
