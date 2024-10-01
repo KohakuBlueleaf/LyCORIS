@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from .base import LycorisBaseModule
 from ..functional.loha import diff_weight as loha_diff_weight
-from ..utils.bnb import LinearNF4
 
 
 class LohaModule(LycorisBaseModule):
@@ -42,7 +41,7 @@ class LohaModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         **kwargs,
     ):
@@ -125,12 +124,12 @@ class LohaModule(LycorisBaseModule):
 
         self.scale = alpha / r_factor
 
-        self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
+        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim / r_factor)))
 
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = torch.tensor(1.0)
+            self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
         # Need more experiments on init method
         if self.tucker:
             torch.nn.init.normal_(self.hada_t1, std=0.1)
@@ -182,6 +181,9 @@ class LohaModule(LycorisBaseModule):
             )
 
     def get_weight(self, shape):
+        scale = torch.tensor(
+            self.scale, dtype=self.hada_w1_b.dtype, device=self.hada_w1_b.device
+        )
         if self.tucker:
             weight = loha_diff_weight(
                 self.hada_w1_b,
@@ -190,7 +192,7 @@ class LohaModule(LycorisBaseModule):
                 self.hada_w2_a,
                 self.hada_t1,
                 self.hada_t2,
-                gamma=torch.tensor(self.scale),
+                gamma=scale,
             )
         else:
             weight = loha_diff_weight(
@@ -200,7 +202,7 @@ class LohaModule(LycorisBaseModule):
                 self.hada_w2_a,
                 None,
                 None,
-                gamma=torch.tensor(self.scale),
+                gamma=scale,
             )
         if shape is not None:
             weight = weight.reshape(shape)
@@ -220,15 +222,15 @@ class LohaModule(LycorisBaseModule):
         return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        merged = (
-            self.org_module[0].weight.data
-            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
-        )
+        diff = self.get_diff_weight(multiplier=1, shape=shape, device=device)[0]
+        weight = self.org_weight
         if self.wd:
-            merged = self.apply_weight_decompose(merged)
+            merged = self.apply_weight_decompose(weight + diff, multiplier)
+        else:
+            merged = weight + diff * multiplier
         return merged, None
 
-    def apply_weight_decompose(self, weight):
+    def apply_weight_decompose(self, weight, multiplier=1):
         weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
@@ -238,7 +240,11 @@ class LohaModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale / weight_norm)
+        scale = self.dora_scale.to(weight.device) / weight_norm
+        if multiplier != 1:
+            scale = multiplier * (scale - 1) + 1
+
+        return weight * scale
 
     def custom_state_dict(self):
         destination = {}
@@ -289,16 +295,17 @@ class LohaModule(LycorisBaseModule):
         if self.bypass_mode:
             return self.bypass_forward(x, scale=self.multiplier)
         else:
-            weight = (
-                self.org_module[0].weight.data.to(self.dtype)
-                + self.get_weight(self.shape) * self.scalar * self.multiplier
-            )
+            diff_weight = self.get_weight(self.shape).to(self.dtype) * self.scalar
+            weight = self.org_module[0].weight.data.to(self.dtype)
+            if self.wd:
+                weight = self.apply_weight_decompose(
+                    weight + diff_weight, self.multiplier
+                )
+            else:
+                weight = weight + diff_weight * self.multiplier
             bias = (
                 None
                 if self.org_module[0].bias is None
                 else self.org_module[0].bias.data
             )
-
-            if self.wd:
-                weight = self.apply_weight_decompose(weight)
             return self.op(x, weight, bias, **self.kw_dict)

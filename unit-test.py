@@ -12,9 +12,15 @@ logger.setLevel(logging.ERROR)
 from test.module import LycorisModuleTests
 from test.wrapper import LycorisWrapperTests
 from test.functional import LycorisFunctionalTests
+from test.kohya import LycorisKohyaWrapperTests
 
 
-TESTS = [LycorisModuleTests, LycorisWrapperTests, LycorisFunctionalTests]
+TESTS = [
+    LycorisModuleTests,
+    LycorisFunctionalTests,
+    LycorisWrapperTests,
+    LycorisKohyaWrapperTests,
+]
 
 
 if __name__ == "__main__":

@@ -1,7 +1,19 @@
+from functools import cache
+
 import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..logging import logger
+
+
+@cache
+def log_bypass_override():
+    return logger.warning(
+        "Automatic Bypass-Mode detected in algo=full, "
+        "override with bypass_mode=False since algo=full not support bypass mode. "
+        "If you are using quantized model which require bypass mode, please don't use algo=full. "
+    )
 
 
 class FullModule(LycorisBaseModule):
@@ -28,9 +40,10 @@ class FullModule(LycorisBaseModule):
         use_tucker=False,
         use_scalar=False,
         rank_dropout_scale=False,
-        bypass_mode=False,
+        bypass_mode=None,
         **kwargs,
     ):
+        org_bypass = bypass_mode
         super().__init__(
             lora_name,
             org_module,
@@ -41,10 +54,14 @@ class FullModule(LycorisBaseModule):
             rank_dropout_scale,
             bypass_mode,
         )
+        if bypass_mode and org_bypass is None:
+            self.bypass_mode = False
+            log_bypass_override()
+
         if self.module_type not in self.support_module:
             raise ValueError(f"{self.module_type} is not supported in Full algo.")
 
-        if self.is_bnb:
+        if self.is_quant:
             raise ValueError(
                 "Quant Linear is not supported and meaningless in Full algo."
             )
@@ -57,6 +74,12 @@ class FullModule(LycorisBaseModule):
             self.bias = nn.Parameter(torch.zeros_like(org_module.bias))
         else:
             self.bias = None
+        self.is_diff = True
+        self._org_weight = [self.org_module[0].weight.data.cpu().clone()]
+        if self.org_module[0].bias is not None:
+            self.org_bias = [self.org_module[0].bias.data.cpu().clone()]
+        else:
+            self.org_bias = None
 
     @classmethod
     def make_module_from_state_dict(cls, lora_name, orig_module, diff, diff_b):
@@ -71,6 +94,7 @@ class FullModule(LycorisBaseModule):
                 module.bias.copy_(diff_b)
             else:
                 module.bias = nn.Parameter(diff_b)
+        module.is_diff = True
         return module
 
     @property
@@ -93,6 +117,7 @@ class FullModule(LycorisBaseModule):
             delattr(self.org_module[0], "bias")
         else:
             self.org_bias = None
+        self.is_diff = False
 
     def restore(self):
         self.org_module[0].forward = self.org_forward
@@ -128,16 +153,24 @@ class FullModule(LycorisBaseModule):
             if self.rank_dropout and self.training
             else 1
         )
-        if drop != 1 or scale != 1:
+        if drop != 1 or scale != 1 or self.is_diff:
             diff_w, diff_b = self.get_diff_weight(scale, device=device)
-            weight = self.org_module[0].weight + diff_w * drop
-            bias = self.org_module[0].bias + diff_b * drop
+            weight = self.org_weight + diff_w * drop
+            if self.org_bias is not None:
+                bias = self.org_bias + diff_b * drop
+            else:
+                bias = None
         else:
             weight = self.weight
             bias = self.bias
         return weight, bias
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
+        if self.is_diff:
+            diff_b = None
+            if self.bias is not None:
+                diff_b = self.bias * multiplier
+            return self.weight * multiplier, diff_b
         org_weight = self.org_module[0].weight.to(device, dtype=self.weight.dtype)
         diff = self.weight.to(device) - org_weight
         diff_b = None

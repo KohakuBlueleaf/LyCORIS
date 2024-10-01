@@ -34,15 +34,18 @@ def weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
         return oft_blocks, None
 
 
-def diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
+def diff_weight(org_weight, *weights, constraint=None):
     """### boft_diff_weight
 
     Args:
-        TODO
+        org_weight (torch.Tensor): the weight tensor of original model
+        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
+        constraint (float, optional): constraint for oft
 
     Returns:
         torch.Tensor: ΔW
     """
+    oft_blocks, rescale = weights
     m, num, b, _ = oft_blocks.shape
     r_b = b // 2
     I = torch.eye(b, device=oft_blocks.device)
@@ -63,17 +66,23 @@ def diff_weight(org_weight, oft_blocks, rescale=None, constraint=None):
     return inp - org
 
 
-def bypass_forward_diff(
-    org_out, oft_blocks, rescale=None, constraint=None, need_transpose=False
-):
+def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False):
     """### boft_bypass_forward_diff
 
     Args:
-        TODO
+        x (torch.Tensor): the input tensor for original model
+        org_out (torch.Tensor): the output tensor from original model
+        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
+        constraint (float, optional): constraint for oft
+        need_transpose (bool, optional):
+            whether to transpose the input and output,
+            set to `True` if the original model have "dim" not in the last axis.
+            For example: Convolution layers
 
     Returns:
         torch.Tensor: output tensor
     """
+    oft_blocks, rescale = weights
     m, num, b, _ = oft_blocks.shape
     r_b = b // 2
     I = torch.eye(b, device=oft_blocks.device)

@@ -1,7 +1,9 @@
 import os
+import fnmatch
 import re
 import logging
-from typing import List
+
+from typing import Any, List
 
 import torch
 
@@ -28,7 +30,7 @@ from .logging import logger
 def create_network(
     multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs
 ):
-    for key, value in kwargs.items():
+    for key, value in list(kwargs.items()):
         if key in deprecated_arg_dict:
             logger.warning(
                 f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
@@ -56,9 +58,10 @@ def create_network(
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
-    bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    bypass_mode = str_bool(kwargs.get("bypass_mode", None))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+    train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
 
     if unbalanced_factorization:
         logger.info("Unbalanced factorization for LoKr is enabled")
@@ -110,6 +113,7 @@ def create_network(
         bypass_mode=bypass_mode,
         rs_lora=rs_lora,
         unbalanced_factorization=unbalanced_factorization,
+        train_t5xxl=train_t5xxl,
     )
 
     return network
@@ -214,6 +218,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         "Downsample2D",
         "Upsample2D",
         "HunYuanDiTBlock",
+        "DoubleStreamBlock",
+        "SingleStreamBlock",
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -232,6 +238,7 @@ class LycorisNetworkKohya(LycorisNetwork):
     LORA_PREFIX_TEXT_ENCODER = "lora_te"
     MODULE_ALGO_MAP = {}
     NAME_ALGO_MAP = {}
+    USE_FNMATCH = False
 
     @classmethod
     def apply_preset(cls, preset):
@@ -251,6 +258,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             cls.MODULE_ALGO_MAP = preset["module_algo_map"]
         if "name_algo_map" in preset:
             cls.NAME_ALGO_MAP = preset["name_algo_map"]
+        if "use_fnmatch" in preset:
+            cls.USE_FNMATCH = preset["use_fnmatch"]
         return cls
 
     def __init__(
@@ -269,12 +278,14 @@ class LycorisNetworkKohya(LycorisNetwork):
         network_module: str = "locon",
         norm_modules=NormModule,
         train_norm=False,
+        train_t5xxl=False,
         **kwargs,
     ) -> None:
         torch.nn.Module.__init__(self)
         root_kwargs = kwargs
         self.multiplier = multiplier
         self.lora_dim = lora_dim
+        self.train_t5xxl = train_t5xxl
 
         if not self.ENABLE_CONV:
             conv_lora_dim = 0
@@ -402,7 +413,9 @@ class LycorisNetworkKohya(LycorisNetwork):
             next_config = {}
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
-                if module_name in target_replace_modules:
+                if module_name in target_replace_modules and not any(
+                    self.match_fn(t, name) for t in target_replace_names
+                ):
                     if module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
                         algo = next_config.get("algo", network_module)
@@ -415,10 +428,11 @@ class LycorisNetworkKohya(LycorisNetwork):
                     )
                     next_config = {}
                 elif name in target_replace_names or any(
-                    re.match(t, name) for t in target_replace_names
+                    self.match_fn(t, name) for t in target_replace_names
                 ):
-                    if name in self.NAME_ALGO_MAP:
-                        next_config = self.NAME_ALGO_MAP[name]
+                    conf_from_name = self.find_conf_for_name(name)
+                    if conf_from_name is not None:
+                        next_config = conf_from_name
                         algo = next_config.get("algo", network_module)
                     elif module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
@@ -489,6 +503,24 @@ class LycorisNetworkKohya(LycorisNetwork):
                 lora.lora_name not in names
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
+
+    def match_fn(self, pattern: str, name: str) -> bool:
+        if self.USE_FNMATCH:
+            return fnmatch.fnmatch(name, pattern)
+        return re.match(pattern, name)
+
+    def find_conf_for_name(
+        self,
+        name: str,
+    ) -> dict[str, Any]:
+        if name in self.NAME_ALGO_MAP.keys():
+            return self.NAME_ALGO_MAP[name]
+
+        for key, value in self.NAME_ALGO_MAP.items():
+            if self.match_fn(key, name):
+                return value
+
+        return None
 
     def load_weights(self, file):
         if os.path.splitext(file)[1] == ".safetensors":

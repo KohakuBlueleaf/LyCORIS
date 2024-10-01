@@ -5,13 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange
-
 from .base import LycorisBaseModule
 from ..functional import factorization, rebuild_tucker
 from ..functional.lokr import make_kron
 from ..logging import logger
-from ..utils.bnb import LinearNF4
 
 
 @cache
@@ -62,7 +59,7 @@ class LokrModule(LycorisBaseModule):
         rank_dropout_scale=False,
         weight_decompose=False,
         full_matrix=False,
-        bypass_mode=False,
+        bypass_mode=None,
         rs_lora=False,
         unbalanced_factorization=False,
         **kwargs,
@@ -208,12 +205,12 @@ class LokrModule(LycorisBaseModule):
 
         self.scale = alpha / r_factor
 
-        self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
+        self.register_buffer("alpha", torch.tensor(alpha * (lora_dim / r_factor)))
 
         if use_scalar:
             self.scalar = nn.Parameter(torch.tensor(0.0))
         else:
-            self.scalar = torch.tensor(1.0)
+            self.register_buffer("scalar", torch.tensor(1.0), persistent=False)
 
         if self.use_w2:
             if use_scalar:
@@ -281,7 +278,29 @@ class LokrModule(LycorisBaseModule):
         ):
             factor = -1
         else:
-            factor = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
+            w1_shape = w1.shape if w1 is not None else (w1a.size(0), w1b.size(1))
+            w2_shape = w2.shape if w2 is not None else (w2a.size(0), w2b.size(1))
+            shape_group_1 = (w1_shape[0], w2_shape[0])
+            shape_group_2 = (w1_shape[1], w2_shape[1])
+            w_shape = (w1_shape[0] * w2_shape[0], w1_shape[1] * w2_shape[1])
+            factor1 = max(w1.shape) if w1 is not None else max(w1a.size(0), w1b.size(1))
+            factor2 = max(w2.shape) if w2 is not None else max(w2a.size(0), w2b.size(1))
+            if (
+                w_shape[0] % factor1 == 0
+                and w_shape[1] % factor1 == 0
+                and factor1 in shape_group_1
+                and factor1 in shape_group_2
+            ):
+                factor = factor1
+            elif (
+                w_shape[0] % factor2 == 0
+                and w_shape[1] % factor2 == 0
+                and factor2 in shape_group_1
+                and factor2 in shape_group_2
+            ):
+                factor = factor2
+            else:
+                factor = min(factor1, factor2)
 
         module = cls(
             lora_name,
@@ -337,7 +356,7 @@ class LokrModule(LycorisBaseModule):
                     else self.lokr_w2_a @ self.lokr_w2_b
                 )
             ),
-            torch.tensor(self.scale),
+            self.scale,
         )
         dtype = weight.dtype
         if shape is not None:
@@ -358,15 +377,15 @@ class LokrModule(LycorisBaseModule):
         return diff, None
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
-        merged = (
-            self.org_module[0].weight.data
-            + self.get_diff_weight(multiplier=multiplier, shape=shape, device=device)[0]
-        )
+        diff = self.get_diff_weight(multiplier=1, shape=shape, device=device)[0]
+        weight = self.org_weight
         if self.wd:
-            merged = self.apply_weight_decompose(merged)
+            merged = self.apply_weight_decompose(weight + diff, multiplier)
+        else:
+            merged = weight + diff * multiplier
         return merged, None
 
-    def apply_weight_decompose(self, weight):
+    def apply_weight_decompose(self, weight, multiplier=1):
         weight = weight.to(self.dora_scale.dtype)
         weight_norm = (
             weight.transpose(0, 1)
@@ -376,7 +395,11 @@ class LokrModule(LycorisBaseModule):
             .transpose(0, 1)
         ) + torch.finfo(weight.dtype).eps
 
-        return weight * (self.dora_scale / weight_norm)
+        scale = self.dora_scale.to(weight.device) / weight_norm
+        if multiplier != 1:
+            scale = multiplier * (scale - 1) + 1
+
+        return weight * scale
 
     def custom_state_dict(self):
         destination = {}
@@ -494,7 +517,7 @@ class LokrModule(LycorisBaseModule):
             hc = hc.transpose(-1, -2)
             h = hc.reshape(*hc.shape[:-2], -1)
 
-        return self.drop(h * scale)
+        return self.drop(h * scale * self.scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
@@ -506,18 +529,21 @@ class LokrModule(LycorisBaseModule):
         if self.bypass_mode:
             return self.bypass_forward(x, self.multiplier)
         else:
-            weight = (
-                self.org_module[0].weight.data.to(self.dtype)
-                + self.get_weight(self.shape) * self.scalar * self.multiplier
-            )
+            diff_weight = self.get_weight(self.shape).to(self.dtype) * self.scalar
+            weight = self.org_module[0].weight.data.to(self.dtype)
+            if self.wd:
+                weight = self.apply_weight_decompose(
+                    weight + diff_weight, self.multiplier
+                )
+            elif self.multiplier == 1:
+                weight = weight + diff_weight
+            else:
+                weight = weight + diff_weight * self.multiplier
             bias = (
                 None
                 if self.org_module[0].bias is None
                 else self.org_module[0].bias.data
             )
-
-            if self.wd:
-                weight = self.apply_weight_decompose(weight)
             return self.op(x, weight, bias, **self.kw_dict)
 
 

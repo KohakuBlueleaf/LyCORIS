@@ -116,20 +116,19 @@ def weight_gen(org_weight, rank, tucker=True):
     return w1d, w1u, w2d, w2u, t1, t2
 
 
-def diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
+def diff_weight(*weights, gamma=1.0):
     """### diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
 
     Args:
-        w1d, w2d (torch.Tensor): weight of down proj linear/conv layer
-        w1u, w2u (torch.Tensor): weight of up proj linear/conv layer
-        t1, t2 (torch.Tensor, optional): middle weight of tucker decomposition
+        wegihts (tuple[torch.Tensor]): (w1d, w2d, w1u, w2u[, t1, t2])
         gamma (float, optional): scale factor, normally alpha/rank here
 
     Returns:
         torch.Tensor: ΔW
     """
+    w1d, w1u, w2d, w2u, t1, t2 = weights
     if t1 is not None and t2 is not None:
         R, I = w1d.shape
         R, O = w1u.shape
@@ -141,22 +140,19 @@ def diff_weight(w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0):
         w1d = w1d.reshape(w1d.size(0), -1)
         w1u = w1u.reshape(-1, w1u.size(1))
         w2d = w2d.reshape(w2d.size(0), -1)
-        w2u = w1u.reshape(-1, w2u.size(1))
+        w2u = w2u.reshape(-1, w2u.size(1))
         result = make_weight(w1d, w1u, w2d, w2u, gamma)
 
     result = result.reshape(O, I, *k)
     return result
 
 
-def bypass_forward_diff(
-    x, w1d, w1u, w2d, w2u, t1=None, t2=None, gamma=1.0, extra_args={}
-):
+def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}):
     """### bypass_forward_diff
 
     Args:
         x (torch.Tensor): input tensor
-        w1d, w2d (torch.Tensor): weight of up proj linear/conv layer
-        w1u, w2u (torch.Tensor): weight of down proj linear/conv layer
+        weights (tuple[torch.Tensor]): (w1d, w2d, w1u, w2u[, t1, t2])
         gamma (float, optional): scale factor, normally alpha/rank here
         extra_args (dict, optional): extra args for forward func, \
             e.g. padding, stride for Conv1/2/3d
@@ -164,5 +160,6 @@ def bypass_forward_diff(
     Returns:
         torch.Tensor: output tensor
     """
+    w1d, w1u, w2d, w2u, t1, t2 = weights
     diff_w = diff_weight(w1d, w1u, w2d, w2u, t1, t2, gamma)
     return FUNC_LIST[w1d.dim() if t1 is None else t1.dim()](x, diff_w, **extra_args)

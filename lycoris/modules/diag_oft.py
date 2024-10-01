@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from .base import LycorisBaseModule
 from ..functional import factorization
 from ..logging import logger
-from ..utils.bnb import LinearNF4
 
 
 @cache
@@ -49,7 +48,7 @@ class DiagOFTModule(LycorisBaseModule):
         rank_dropout_scale=False,
         constraint=0,
         rescaled=False,
-        bypass_mode=False,
+        bypass_mode=None,
         **kwargs,
     ):
         super().__init__(
@@ -104,9 +103,12 @@ class DiagOFTModule(LycorisBaseModule):
             orig_module,
             1,
             lora_dim=s,
-            alpha=float(alpha),
-            rescale=rescale is not None,
+            constraint=float(alpha),
+            rescaled=rescale is not None,
         )
+        module.oft_blocks.copy_(oft_blocks)
+        if rescale is not None:
+            module.rescale.copy_(rescale)
         return module
 
     @property

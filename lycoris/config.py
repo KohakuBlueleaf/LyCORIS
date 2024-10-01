@@ -7,6 +7,8 @@ PRESET = {
             "Downsample2D",
             "Upsample2D",
             "HunYuanDiTBlock",
+            "DoubleStreamBlock",
+            "SingleStreamBlock",
         ],
         "unet_target_name": [
             "conv_in",
@@ -28,6 +30,8 @@ PRESET = {
             "Transformer2DModel",
             "ResnetBlock2D",
             "HunYuanDiTBlock",
+            "DoubleStreamBlock",
+            "SingleStreamBlock",
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -46,6 +50,8 @@ PRESET = {
         "unet_target_module": [
             "Transformer2DModel",
             "HunYuanDiTBlock",
+            "DoubleStreamBlock",
+            "SingleStreamBlock",
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -78,6 +84,8 @@ PRESET = {
             "Downsample2D",
             "Upsample2D",
             "HunYuanDiTBlock",
+            "DoubleStreamBlock",
+            "SingleStreamBlock",
         ],
         "unet_target_name": [
             "conv_in",
@@ -93,6 +101,8 @@ PRESET = {
         "unet_target_module": [
             "Transformer2DModel",
             "HunYuanDiTBlock",
+            "DoubleStreamBlock",
+            "SingleStreamBlock",
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],

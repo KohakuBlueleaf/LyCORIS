@@ -1,9 +1,10 @@
 # General LyCORIS wrapper based on kohya-ss/sd-scripts' style
 import os
-import regex as re
+import fnmatch
+import re
 import logging
 
-from typing import List
+from typing import Any, List
 
 import torch
 import torch.nn as nn
@@ -25,6 +26,22 @@ from .utils import str_bool
 from .logging import logger
 
 
+VALID_PRESET_KEYS = [
+    "enable_conv",
+    "target_module",
+    "target_name",
+    "module_algo_map",
+    "name_algo_map",
+    "lora_prefix",
+    "use_fnmatch",
+    "unet_target_module",
+    "unet_target_name",
+    "text_encoder_target_module",
+    "text_encoder_target_name",
+    "exclude_name",
+]
+
+
 network_module_dict = {
     "lora": LoConModule,
     "locon": LoConModule,
@@ -44,8 +61,8 @@ deprecated_arg_dict = {
 }
 
 
-def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
-    for key, value in kwargs.items():
+def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwargs):
+    for key, value in list(kwargs.items()):
         if key in deprecated_arg_dict:
             logger.warning(
                 f"{key} is deprecated. Please use {deprecated_arg_dict[key]} instead.",
@@ -73,7 +90,7 @@ def create_lycoris(module, multiplier, linear_dim, linear_alpha, **kwargs):
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
-    bypass_mode = str_bool(kwargs.get("bypass_mode", False))
+    bypass_mode = str_bool(kwargs.get("bypass_mode", None))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
 
     if unbalanced_factorization:
@@ -189,9 +206,17 @@ class LycorisNetwork(torch.nn.Module):
     LORA_PREFIX = "lycoris"
     MODULE_ALGO_MAP = {}
     NAME_ALGO_MAP = {}
+    USE_FNMATCH = False
+    TARGET_EXCLUDE_NAME = []
 
     @classmethod
     def apply_preset(cls, preset):
+        for preset_key in preset.keys():
+            if preset_key not in VALID_PRESET_KEYS:
+                raise KeyError(
+                    f'Unknown preset key "{preset_key}". Valid keys: {VALID_PRESET_KEYS}'
+                )
+
         if "enable_conv" in preset:
             cls.ENABLE_CONV = preset["enable_conv"]
         if "target_module" in preset:
@@ -202,6 +227,12 @@ class LycorisNetwork(torch.nn.Module):
             cls.MODULE_ALGO_MAP = preset["module_algo_map"]
         if "name_algo_map" in preset:
             cls.NAME_ALGO_MAP = preset["name_algo_map"]
+        if "lora_prefix" in preset:
+            cls.LORA_PREFIX = preset["lora_prefix"]
+        if "use_fnmatch" in preset:
+            cls.USE_FNMATCH = preset["use_fnmatch"]
+        if "exclude_name" in preset:
+            cls.TARGET_EXCLUDE_NAME = preset["exclude_name"]
         return cls
 
     def __init__(
@@ -324,27 +355,43 @@ class LycorisNetwork(torch.nn.Module):
             prefix: str,
             root_module: torch.nn.Module,
             algo,
+            current_lora_map: dict[str, Any],
             configs={},
         ):
-            loras = {}
+            assert current_lora_map is not None, "No mapping supplied"
+            loras = current_lora_map
             lora_names = []
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
                     next_algo = next_config.get("algo", algo)
-                    new_loras, new_lora_names = create_modules_(
-                        f"{prefix}_{name}", module, next_algo, next_config
+                    new_loras, new_lora_names, new_lora_map = create_modules_(
+                        f"{prefix}_{name}" if name else prefix,
+                        module,
+                        next_algo,
+                        loras,
+                        configs=next_config,
                     )
+                    loras = {**loras, **new_lora_map}
                     for lora_name, lora in zip(new_lora_names, new_loras):
-                        if lora_name not in loras:
+                        if lora_name not in loras and lora_name not in current_lora_map:
                             loras[lora_name] = lora
+                        if lora_name not in lora_names:
                             lora_names.append(lora_name)
                     continue
+
                 if name:
                     lora_name = prefix + "." + name
                 else:
                     lora_name = prefix
+
+                if f"{self.LORA_PREFIX}_." in lora_name:
+                    lora_name = lora_name.replace(
+                        f"{self.LORA_PREFIX}_.",
+                        f"{self.LORA_PREFIX}.",
+                    )
+
                 lora_name = lora_name.replace(".", "_")
                 if lora_name in loras:
                     continue
@@ -353,7 +400,7 @@ class LycorisNetwork(torch.nn.Module):
                 if lora is not None:
                     loras[lora_name] = lora
                     lora_names.append(lora_name)
-            return [loras[lora_name] for lora_name in lora_names], lora_names
+            return [loras[lora_name] for lora_name in lora_names], lora_names, loras
 
         # create module instances
         def create_modules(
@@ -361,29 +408,44 @@ class LycorisNetwork(torch.nn.Module):
             root_module: torch.nn.Module,
             target_replace_modules,
             target_replace_names=[],
+            target_exclude_names=[],
         ) -> List:
             logger.info("Create LyCORIS Module")
             loras = []
+            lora_map = {}
             next_config = {}
             for name, module in root_module.named_modules():
+                if name in target_exclude_names or any(
+                    self.match_fn(t, name) for t in target_exclude_names
+                ):
+                    continue
+
                 module_name = module.__class__.__name__
-                if module_name in target_replace_modules:
+                if module_name in target_replace_modules and not any(
+                    self.match_fn(t, name) for t in target_replace_names
+                ):
                     if module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
                         algo = next_config.get("algo", network_module)
                     else:
                         algo = network_module
-                    loras.extend(
-                        create_modules_(f"{prefix}_{name}", module, algo, next_config)[
-                            0
-                        ]
+
+                    lora_lst, _, _lora_map = create_modules_(
+                        f"{prefix}_{name}",
+                        module,
+                        algo,
+                        lora_map,
+                        configs=next_config,
                     )
+                    lora_map = {**lora_map, **_lora_map}
+                    loras.extend(lora_lst)
                     next_config = {}
                 elif name in target_replace_names or any(
-                    re.match(t, name) for t in target_replace_names
+                    self.match_fn(t, name) for t in target_replace_names
                 ):
-                    if name in self.NAME_ALGO_MAP:
-                        next_config = self.NAME_ALGO_MAP[name]
+                    conf_from_name = self.find_conf_for_name(name)
+                    if conf_from_name is not None:
+                        next_config = conf_from_name
                         algo = next_config.get("algo", network_module)
                     elif module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
@@ -392,17 +454,37 @@ class LycorisNetwork(torch.nn.Module):
                         algo = network_module
                     lora_name = prefix + "." + name
                     lora_name = lora_name.replace(".", "_")
+
+                    if lora_name in lora_map:
+                        continue
+
                     lora = create_single_module(lora_name, module, algo, **next_config)
                     next_config = {}
                     if lora is not None:
+                        lora_map[lora.lora_name] = lora
                         loras.append(lora)
             return loras
 
         self.loras = create_modules(
             LycorisNetwork.LORA_PREFIX,
             module,
-            LycorisNetwork.TARGET_REPLACE_MODULE,
-            LycorisNetwork.TARGET_REPLACE_NAME,
+            list(
+                set(
+                    [
+                        *LycorisNetwork.TARGET_REPLACE_MODULE,
+                        *LycorisNetwork.MODULE_ALGO_MAP.keys(),
+                    ]
+                )
+            ),
+            list(
+                set(
+                    [
+                        *LycorisNetwork.TARGET_REPLACE_NAME,
+                        *LycorisNetwork.NAME_ALGO_MAP.keys(),
+                    ]
+                )
+            ),
+            target_exclude_names=LycorisNetwork.TARGET_EXCLUDE_NAME,
         )
         logger.info(f"create LyCORIS: {len(self.loras)} modules.")
 
@@ -413,13 +495,32 @@ class LycorisNetwork(torch.nn.Module):
             )
         logger.info(f"module type table: {algo_table}")
 
-        # assertion
+        # Assertion to ensure we have not accidentally wrapped some layers
+        # multiple times.
         names = set()
         for lora in self.loras:
             assert (
                 lora.lora_name not in names
             ), f"duplicated lora name: {lora.lora_name}"
             names.add(lora.lora_name)
+
+    def match_fn(self, pattern: str, name: str) -> bool:
+        if self.USE_FNMATCH:
+            return fnmatch.fnmatch(name, pattern)
+        return bool(re.match(pattern, name))
+
+    def find_conf_for_name(
+        self,
+        name: str,
+    ) -> dict[str, Any]:
+        if name in self.NAME_ALGO_MAP.keys():
+            return self.NAME_ALGO_MAP[name]
+
+        for key, value in self.NAME_ALGO_MAP.items():
+            if self.match_fn(key, name):
+                return value
+
+        return None
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
@@ -442,6 +543,9 @@ class LycorisNetwork(torch.nn.Module):
         return state
 
     def apply_to(self):
+        """
+        Register to modules to the subclass so that torch sees them.
+        """
         for lora in self.loras:
             lora.apply_to()
             self.add_module(lora.lora_name, lora)
