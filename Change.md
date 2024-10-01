@@ -1,5 +1,37 @@
 # Change Log
 
+## 2024/10/02 update to 3.1.0
+
+### Highlights
+
+* Support all the quantized linear layer by automatic detecting method
+* Support Flux in Kohya-ss/sd-scripts
+* Support wildcard matching for select layers in preset
+
+### Full change log
+
+#### New Features
+
+* Support Flux
+* Support any quantized linear layer such as torchao
+* Refined Functional API to support drop-in replacement between different algorithms
+* Support wildcard for name matching in preset
+
+#### Bug fixes
+
+* fix bugs in loading function of BOFT/OFT
+* fix bugs in loading function of LoKr
+* fix wrong behaviour of weight-decomposition when multiplier != 1
+
+#### Improvements
+
+* Improve the coverage of unit-test
+
+### Pending Updates
+
+* option to toggle "correct" implementation of weight-decompose.
+* automatic device/type casting for `.merge_to()`
+
 ## 2024/06/29 update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
 
 ### The reasons of 3.0.0
