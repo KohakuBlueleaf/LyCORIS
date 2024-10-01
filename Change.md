@@ -27,11 +27,6 @@
 
 * Improve the coverage of unit-test
 
-### Pending Updates
-
-* option to toggle "correct" implementation of weight-decompose.
-* automatic device/type casting for `.merge_to()`
-
 ## 2024/06/29 update to 3.0.0 - Brand New Functional API, Parametrize API and Module API
 
 ### The reasons of 3.0.0
