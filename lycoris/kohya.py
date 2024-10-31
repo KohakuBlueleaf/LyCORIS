@@ -220,6 +220,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "HunYuanDiTBlock",
         "DoubleStreamBlock",
         "SingleStreamBlock",
+        "SingleDiTBlock",
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -229,6 +230,7 @@ class LycorisNetworkKohya(LycorisNetwork):
     ]
     TEXT_ENCODER_TARGET_REPLACE_MODULE = [
         "CLIPAttention",
+        "CLIPSdpaAttention",
         "CLIPMLP",
         "MT5Block",
         "BertLayer",
