@@ -1,5 +1,4 @@
-from setuptools import setup, find_packages
-
+from setuptools import find_packages, setup
 
 setup(
     name="lycoris_lora",
@@ -11,7 +10,7 @@ setup(
     author_email="apolloyeh0123@gmail.com",
     zip_safe=False,
     install_requires=["torch", "einops", "toml", "tqdm"],
-    python_requires=">=3.10",
+    python_requires=">=3.9",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: GPU :: NVIDIA CUDA :: 11.8",
@@ -21,6 +20,7 @@ setup(
         "Intended Audience :: End Users/Desktop",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
