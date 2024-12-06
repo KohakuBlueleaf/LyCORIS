@@ -9,6 +9,7 @@ unet_target_module = [
   "HunYuanDiTBlock",
   "DoubleStreamBlock",
   "SingleStreamBlock",
+  "SingleDiTBlock",
 ]
 unet_target_name = [
   "conv_in",
@@ -18,6 +19,7 @@ unet_target_name = [
 ]
 text_encoder_target_module = [
   "CLIPAttention",
+  "CLIPSdpaAttention",
   "CLIPMLP",
   "MT5Block",
   "BertLayer",
