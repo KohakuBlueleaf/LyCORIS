@@ -57,6 +57,7 @@ def create_network(
     constraint = float(kwargs.get("constraint", None) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
+    wd_on_output = str_bool(kwargs.get("wd_on_output", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", None))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
@@ -109,6 +110,7 @@ def create_network(
         constraint=constraint,
         rescaled=rescaled,
         weight_decompose=weight_decompose,
+        wd_on_out=wd_on_output,
         full_matrix=full_matrix,
         bypass_mode=bypass_mode,
         rs_lora=rs_lora,
