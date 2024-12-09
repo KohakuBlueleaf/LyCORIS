@@ -589,6 +589,21 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.loras = self.text_encoder_loras + self.unet_loras
         super().merge_to(1)
 
+    def apply_max_norm_regularization(self, max_norm_value, device):
+        key_scaled = 0
+        norms = []
+        for module in self.unet_loras + self.text_encoder_loras:
+            scaled, norm = module.apply_max_norm(max_norm_value, device)
+            if scaled is None:
+                continue
+            norms.append(norm)
+            key_scaled += scaled
+
+        if key_scaled == 0:
+            return key_scaled, 0, 0
+
+        return key_scaled, sum(norms) / len(norms), max(norms)
+
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
             params = []
