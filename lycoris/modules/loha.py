@@ -41,6 +41,7 @@ class LohaModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
+        wd_on_out=False,
         bypass_mode=None,
         rs_lora=False,
         **kwargs,
@@ -98,18 +99,28 @@ class LohaModule(LycorisBaseModule):
             self.hada_w2_b = nn.Parameter(torch.empty(lora_dim, w_shape[1]))
 
         self.wd = weight_decompose
+        self.wd_on_out = wd_on_out
         if self.wd:
             org_weight = org_module.weight.cpu().clone().float()
             self.dora_norm_dims = org_weight.dim() - 1
-            self.dora_scale = nn.Parameter(
-                torch.norm(
-                    org_weight.transpose(1, 0).reshape(org_weight.shape[1], -1),
-                    dim=1,
-                    keepdim=True,
-                )
-                .reshape(org_weight.shape[1], *[1] * self.dora_norm_dims)
-                .transpose(1, 0)
-            ).float()
+            if self.wd_on_out:
+                self.dora_scale = nn.Parameter(
+                    torch.norm(
+                        org_weight.reshape(org_weight.shape[0], -1),
+                        dim=1,
+                        keepdim=True,
+                    ).reshape(org_weight.shape[0], *[1] * self.dora_norm_dims)
+                ).float()
+            else:
+                self.dora_scale = nn.Parameter(
+                    torch.norm(
+                        org_weight.transpose(1, 0).reshape(org_weight.shape[1], -1),
+                        dim=1,
+                        keepdim=True,
+                    )
+                    .reshape(org_weight.shape[1], *[1] * self.dora_norm_dims)
+                    .transpose(1, 0)
+                ).float()
 
         if self.dropout:
             print("[WARN]LoHa/LoKr haven't implemented normal dropout yet.")
@@ -232,13 +243,20 @@ class LohaModule(LycorisBaseModule):
 
     def apply_weight_decompose(self, weight, multiplier=1):
         weight = weight.to(self.dora_scale.dtype)
-        weight_norm = (
-            weight.transpose(0, 1)
-            .reshape(weight.shape[1], -1)
-            .norm(dim=1, keepdim=True)
-            .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
-            .transpose(0, 1)
-        ) + torch.finfo(weight.dtype).eps
+        if self.wd_on_out:
+            weight_norm = (
+                weight.reshape(weight.shape[0], -1)
+                .norm(dim=1)
+                .reshape(weight.shape[0], *[1] * self.dora_norm_dims)
+            ) + torch.finfo(weight.dtype).eps
+        else:
+            weight_norm = (
+                weight.transpose(0, 1)
+                .reshape(weight.shape[1], -1)
+                .norm(dim=1, keepdim=True)
+                .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
+                .transpose(0, 1)
+            ) + torch.finfo(weight.dtype).eps
 
         scale = self.dora_scale.to(weight.device) / weight_norm
         if multiplier != 1:
