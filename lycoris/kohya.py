@@ -57,6 +57,7 @@ def create_network(
     constraint = float(kwargs.get("constraint", None) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
+    wd_on_output = str_bool(kwargs.get("wd_on_output", False))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
     bypass_mode = str_bool(kwargs.get("bypass_mode", None))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
@@ -109,6 +110,7 @@ def create_network(
         constraint=constraint,
         rescaled=rescaled,
         weight_decompose=weight_decompose,
+        wd_on_out=wd_on_output,
         full_matrix=full_matrix,
         bypass_mode=bypass_mode,
         rs_lora=rs_lora,
@@ -586,6 +588,21 @@ class LycorisNetworkKohya(LycorisNetwork):
 
         self.loras = self.text_encoder_loras + self.unet_loras
         super().merge_to(1)
+
+    def apply_max_norm_regularization(self, max_norm_value, device):
+        key_scaled = 0
+        norms = []
+        for module in self.unet_loras + self.text_encoder_loras:
+            scaled, norm = module.apply_max_norm(max_norm_value, device)
+            if scaled is None:
+                continue
+            norms.append(norm)
+            key_scaled += scaled
+
+        if key_scaled == 0:
+            return 0, 0, 0
+
+        return key_scaled, sum(norms) / len(norms), max(norms)
 
     def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
         def enumerate_params(loras):
