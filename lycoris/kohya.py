@@ -600,7 +600,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             key_scaled += scaled
 
         if key_scaled == 0:
-            return key_scaled, 0, 0
+            return 0, 0, 0
 
         return key_scaled, sum(norms) / len(norms), max(norms)
 
