@@ -155,9 +155,16 @@ class ButterflyOFTModule(LycorisBaseModule):
             k = 2**i * r_b
             if scale != 1:
                 bi = bi * scale + (1 - scale) * self.I
-            inp = inp.unflatten(-1, (-1, g, k)).transpose(-2, -1).flatten(-3).unflatten(-1, (-1, b))
+            inp = (
+                inp.unflatten(-1, (-1, g, k))
+                .transpose(-2, -1)
+                .flatten(-3)
+                .unflatten(-1, (-1, b))
+            )
             inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
-            inp = inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
+            inp = (
+                inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
+            )
 
         if self.rescaled:
             inp = inp * self.rescale
@@ -207,9 +214,16 @@ class ButterflyOFTModule(LycorisBaseModule):
             k = 2**i * r_b
             if scale != 1:
                 bi = bi * scale + (1 - scale) * self.I
-            inp = inp.unflatten(-1, (-1, g, k)).transpose(-2, -1).flatten(-3).unflatten(-1, (-1, b))
+            inp = (
+                inp.unflatten(-1, (-1, g, k))
+                .transpose(-2, -1)
+                .flatten(-3)
+                .unflatten(-1, (-1, b))
+            )
             inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
-            inp = inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
+            inp = (
+                inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
+            )
 
         if self.rescaled:
             inp = inp * self.rescale.transpose(0, -1)

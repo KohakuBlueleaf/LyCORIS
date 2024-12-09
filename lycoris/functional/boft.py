@@ -56,7 +56,12 @@ def diff_weight(org_weight, *weights, constraint=None):
         bi = r[i]  # b_num, b_size, b_size
         g = 2
         k = 2**i * r_b
-        inp = inp.unflatten(-1, (-1, g, k)).transpose(-2, -1).flatten(-3).unflatten(-1, (-1, b))
+        inp = (
+            inp.unflatten(-1, (-1, g, k))
+            .transpose(-2, -1)
+            .flatten(-3)
+            .unflatten(-1, (-1, b))
+        )
         inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
         inp = inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
 
@@ -97,7 +102,12 @@ def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False
         k = 2**i * r_b
         # ... (c g k) ->... (c k g)
         # ... (d b) -> ... d b
-        inp = inp.unflatten(-1, (-1, g, k)).transpose(-2, -1).flatten(-3).unflatten(-1, (-1, b))
+        inp = (
+            inp.unflatten(-1, (-1, g, k))
+            .transpose(-2, -1)
+            .flatten(-3)
+            .unflatten(-1, (-1, b))
+        )
         inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
         # ... d b -> ... (d b)
         # ... (c k g) -> ... (c g k)
