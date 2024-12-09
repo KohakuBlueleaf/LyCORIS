@@ -259,37 +259,21 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-### 2024/10/02 update to 3.1.0
 
-#### Highlights
+### 2024/12/09 update to 3.1.1
 
-* Support all the quantized linear layer by automatic detecting method
-* Support Flux in Kohya-ss/sd-scripts
-* Support wildcard matching for select layers in preset
+#### New Features
 
-#### Full change log
+* use `wd_on_output=True` can enable "correct" weight-decomposition implementation which use the output dimension of weight to calc the norm. The original implementation in LyCORIS calculate things on input dimension due to ambiguos annotation in paper.
 
-##### New Features
+#### Improvements
 
-* Support Flux
-* Support any quantized linear layer such as torchao
-* Refined Functional API to support drop-in replacement between different algorithms
-* Support wildcard for name matching in preset
+* BOFT now have more efficient implementation which avoid einops.rearrange.
+* `.merge_to()` will automatically match the device and dtype now.
 
-##### Bug fixes
+#### Bug fixes
 
-* fix bugs in loading function of BOFT/OFT
-* fix bugs in loading function of LoKr
-* fix wrong behaviour of weight-decomposition when multiplier != 1
-
-##### Improvements
-
-* Improve the coverage of unit-test
-
-#### Pending Updates for 3.1.1
-
-* option to toggle "correct" implementation of weight-decompose.
-* automatic device/type casting for `.merge_to()`
+* `scale_weight_norm` working correctly now.
 
 ## Todo list
 
