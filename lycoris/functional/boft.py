@@ -94,9 +94,9 @@ def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False
     for i in range(m):
         bi = r[i]  # b_num, b_size, b_size
         inp = rearrange(inp, "... (c g k) ->... (c k g)", g=2, k=2**i * r_b)
-        inp = rearrange(inp, "... (d b) -> ... d b", b=b)
+        inp = inp.unflatten(-1, (-1, b))
         inp = torch.einsum("b i j, ... b j -> ... b i", bi, inp)
-        inp = rearrange(inp, "... d b -> ... (d b)")
+        inp = inp.flatten(-2)
         inp = rearrange(inp, "... (c k g) -> ... (c g k)", g=2, k=2**i * r_b)
 
     if rescale is not None:
