@@ -275,6 +275,9 @@ class LycorisBaseModule(ModuleCustomSD):
     def merge_to(self, multiplier=1.0):
         if self.not_supported:
             return
+        self_device = next(self.parameters()).device
+        self_dtype = next(self.parameters()).dtype
+        self.to(self.org_weight)
         weight, bias = self.get_merged_weight(
             multiplier, self.org_weight.shape, self.org_weight.device
         )
@@ -285,6 +288,7 @@ class LycorisBaseModule(ModuleCustomSD):
                 self.org_module[0].bias.data.copy_(bias)
             else:
                 self.org_module[0].bias = nn.Parameter(bias)
+        self.to(self_device, self_dtype)
 
     def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
         raise NotImplementedError
