@@ -6,10 +6,12 @@ PRESET = {
             "ResnetBlock2D",
             "Downsample2D",
             "Upsample2D",
-            "HunYuanDiTBlock",
-            "DoubleStreamBlock",
-            "SingleStreamBlock",
-            "SingleDiTBlock",
+            "HunYuanDiTBlock", #HunYuanDiT
+            "DoubleStreamBlock", #Flux
+            "SingleStreamBlock", #Flux
+            "SingleDiTBlock", #SD3.5
+            "MMDoubleStreamBlock", #HunYuanVideo
+            "MMSingleStreamBlock", #HunYuanVideo
         ],
         "unet_target_name": [
             "conv_in",
@@ -35,6 +37,8 @@ PRESET = {
             "DoubleStreamBlock",
             "SingleStreamBlock",
             "SingleDiTBlock",
+            "MMDoubleStreamBlock", #HunYuanVideo
+            "MMSingleStreamBlock", #HunYuanVideo
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -57,6 +61,8 @@ PRESET = {
             "DoubleStreamBlock",
             "SingleStreamBlock",
             "SingleDiTBlock",
+            "MMDoubleStreamBlock", #HunYuanVideo
+            "MMSingleStreamBlock", #HunYuanVideo
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -94,6 +100,8 @@ PRESET = {
             "DoubleStreamBlock",
             "SingleStreamBlock",
             "SingleDiTBlock",
+            "MMDoubleStreamBlock", #HunYuanVideo
+            "MMSingleStreamBlock", #HunYuanVideo
         ],
         "unet_target_name": [
             "conv_in",
@@ -112,6 +120,8 @@ PRESET = {
             "DoubleStreamBlock",
             "SingleStreamBlock",
             "SingleDiTBlock",
+            "MMDoubleStreamBlock", #HunYuanVideo
+            "MMSingleStreamBlock", #HunYuanVideo
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],

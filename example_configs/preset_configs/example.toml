@@ -10,6 +10,8 @@ unet_target_module = [
   "DoubleStreamBlock",
   "SingleStreamBlock",
   "SingleDiTBlock",
+  "MMDoubleStreamBlock", #HunYuanVideo
+  "MMSingleStreamBlock", #HunYuanVideo
 ]
 unet_target_name = [
   "conv_in",
