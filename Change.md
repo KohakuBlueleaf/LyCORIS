@@ -1,5 +1,20 @@
 # Change Log
 
+## 2024/12/09 update to 3.1.1
+
+#### New Features
+
+* use `wd_on_output=True` can enable "correct" weight-decomposition implementation which use the output dimension of weight to calc the norm. The original implementation in LyCORIS calculate things on input dimension due to ambiguos annotation in paper.
+
+#### Improvements
+
+* BOFT now have more efficient implementation which avoid einops.rearrange.
+* `.merge_to()` will automatically match the device and dtype now.
+
+#### Bug fixes
+
+* `scale_weight_norm` working correctly now.
+
 ## 2024/10/02 update to 3.1.0
 
 ### Highlights
