@@ -417,6 +417,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             logger.info("Create LyCORIS Module")
             loras = []
             next_config = {}
+            if root_module is None:
+                return loras
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules and not any(
@@ -606,7 +608,7 @@ class LycorisNetworkKohya(LycorisNetwork):
 
         return key_scaled, sum(norms) / len(norms), max(norms)
 
-    def prepare_optimizer_params(self, text_encoder_lr, unet_lr, learning_rate):
+    def prepare_optimizer_params(self, text_encoder_lr=None, unet_lr: float = 1e-4, learning_rate=None):
         def enumerate_params(loras):
             params = []
             for lora in loras:
@@ -615,20 +617,39 @@ class LycorisNetworkKohya(LycorisNetwork):
 
         self.requires_grad_(True)
         all_params = []
+        lr_descriptions = []
 
         if self.text_encoder_loras:
             param_data = {"params": enumerate_params(self.text_encoder_loras)}
             if text_encoder_lr is not None:
                 param_data["lr"] = text_encoder_lr
             all_params.append(param_data)
+            lr_descriptions.append("text_encoder")
 
         if self.unet_loras:
             param_data = {"params": enumerate_params(self.unet_loras)}
             if unet_lr is not None:
                 param_data["lr"] = unet_lr
             all_params.append(param_data)
+            lr_descriptions.append("unet")
 
-        return all_params
+        return all_params, lr_descriptions
+
+    def enable_gradient_checkpointing(self):
+        # not supported
+        pass
+
+    def prepare_grad_etc(self, unet):
+        self.requires_grad_(True)
+
+    def on_epoch_start(self, unet):
+        self.train()
+
+    def on_step_start(self):
+        pass
+
+    def get_trainable_params(self):
+        return self.parameters()
 
     def save_weights(self, file, dtype, metadata):
         if metadata is not None and len(metadata) == 0:
