@@ -462,6 +462,7 @@ class LycorisNetworkKohya(LycorisNetwork):
             ]
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME = []
 
+        self.text_encoder_loras = []
         if text_encoder:
             if isinstance(text_encoder, list):
                 text_encoders = text_encoder
@@ -470,7 +471,6 @@ class LycorisNetworkKohya(LycorisNetwork):
                 text_encoders = [text_encoder]
                 use_index = False
 
-            self.text_encoder_loras = []
             for i, te in enumerate(text_encoders):
                 self.text_encoder_loras.extend(
                     create_modules(
