@@ -417,8 +417,6 @@ class LycorisNetworkKohya(LycorisNetwork):
             logger.info("Create LyCORIS Module")
             loras = []
             next_config = {}
-            if root_module is None:
-                return loras
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules and not any(
@@ -464,27 +462,28 @@ class LycorisNetworkKohya(LycorisNetwork):
             ]
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME = []
 
-        if isinstance(text_encoder, list):
-            text_encoders = text_encoder
-            use_index = True
-        else:
-            text_encoders = [text_encoder]
-            use_index = False
+        if text_encoder:
+            if isinstance(text_encoder, list):
+                text_encoders = text_encoder
+                use_index = True
+            else:
+                text_encoders = [text_encoder]
+                use_index = False
 
-        self.text_encoder_loras = []
-        for i, te in enumerate(text_encoders):
-            self.text_encoder_loras.extend(
-                create_modules(
-                    LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
-                    + (f"{i+1}" if use_index else ""),
-                    te,
-                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
-                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
+            self.text_encoder_loras = []
+            for i, te in enumerate(text_encoders):
+                self.text_encoder_loras.extend(
+                    create_modules(
+                        LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
+                        + (f"{i+1}" if use_index else ""),
+                        te,
+                        LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                        LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
+                    )
                 )
+            logger.info(
+                f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
             )
-        logger.info(
-            f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
-        )
 
         self.unet_loras = create_modules(
             LycorisNetworkKohya.LORA_PREFIX_UNET,
