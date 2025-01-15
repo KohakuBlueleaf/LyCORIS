@@ -63,6 +63,12 @@ def create_network(
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
     train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
+    #lora_plus
+    loraplus_lr_ratio = float(kwargs.get("loraplus_lr_ratio", None)) if kwargs.get("loraplus_lr_ratio", None) is not None else None
+    loraplus_unet_lr_ratio = float(kwargs.get("loraplus_unet_lr_ratio", None)) if kwargs.get("loraplus_unet_lr_ratio", None) is not None else None
+    loraplus_text_encoder_lr_ratio = float(kwargs.get("loraplus_text_encoder_lr_ratio", None)) if kwargs.get("loraplus_text_encoder_lr_ratio", None) is not None else None
+    if loraplus_lr_ratio is not None or loraplus_unet_lr_ratio is not None or loraplus_text_encoder_lr_ratio is not None:
+        network.set_loraplus_lr_ratio(loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio)
 
     if unbalanced_factorization:
         logger.info("Unbalanced factorization for LoKr is enabled")
@@ -607,30 +613,69 @@ class LycorisNetworkKohya(LycorisNetwork):
 
         return key_scaled, sum(norms) / len(norms), max(norms)
 
-    def prepare_optimizer_params(self, text_encoder_lr=None, unet_lr: float = 1e-4, learning_rate=None):
-        def enumerate_params(loras):
-            params = []
-            for lora in loras:
-                params.extend(lora.parameters())
-            return params
+    def set_loraplus_lr_ratio(self, loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio):
+        self.loraplus_lr_ratio = loraplus_lr_ratio
+        self.loraplus_unet_lr_ratio = loraplus_unet_lr_ratio
+        self.loraplus_text_encoder_lr_ratio = loraplus_text_encoder_lr_ratio
 
+        logger.info(f"LoRA+ UNet LR Ratio: {self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio}")
+        logger.info(f"LoRA+ Text Encoder LR Ratio: {self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio}")
+
+    def prepare_optimizer_params(self, text_encoder_lr=None, unet_lr: float = 1e-4, learning_rate=None):
         self.requires_grad_(True)
+
         all_params = []
         lr_descriptions = []
 
+        def assemble_params(loras, lr, ratio):
+            param_groups = {"lora": {}, "plus": {}}
+            for lora in loras:
+                for name, param in lora.named_parameters():
+                    if ratio is not None and "lora_up" in name:
+                        param_groups["plus"][f"{lora.lora_name}.{name}"] = param
+                    else:
+                        param_groups["lora"][f"{lora.lora_name}.{name}"] = param
+
+            params = []
+            descriptions = []
+            for key in param_groups.keys():
+                param_data = {"params": param_groups[key].values()}
+
+                if len(param_data["params"]) == 0:
+                    continue
+
+                if lr is not None:
+                    if key == "plus":
+                        param_data["lr"] = lr * ratio
+                    else:
+                        param_data["lr"] = lr
+
+                if param_data.get("lr", None) == 0 or param_data.get("lr", None) is None:
+                    logger.info("NO LR skipping!")
+                    continue
+
+                params.append(param_data)
+                descriptions.append("plus" if key == "plus" else "")
+
+            return params, descriptions
+
         if self.text_encoder_loras:
-            param_data = {"params": enumerate_params(self.text_encoder_loras)}
-            if text_encoder_lr is not None:
-                param_data["lr"] = text_encoder_lr
-            all_params.append(param_data)
-            lr_descriptions.append("text_encoder")
+            params, descriptions = assemble_params(
+                self.text_encoder_loras,
+                text_encoder_lr if text_encoder_lr is not None else default_lr,
+                self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio,
+            )
+            all_params.extend(params)
+            lr_descriptions.extend(["textencoder" + (" " + d if d else "") for d in descriptions])
 
         if self.unet_loras:
-            param_data = {"params": enumerate_params(self.unet_loras)}
-            if unet_lr is not None:
-                param_data["lr"] = unet_lr
-            all_params.append(param_data)
-            lr_descriptions.append("unet")
+            params, descriptions = assemble_params(
+                self.unet_loras,
+                unet_lr if unet_lr is not None else default_lr,
+                self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio,
+            )
+            all_params.extend(params)
+            lr_descriptions.extend(["unet" + (" " + d if d else "") for d in descriptions])
 
         return all_params, lr_descriptions
 
