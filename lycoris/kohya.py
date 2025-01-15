@@ -163,22 +163,23 @@ def create_network_from_weights(
         if lora_name in unet_loras:
             unet_loras[lora_name] = modules
 
-    if isinstance(text_encoder, list):
-        text_encoders = text_encoder
-        use_index = True
-    else:
-        text_encoders = [text_encoder]
-        use_index = False
-
-    for idx, te in enumerate(text_encoders):
-        if use_index:
-            prefix = f"{LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER}{idx+1}"
+    if text_encoder:
+        if isinstance(text_encoder, list):
+            text_encoders = text_encoder
+            use_index = True
         else:
-            prefix = LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
-        for name, modules in te.named_modules():
-            lora_name = f"{prefix}_{name}".replace(".", "_")
-            if lora_name in te_loras:
-                te_loras[lora_name] = modules
+            text_encoders = [text_encoder]
+            use_index = False
+
+        for idx, te in enumerate(text_encoders):
+            if use_index:
+                prefix = f"{LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER}{idx+1}"
+            else:
+                prefix = LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
+            for name, modules in te.named_modules():
+                lora_name = f"{prefix}_{name}".replace(".", "_")
+                if lora_name in te_loras:
+                    te_loras[lora_name] = modules
 
     original_level = logger.level
     logger.setLevel(logging.ERROR)
@@ -198,14 +199,16 @@ def create_network_from_weights(
     logger.info(f"{len(network.unet_loras)} Modules Loaded")
 
     logger.info("Loading TE Modules from state dict...")
-    for lora_name, orig_modules in te_loras.items():
-        if orig_modules is None:
-            continue
-        lyco_type, params = get_module(weights_sd, lora_name)
-        module = make_module(lyco_type, params, lora_name, orig_modules)
-        if module is not None:
-            network.text_encoder_loras.append(module)
-    logger.info(f"{len(network.text_encoder_loras)} Modules Loaded")
+
+    if text_encoder:
+        for lora_name, orig_modules in te_loras.items():
+            if orig_modules is None:
+                continue
+            lyco_type, params = get_module(weights_sd, lora_name)
+            module = make_module(lyco_type, params, lora_name, orig_modules)
+            if module is not None:
+                network.text_encoder_loras.append(module)
+        logger.info(f"{len(network.text_encoder_loras)} Modules Loaded")
 
     for lora in network.unet_loras + network.text_encoder_loras:
         lora.multiplier = multiplier
