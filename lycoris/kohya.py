@@ -67,8 +67,6 @@ def create_network(
     loraplus_lr_ratio = float(kwargs.get("loraplus_lr_ratio", None)) if kwargs.get("loraplus_lr_ratio", None) is not None else None
     loraplus_unet_lr_ratio = float(kwargs.get("loraplus_unet_lr_ratio", None)) if kwargs.get("loraplus_unet_lr_ratio", None) is not None else None
     loraplus_text_encoder_lr_ratio = float(kwargs.get("loraplus_text_encoder_lr_ratio", None)) if kwargs.get("loraplus_text_encoder_lr_ratio", None) is not None else None
-    if loraplus_lr_ratio is not None or loraplus_unet_lr_ratio is not None or loraplus_text_encoder_lr_ratio is not None:
-        network.set_loraplus_lr_ratio(loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio)
 
     if unbalanced_factorization:
         logger.info("Unbalanced factorization for LoKr is enabled")
@@ -123,6 +121,8 @@ def create_network(
         unbalanced_factorization=unbalanced_factorization,
         train_t5xxl=train_t5xxl,
     )
+    if loraplus_lr_ratio is not None or loraplus_unet_lr_ratio is not None or loraplus_text_encoder_lr_ratio is not None:
+        network.set_loraplus_lr_ratio(loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio)
 
     return network
 
