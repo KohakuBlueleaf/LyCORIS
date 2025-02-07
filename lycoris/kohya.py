@@ -724,7 +724,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         # not supported
         pass
 
-    def prepare_grad_etc(self, unet):
+    def prepare_grad_etc(self, *args):
         self.requires_grad_(True)
 
     def on_epoch_start(self, unet):
