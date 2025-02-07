@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
     name="lycoris_lora",
     packages=find_packages(),
-    version="3.2.0.dev1",
+    version="3.2.0.dev2",
     url="https://github.com/KohakuBlueleaf/LyCORIS",
     description="Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion",
     author="Shih-Ying Yeh(KohakuBlueLeaf), Yu-Guan Hsieh, Zhidong Gao",
