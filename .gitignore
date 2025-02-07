@@ -1,3 +1,8 @@
+# Triton objects on Windows
+*.exp
+*.lib
+*.obj
+
 # example
 data/
 
