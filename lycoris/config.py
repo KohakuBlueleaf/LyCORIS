@@ -12,6 +12,7 @@ PRESET = {
             "SingleDiTBlock",  # SD3.5
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
+            "WanAttentionBlock", # Wan
         ],
         "unet_target_name": [
             "conv_in",
@@ -39,6 +40,7 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
+            "WanAttentionBlock", # Wan
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -63,6 +65,7 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
+            "WanAttentionBlock", # Wan
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -102,6 +105,7 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
+            "WanAttentionBlock", # Wan
         ],
         "unet_target_name": [
             "conv_in",
@@ -122,6 +126,7 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
+            "WanAttentionBlock", # Wan
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],
