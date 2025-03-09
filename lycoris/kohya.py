@@ -63,12 +63,22 @@ def create_network(
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
     train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
-    #lora_plus
-    loraplus_lr_ratio = float(kwargs.get("loraplus_lr_ratio", None)) if kwargs.get("loraplus_lr_ratio", None) is not None else None
-    loraplus_unet_lr_ratio = float(kwargs.get("loraplus_unet_lr_ratio", None)) if kwargs.get("loraplus_unet_lr_ratio", None) is not None else None
-    loraplus_text_encoder_lr_ratio = float(kwargs.get("loraplus_text_encoder_lr_ratio", None)) if kwargs.get("loraplus_text_encoder_lr_ratio", None) is not None else None
-    if loraplus_lr_ratio is not None or loraplus_unet_lr_ratio is not None or loraplus_text_encoder_lr_ratio is not None:
-        network.set_loraplus_lr_ratio(loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio)
+    # lora_plus
+    loraplus_lr_ratio = (
+        float(kwargs.get("loraplus_lr_ratio", None))
+        if kwargs.get("loraplus_lr_ratio", None) is not None
+        else None
+    )
+    loraplus_unet_lr_ratio = (
+        float(kwargs.get("loraplus_unet_lr_ratio", None))
+        if kwargs.get("loraplus_unet_lr_ratio", None) is not None
+        else None
+    )
+    loraplus_text_encoder_lr_ratio = (
+        float(kwargs.get("loraplus_text_encoder_lr_ratio", None))
+        if kwargs.get("loraplus_text_encoder_lr_ratio", None) is not None
+        else None
+    )
 
     if unbalanced_factorization:
         logger.info("Unbalanced factorization for LoKr is enabled")
@@ -123,6 +133,14 @@ def create_network(
         unbalanced_factorization=unbalanced_factorization,
         train_t5xxl=train_t5xxl,
     )
+    if (
+        loraplus_lr_ratio is not None
+        or loraplus_unet_lr_ratio is not None
+        or loraplus_text_encoder_lr_ratio is not None
+    ):
+        network.set_loraplus_lr_ratio(
+            loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio
+        )
 
     return network
 
@@ -232,8 +250,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         "DoubleStreamBlock",
         "SingleStreamBlock",
         "SingleDiTBlock",
-        "MMDoubleStreamBlock", #HunYuanVideo
-        "MMSingleStreamBlock", #HunYuanVideo
+        "MMDoubleStreamBlock",  # HunYuanVideo
+        "MMSingleStreamBlock",  # HunYuanVideo
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -302,6 +320,11 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.lora_dim = lora_dim
         self.train_t5xxl = train_t5xxl
         
+        # 初始化LoRA+相关属性
+        self.loraplus_lr_ratio = None
+        self.loraplus_unet_lr_ratio = None
+        self.loraplus_text_encoder_lr_ratio = None
+
         # 初始化LoRA+相关属性
         self.loraplus_lr_ratio = None
         self.loraplus_unet_lr_ratio = None
@@ -621,15 +644,23 @@ class LycorisNetworkKohya(LycorisNetwork):
 
         return key_scaled, sum(norms) / len(norms), max(norms)
 
-    def set_loraplus_lr_ratio(self, loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio):
+    def set_loraplus_lr_ratio(
+        self, loraplus_lr_ratio, loraplus_unet_lr_ratio, loraplus_text_encoder_lr_ratio
+    ):
         self.loraplus_lr_ratio = loraplus_lr_ratio
         self.loraplus_unet_lr_ratio = loraplus_unet_lr_ratio
         self.loraplus_text_encoder_lr_ratio = loraplus_text_encoder_lr_ratio
 
-        logger.info(f"LoRA+ UNet LR Ratio: {self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio}")
-        logger.info(f"LoRA+ Text Encoder LR Ratio: {self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio}")
+        logger.info(
+            f"LoRA+ UNet LR Ratio: {self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio}"
+        )
+        logger.info(
+            f"LoRA+ Text Encoder LR Ratio: {self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio}"
+        )
 
-    def prepare_optimizer_params(self, text_encoder_lr=None, unet_lr: float = 1e-4, learning_rate=None):
+    def prepare_optimizer_params(
+        self, text_encoder_lr=None, unet_lr: float = 1e-4, learning_rate=None
+    ):
         self.requires_grad_(True)
 
         all_params = []
@@ -658,7 +689,10 @@ class LycorisNetworkKohya(LycorisNetwork):
                     else:
                         param_data["lr"] = lr
 
-                if param_data.get("lr", None) == 0 or param_data.get("lr", None) is None:
+                if (
+                    param_data.get("lr", None) == 0
+                    or param_data.get("lr", None) is None
+                ):
                     logger.info("NO LR skipping!")
                     continue
 
@@ -674,7 +708,9 @@ class LycorisNetworkKohya(LycorisNetwork):
                 self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
-            lr_descriptions.extend(["textencoder" + (" " + d if d else "") for d in descriptions])
+            lr_descriptions.extend(
+                ["textencoder" + (" " + d if d else "") for d in descriptions]
+            )
 
         if self.unet_loras:
             params, descriptions = assemble_params(
@@ -683,7 +719,9 @@ class LycorisNetworkKohya(LycorisNetwork):
                 self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
-            lr_descriptions.extend(["unet" + (" " + d if d else "") for d in descriptions])
+            lr_descriptions.extend(
+                ["unet" + (" " + d if d else "") for d in descriptions]
+            )
 
         return all_params, lr_descriptions
 
@@ -691,7 +729,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         # not supported
         pass
 
-    def prepare_grad_etc(self, unet):
+    def prepare_grad_etc(self, *args):
         self.requires_grad_(True)
 
     def on_epoch_start(self, unet):
