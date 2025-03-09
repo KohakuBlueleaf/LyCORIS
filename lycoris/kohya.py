@@ -320,11 +320,6 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.train_t5xxl = train_t5xxl
-        
-        # 初始化LoRA+相关属性
-        self.loraplus_lr_ratio = None
-        self.loraplus_unet_lr_ratio = None
-        self.loraplus_text_encoder_lr_ratio = None
 
         # 初始化LoRA+相关属性
         self.loraplus_lr_ratio = None
