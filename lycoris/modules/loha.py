@@ -41,7 +41,7 @@ class LohaModule(LycorisBaseModule):
         use_scalar=False,
         rank_dropout_scale=False,
         weight_decompose=False,
-        wd_on_out=False,
+        wd_on_out=True,
         bypass_mode=None,
         rs_lora=False,
         **kwargs,
