@@ -105,12 +105,12 @@ def weight_gen(
             w2 = torch.empty(shape[0][1], shape[1][1])
 
     if use_w2:
-        torch.nn.init.constant_(w2, 1)
+        torch.nn.init.constant_(w2, 0)
     else:
         if tucker:
             torch.nn.init.kaiming_uniform_(t2, a=math.sqrt(5))
         torch.nn.init.kaiming_uniform_(w2a, a=math.sqrt(5))
-        torch.nn.init.constant_(w2b, 1)
+        torch.nn.init.constant_(w2b, 0)
 
     if use_w1:
         torch.nn.init.kaiming_uniform_(w1, a=math.sqrt(5))
