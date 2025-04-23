@@ -259,21 +259,21 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-
-### 2024/12/09 update to 3.1.1
+### 2025/04/23 update to 3.2.0
 
 #### New Features
 
-* use `wd_on_output=True` can enable "correct" weight-decomposition implementation which use the output dimension of weight to calc the norm. The original implementation in LyCORIS calculate things on input dimension due to ambiguos annotation in paper.
+* Support lora-plus learning rate scaling
+* Support HunYuanVideo model and Wan2.1 model
+* LyCORIS now have `onfly_merge` and `onfly_restore` method. Which can be used in inference time to merge the weights of LyCORIS into the original model. This will save the memory and speed up the inference time.
 
 #### Improvements
 
-* BOFT now have more efficient implementation which avoid einops.rearrange.
-* `.merge_to()` will automatically match the device and dtype now.
+* [BREAKING CHANGES] Now LyCORIS will use `wd_on_output=True` by default. This will make the weight norm more consistent with the original paper.
 
 #### Bug fixes
 
-* `scale_weight_norm` working correctly now.
+* `bypass_mode=False` will turn off the bypass mode correctly now.
 
 ## Todo list
 
