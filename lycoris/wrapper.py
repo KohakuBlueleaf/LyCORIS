@@ -89,9 +89,9 @@ def create_lycoris(module, multiplier=1.0, linear_dim=4, linear_alpha=1, **kwarg
     constraint = float(kwargs.get("constraint", 0) or 0)
     rescaled = str_bool(kwargs.get("rescaled", False))
     weight_decompose = str_bool(kwargs.get("dora_wd", False))
-    wd_on_output = str_bool(kwargs.get("wd_on_output", False))
+    wd_on_output = str_bool(kwargs.get("wd_on_output", True))
     full_matrix = str_bool(kwargs.get("full_matrix", False))
-    bypass_mode = str_bool(kwargs.get("bypass_mode", None))
+    bypass_mode = str_bool(kwargs.get("bypass_mode", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
 
     if unbalanced_factorization:
@@ -567,6 +567,14 @@ class LycorisNetwork(torch.nn.Module):
     def merge_to(self, weight=1.0):
         for lora in self.loras:
             lora.merge_to(weight)
+
+    def onfly_merge(self, weight=1.0):
+        for lora in self.loras:
+            lora.onfly_merge(weight)
+
+    def onfly_restore(self):
+        for lora in self.loras:
+            lora.onfly_restore()
 
     def apply_max_norm_regularization(self, max_norm_value, device):
         key_scaled = 0

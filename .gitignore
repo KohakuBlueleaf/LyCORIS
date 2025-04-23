@@ -1,5 +1,11 @@
+# Triton objects on Windows
+*.exp
+*.lib
+*.obj
+
 # example
 data/
+*experiments/
 
 # test
 models/

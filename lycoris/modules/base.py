@@ -290,6 +290,38 @@ class LycorisBaseModule(ModuleCustomSD):
                 self.org_module[0].bias = nn.Parameter(bias)
         self.to(self_device, self_dtype)
 
+    def onfly_merge(self, multiplier=1.0):
+        if self.not_supported:
+            return
+        self_device = next(self.parameters()).device
+        self_dtype = next(self.parameters()).dtype
+        self.to(self.org_weight)
+        self.cached_org_weight = self.org_weight.data.cpu()
+        self.cached_org_bias = None
+        weight, bias = self.get_merged_weight(
+            multiplier, self.org_weight.shape, self.org_weight.device
+        )
+        self.org_weight = weight
+        if bias is not None:
+            bias = bias.to(self.org_weight)
+            if self.org_module[0].bias is not None:
+                self.org_module[0].bias.data.copy_(bias)
+                self.cached_org_bias = self.org_module[0].bias.data.cpu()
+            else:
+                self.org_module[0].bias = nn.Parameter(bias)
+        if self.org_module[0].bias is not None:
+            self.org_module[0].bias = self.org_module[0].bias.to(self.org_weight)
+        self.to(self_device, self_dtype)
+
+    def onfly_restore(self):
+        if self.not_supported:
+            return
+        self.org_weight = self.cached_org_weight.to(self.org_weight)
+        if self.cached_org_bias is not None:
+            self.org_module[0].bias.data.copy_(self.cached_org_bias.to(self.org_weight))
+        del self.cached_org_weight
+        del self.cached_org_bias
+
     def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
         raise NotImplementedError
 
