@@ -5,6 +5,7 @@
 
 # example
 data/
+*experiments/
 
 # test
 models/
