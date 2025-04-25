@@ -253,6 +253,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         "MMDoubleStreamBlock",  # HunYuanVideo
         "MMSingleStreamBlock",  # HunYuanVideo
         "WanAttentionBlock", # Wan
+        "HunyuanVideoTransformerBlock", # FramePack
+        "HunyuanVideoSingleTransformerBlock", # FramePack
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",

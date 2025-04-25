@@ -13,6 +13,8 @@ PRESET = {
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
             "WanAttentionBlock", # Wan
+            "HunyuanVideoTransformerBlock", # FramePack
+            "HunyuanVideoSingleTransformerBlock", # FramePack
         ],
         "unet_target_name": [
             "conv_in",
@@ -41,6 +43,8 @@ PRESET = {
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
             "WanAttentionBlock", # Wan
+            "HunyuanVideoTransformerBlock", # FramePack
+            "HunyuanVideoSingleTransformerBlock", # FramePack
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -66,6 +70,8 @@ PRESET = {
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
             "WanAttentionBlock", # Wan
+            "HunyuanVideoTransformerBlock", # FramePack
+            "HunyuanVideoSingleTransformerBlock", # FramePack
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -106,6 +112,8 @@ PRESET = {
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
             "WanAttentionBlock", # Wan
+            "HunyuanVideoTransformerBlock", # FramePack
+            "HunyuanVideoSingleTransformerBlock", # FramePack
         ],
         "unet_target_name": [
             "conv_in",
@@ -127,6 +135,8 @@ PRESET = {
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
             "WanAttentionBlock", # Wan
+            "HunyuanVideoTransformerBlock", # FramePack
+            "HunyuanVideoSingleTransformerBlock", # FramePack
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],
