@@ -58,7 +58,7 @@ class LokrModule(LycorisBaseModule):
         factor: int = -1,  # factorization factor
         rank_dropout_scale=False,
         weight_decompose=False,
-        wd_on_out=False,
+        wd_on_out=True,
         full_matrix=False,
         bypass_mode=None,
         rs_lora=False,

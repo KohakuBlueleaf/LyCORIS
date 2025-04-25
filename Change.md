@@ -1,5 +1,21 @@
 # Change Log
 
+## 2025/04/23 update to 3.2.0
+
+#### New Features
+
+* Support lora-plus learning rate scaling
+* Support HunYuanVideo model and Wan2.1 model
+* LyCORIS now have `onfly_merge` and `onfly_restore` method. Which can be used in inference time to merge the weights of LyCORIS into the original model. This will save the memory and speed up the inference time.
+
+#### Improvements
+
+* [BREAKING CHANGES] Now LyCORIS will use `wd_on_output=True` by default. This will make the weight norm more consistent with the original paper.
+
+#### Bug fixes
+
+* `bypass_mode=False` will turn off the bypass mode correctly now.
+
 ## 2024/12/09 update to 3.1.1
 
 #### New Features
