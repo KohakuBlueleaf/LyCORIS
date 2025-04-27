@@ -137,7 +137,7 @@ Check [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informat
 
 #### As standalone wrappers
 
-See [standalone_example.py](standalone_example.py) for full example.
+See [example/standalone_example.py](example/standalone_example.py) for full example.
 
 Import `create_lycoris` and `LycorisNetwork` from `lycoris` library, put your preset to `LycorisNetwork` and then use `create_lycoris` to create LyCORIS module for your pytorch module.
 
@@ -169,12 +169,12 @@ You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to
 
 After LyCORIS3.0.0, Parametrize API and Functional API have been added, which provide more different ways on utilizing LyCORIS library.
 
-Check API reference for more informations.
+Check API reference for more information.
 You can also take the [test suites](test/) as a kind of examples.
 
 #### Bitsandbytes support
 
-See [bnb_example.py](bnb_example.py) for example. Basically as same as standalone wrapper.
+See [example/bnb_example.py](example/bnb_example.py) for example. Basically as same as standalone wrapper.
 
 #### Graphical interfaces and Colabs (via kohya trainer)
 
