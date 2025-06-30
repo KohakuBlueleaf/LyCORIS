@@ -12,6 +12,8 @@ unet_target_module = [
   "SingleDiTBlock",
   "MMDoubleStreamBlock", #HunYuanVideo
   "MMSingleStreamBlock", #HunYuanVideo
+  "JointTransformerBlock", # lumina-image-2
+  "FinalLayer", # lumina-image-2
 ]
 unet_target_name = [
   "conv_in",
@@ -25,6 +27,10 @@ text_encoder_target_module = [
   "CLIPMLP",
   "MT5Block",
   "BertLayer",
+  "Gemma2Attention",
+  "Gemma2FlashAttention2",
+  "Gemma2SdpaAttention",
+  "Gemma2MLP",
 ]
 text_encoder_target_name = [
   # "token_embedding", # not supported, Embedding module in CLIP

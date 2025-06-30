@@ -255,6 +255,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         "WanAttentionBlock", # Wan
         "HunyuanVideoTransformerBlock", # FramePack
         "HunyuanVideoSingleTransformerBlock", # FramePack
+        "JointTransformerBlock", # lumina-image-2
+        "FinalLayer", # lumina-image-2
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -268,6 +270,10 @@ class LycorisNetworkKohya(LycorisNetwork):
         "CLIPMLP",
         "MT5Block",
         "BertLayer",
+        "Gemma2Attention",
+        "Gemma2FlashAttention2",
+        "Gemma2SdpaAttention",
+        "Gemma2MLP",
     ]
     TEXT_ENCODER_TARGET_REPLACE_NAME = []
     LORA_PREFIX_UNET = "lora_unet"
