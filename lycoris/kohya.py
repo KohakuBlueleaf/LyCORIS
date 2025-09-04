@@ -257,6 +257,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "HunyuanVideoSingleTransformerBlock", # FramePack
         "JointTransformerBlock", # lumina-image-2
         "FinalLayer", # lumina-image-2
+        "QwenImageTransformerBlock", # Qwen
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",

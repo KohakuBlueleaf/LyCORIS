@@ -17,6 +17,7 @@ PRESET = {
             "HunyuanVideoSingleTransformerBlock", # FramePack
             "JointTransformerBlock", # lumina-image-2
             "FinalLayer", # lumina-image-2
+            "QwenImageTransformerBlock", # Qwen
         ],
         "unet_target_name": [
             "conv_in",
@@ -53,6 +54,7 @@ PRESET = {
             "HunyuanVideoSingleTransformerBlock", # FramePack
             "JointTransformerBlock", # lumina-image-2
             "FinalLayer", # lumina-image-2
+            "QwenImageTransformerBlock", # Qwen
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -86,6 +88,7 @@ PRESET = {
             "HunyuanVideoSingleTransformerBlock", # FramePack
             "JointTransformerBlock", # lumina-image-2
             "FinalLayer", # lumina-image-2
+            "QwenImageTransformerBlock", # Qwen
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -137,6 +140,7 @@ PRESET = {
             "HunyuanVideoSingleTransformerBlock", # FramePack
             "JointTransformerBlock", # lumina-image-2
             "FinalLayer", # lumina-image-2
+            "QwenImageTransformerBlock", # Qwen
         ],
         "unet_target_name": [
             "conv_in",
@@ -162,6 +166,7 @@ PRESET = {
             "HunyuanVideoSingleTransformerBlock", # FramePack
             "JointTransformerBlock", # lumina-image-2
             "FinalLayer", # lumina-image-2
+            "QwenImageTransformerBlock", # Qwen
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],
