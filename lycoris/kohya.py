@@ -680,7 +680,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         if self.text_encoder_loras:
             params, descriptions = assemble_params(
                 self.text_encoder_loras,
-                text_encoder_lr if text_encoder_lr is not None else default_lr,
+                text_encoder_lr if text_encoder_lr is not None else learning_rate,
                 self.loraplus_text_encoder_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
@@ -689,7 +689,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         if self.unet_loras:
             params, descriptions = assemble_params(
                 self.unet_loras,
-                unet_lr if unet_lr is not None else default_lr,
+                unet_lr if unet_lr is not None else learning_rate,
                 self.loraplus_unet_lr_ratio or self.loraplus_lr_ratio,
             )
             all_params.extend(params)
@@ -701,13 +701,13 @@ class LycorisNetworkKohya(LycorisNetwork):
         # not supported
         pass
 
-    def prepare_grad_etc(self, unet):
+    def prepare_grad_etc(self, *args):
         self.requires_grad_(True)
 
-    def on_epoch_start(self, unet):
+    def on_epoch_start(self, *args):
         self.train()
 
-    def on_step_start(self):
+    def on_step_start(self, *args):
         pass
 
     def get_trainable_params(self):
