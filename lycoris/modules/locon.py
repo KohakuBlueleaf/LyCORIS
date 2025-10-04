@@ -306,27 +306,27 @@ class LoConModule(LycorisBaseModule):
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
-        scale = self.scale
+                return self.org_forward(x, *args, **kwargs)
 
-        dtype = self.dtype
-        if not self.bypass_mode:
-            diff_weight = self.make_weight(x.device).to(dtype) * scale
-            weight = self.org_module[0].weight.data.to(dtype)
-            if self.wd:
-                weight = self.apply_weight_decompose(
-                    weight + diff_weight, self.multiplier
-                )
-            else:
-                weight = weight + diff_weight * self.multiplier
-            bias = (
-                None
-                if self.org_module[0].bias is None
-                else self.org_module[0].bias.data
-            )
-            return self.op(x, weight, bias, **self.kw_dict)
-        else:
+        if self.bypass_mode:
             return self.bypass_forward(x, scale=self.multiplier)
+
+        base = self.org_forward(x, *args, **kwargs)
+        scale = self.scale
+        device = x.device
+
+        base_weight = self._current_weight().to(device)
+        diff_weight = self.make_weight(device).to(base_weight.dtype) * scale
+        if self.wd:
+            new_weight = self.apply_weight_decompose(
+                base_weight + diff_weight, self.multiplier
+            )
+        else:
+            new_weight = base_weight + diff_weight * self.multiplier
+
+        delta_weight = new_weight - base_weight
+        delta = self.op(x, delta_weight, None, **self.kw_dict)
+        return base + delta
