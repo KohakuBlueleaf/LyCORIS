@@ -244,12 +244,16 @@ class ButterflyOFTModule(LycorisBaseModule):
     def forward(self, x, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
+                return self.org_forward(x, *args, **kwargs)
         scale = self.multiplier
 
         if self.bypass_mode:
             return self.bypass_forward(x, scale)
         else:
-            w = self.make_weight(scale, x.device)
-            kw_dict = self.kw_dict | {"weight": w, "bias": self.org_module[0].bias}
-            return self.op(x, **kw_dict)
+            base = self.org_forward(x, *args, **kwargs)
+            new_weight = self.make_weight(scale, x.device)
+            base_weight = self._current_weight().to(new_weight.device)
+            new_weight = new_weight.to(base_weight.dtype)
+            delta_weight = new_weight - base_weight
+            delta = self.op(x, weight=delta_weight, bias=None, **self.kw_dict)
+            return base + delta
