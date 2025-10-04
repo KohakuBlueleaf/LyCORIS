@@ -122,25 +122,39 @@ class NormModule(LycorisBaseModule):
             bias = None
         return weight, bias
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         if self.not_supported or (
             self.module_dropout
             and self.training
             and torch.rand(1) < self.module_dropout
         ):
-            return self.org_forward(x)
-        scale = self.multiplier
+            return self.org_forward(x, *args, **kwargs)
 
-        w, b = self.make_weight(scale, x.device)
+        base = self.org_forward(x, *args, **kwargs)
+
+        weight, bias = self.make_weight(self.multiplier, x.device)
+        org_weight = self._current_weight().to(weight.device, dtype=weight.dtype)
+        delta_w = weight - org_weight
+
+        delta_b = None
+        if bias is not None:
+            bias = bias.to(x.device)
+            org_bias = self._current_bias()
+            if org_bias is not None:
+                delta_b = bias - org_bias.to(bias.device)
+            else:
+                delta_b = bias
+
         if self.org_norm is not None:
             normed = self.org_norm(x)
-            scaled = normed * w
-            if b is not None:
-                scaled += b
-            return scaled
+            delta = normed * delta_w
+            if delta_b is not None:
+                delta = delta + delta_b
+            return base + delta
 
-        kw_dict = self.kw_dict | {"weight": w, "bias": b}
-        return self.op(x, **kw_dict)
+        kw_dict = self.kw_dict | {"weight": delta_w, "bias": delta_b}
+        delta = self.op(x, **kw_dict)
+        return base + delta
 
 
 if __name__ == "__main__":
