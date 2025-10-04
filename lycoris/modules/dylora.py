@@ -143,15 +143,14 @@ class DyLoraModule(LycorisBaseModule):
     def forward(self, x, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x, *args, **kwargs)
+                return self.org_forward(x)
         if self.bypass_mode:
             return self.bypass_forward(x, self.multiplier)
         else:
-            base = self.org_forward(x, *args, **kwargs)
-            base_weight = self._current_weight().to(x.device)
-            merged_weight = self.get_merged_weight(multiplier=self.multiplier)[0].to(
-                base_weight.dtype
+            weight = self.get_merged_weight(multiplier=self.multiplier)[0]
+            bias = (
+                None
+                if self.org_module[0].bias is None
+                else self.org_module[0].bias.data
             )
-            delta_weight = merged_weight - base_weight
-            delta = self.op(x, delta_weight, None, **self.kw_dict)
-            return base + delta
+            return self.op(x, weight, bias, **self.kw_dict)
