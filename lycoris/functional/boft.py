@@ -63,9 +63,7 @@ def diff_weight(org_weight, *weights, constraint=None):
             .unflatten(0, (-1, b))
         )
         inp = torch.einsum("b i j, b j ...-> b i ...", bi, inp)
-        inp = (
-            inp.flatten(0, 1).unflatten(0, (-1, k, g)).transpose(1, 2).flatten(0, 2)
-        )
+        inp = inp.flatten(0, 1).unflatten(0, (-1, k, g)).transpose(1, 2).flatten(0, 2)
 
     if rescale is not None:
         inp = inp * rescale

@@ -293,14 +293,18 @@ class LycorisBaseModule(ModuleCustomSD):
         wrappers = list(getattr(module, "_lycoris_wrappers", []))
 
         if not wrappers:
-            module.forward = getattr(module, "_lycoris_original_forward", self.org_forward)
+            module.forward = getattr(
+                module, "_lycoris_original_forward", self.org_forward
+            )
             return
 
         try:
             idx = wrappers.index(self)
         except ValueError:
-            module.forward = wrappers[-1].forward if wrappers else getattr(
-                module, "_lycoris_original_forward", self.org_forward
+            module.forward = (
+                wrappers[-1].forward
+                if wrappers
+                else getattr(module, "_lycoris_original_forward", self.org_forward)
             )
             return
 
@@ -313,7 +317,9 @@ class LycorisBaseModule(ModuleCustomSD):
             module._lycoris_wrappers = wrappers
             module.forward = wrappers[-1].forward
         else:
-            module.forward = getattr(module, "_lycoris_original_forward", self.org_forward)
+            module.forward = getattr(
+                module, "_lycoris_original_forward", self.org_forward
+            )
             module.__dict__.pop("_lycoris_wrappers", None)
             module.__dict__.pop("_lycoris_original_forward", None)
 
