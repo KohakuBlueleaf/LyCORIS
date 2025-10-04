@@ -231,6 +231,8 @@ $ python3 merge.py --help
 usage: merge.py [-h] [--is_v2] [--is_sdxl] [--device DEVICE] [--dtype DTYPE] [--weight WEIGHT] base_model lycoris_model output_name
 ```
 
+**Note**: The `merge_to()` method has an opt-in parameter, `precise` that uses more CPU memory to store an original snapshot of the modified weights, allowing us to restore the original weights exactly when calling `restore()`. This is useful when you want to merge multiple LyCORIS models sequentially to the same base model without accumulating numerical errors in a production environment. See this [model merge example](example/high_precision_merge_demo.py) for context.
+
 ### Conversion of LoRA, LyCORIS and full models between HCP and sd-webui format
 
 This script allows you to use the LyCORIS models trained with HCP-Diffusion in sd-webui.

@@ -564,9 +564,9 @@ class LycorisNetwork(torch.nn.Module):
         for lora in self.loras:
             lora.restore()
 
-    def merge_to(self, weight=1.0):
+    def merge_to(self, weight=1.0, *, precise: bool = False):
         for lora in self.loras:
-            lora.merge_to(weight)
+            lora.merge_to(weight, precise=precise)
 
     def onfly_merge(self, weight=1.0):
         for lora in self.loras:
