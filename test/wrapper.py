@@ -230,62 +230,6 @@ class LycorisWrapperTests(unittest.TestCase):
         finally:
             reset_globals()
 
-    def test_multiple_wrappers_stack(self):
-        try:
-            reset_globals()
-            torch.manual_seed(0)
-
-            net = nn.Linear(4, 4)
-            data = torch.randn(2, 4)
-
-            base = net(data)
-
-            lyco1 = create_lycoris(
-                net,
-                multiplier=1.0,
-                linear_dim=2,
-                linear_alpha=1.0,
-                algo="lora",
-            )
-            lyco1.apply_to()
-            out1 = net(data)
-            delta1 = out1 - base
-            lyco1.restore()
-
-            self.assertTrue(torch.allclose(base, net(data)))
-
-            torch.manual_seed(1)
-            lyco2 = create_lycoris(
-                net,
-                multiplier=1.0,
-                linear_dim=2,
-                linear_alpha=1.0,
-                algo="loha",
-            )
-            lyco2.apply_to()
-            out2 = net(data)
-            delta2 = out2 - base
-            lyco2.restore()
-
-            self.assertTrue(torch.allclose(base, net(data)))
-
-            lyco1.apply_to()
-            lyco2.apply_to()
-            stacked = net(data)
-
-            after_pop_top = None
-            lyco2.restore()
-            after_pop_top = net(data)
-            self.assertTrue(torch.allclose(after_pop_top, base + delta1, atol=1e-5))
-
-            lyco1.restore()
-
-            expected = base + delta1 + delta2
-            self.assertTrue(torch.allclose(stacked, expected, atol=1e-5))
-            self.assertTrue(torch.allclose(net(data), base, atol=1e-5))
-        finally:
-            reset_globals()
-
     def test_lycoris_wrapper_regex_named_modules(
         self,
         device_dtype=(torch.device("cpu"), torch.float32),

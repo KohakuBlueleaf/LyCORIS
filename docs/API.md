@@ -88,10 +88,6 @@ Although different algorithm will have different extra arguments for weight_diff
 * `create_lycoris`: see example
 * `create_lycoris_from_weights`: see example
 
-`LycorisNetwork.apply_to()` can be invoked multiple times on the same module with different wrapper instances. Each wrapper is stacked on top of the previous one, and calling `restore()` on a wrapper removes only its own contribution while keeping earlier wrappers active.
-
-See `example/stacked_wrapper_demo.py` for a script that showcases stacking and selective removal in practice.
-
 ### kohya
 
 * the specialized wrapper for kohya-ss/sd-scripts.
