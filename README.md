@@ -163,6 +163,10 @@ lycoris_param = lycoris_net.parameters()
 forward_with_lyco = your_model(x)
 ```
 
+You can also layer multiple wrappers on top of the same module. Each call to `apply_to()` stacks a new adapter after the previously attached ones, and invoking `restore()` on a wrapper removes only its contribution while keeping earlier wrappers active. See [example/standalone_example.py](example/standalone_example.py) for an end-to-end demonstration.
+
+For a stacking-specific walkthrough (including selectively removing adapters), see `python example/stacked_wrapper_demo.py --help`.
+
 You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to see how I utilize LyCORIS to finetune the Phi-1.5 models.
 
 #### Other method

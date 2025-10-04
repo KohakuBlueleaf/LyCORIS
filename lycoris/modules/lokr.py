@@ -543,26 +543,27 @@ class LokrModule(LycorisBaseModule):
     def forward(self, x: torch.Tensor, *args, **kwargs):
         if self.module_dropout and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x)
+                return self.org_forward(x, *args, **kwargs)
+
         if self.bypass_mode:
             return self.bypass_forward(x, self.multiplier)
-        else:
-            diff_weight = self.get_weight(self.shape).to(self.dtype) * self.scalar
-            weight = self.org_module[0].weight.data.to(self.dtype)
-            if self.wd:
-                weight = self.apply_weight_decompose(
-                    weight + diff_weight, self.multiplier
-                )
-            elif self.multiplier == 1:
-                weight = weight + diff_weight
-            else:
-                weight = weight + diff_weight * self.multiplier
-            bias = (
-                None
-                if self.org_module[0].bias is None
-                else self.org_module[0].bias.data
+
+        base = self.org_forward(x, *args, **kwargs)
+        base_weight = self._current_weight().to(x.device)
+        diff_weight = self.get_weight(self.shape).to(base_weight.dtype) * self.scalar
+
+        if self.wd:
+            new_weight = self.apply_weight_decompose(
+                base_weight + diff_weight, self.multiplier
             )
-            return self.op(x, weight, bias, **self.kw_dict)
+        elif self.multiplier == 1:
+            new_weight = base_weight + diff_weight
+        else:
+            new_weight = base_weight + diff_weight * self.multiplier
+
+        delta_weight = new_weight - base_weight
+        delta = self.op(x, delta_weight, None, **self.kw_dict)
+        return base + delta
 
 
 if __name__ == "__main__":

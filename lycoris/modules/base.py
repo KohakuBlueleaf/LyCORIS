@@ -261,16 +261,61 @@ class LycorisBaseModule(ModuleCustomSD):
     def org_weight(self, value):
         self.org_module[0].weight.data.copy_(value)
 
+    def _current_weight(self):
+        return self.org_module[0].weight.detach()
+
+    def _current_bias(self):
+        bias = self.org_module[0].bias
+        return None if bias is None else bias.detach()
+
     def apply_to(self, **kwargs):
         if self.not_supported:
             return
-        self.org_forward = self.org_module[0].forward
-        self.org_module[0].forward = self.forward
+
+        module = self.org_module[0]
+        if not hasattr(module, "_lycoris_original_forward"):
+            module._lycoris_original_forward = module.forward
+
+        wrappers = list(getattr(module, "_lycoris_wrappers", []))
+        if self in wrappers:
+            wrappers.remove(self)
+
+        self.org_forward = module.forward
+        wrappers.append(self)
+
+        module._lycoris_wrappers = wrappers
+        module.forward = self.forward
 
     def restore(self):
         if self.not_supported:
             return
-        self.org_module[0].forward = self.org_forward
+        module = self.org_module[0]
+        wrappers = list(getattr(module, "_lycoris_wrappers", []))
+
+        if not wrappers:
+            module.forward = getattr(module, "_lycoris_original_forward", self.org_forward)
+            return
+
+        try:
+            idx = wrappers.index(self)
+        except ValueError:
+            module.forward = wrappers[-1].forward if wrappers else getattr(
+                module, "_lycoris_original_forward", self.org_forward
+            )
+            return
+
+        wrappers.pop(idx)
+
+        if idx < len(wrappers):
+            wrappers[idx].org_forward = self.org_forward
+
+        if wrappers:
+            module._lycoris_wrappers = wrappers
+            module.forward = wrappers[-1].forward
+        else:
+            module.forward = getattr(module, "_lycoris_original_forward", self.org_forward)
+            module.__dict__.pop("_lycoris_wrappers", None)
+            module.__dict__.pop("_lycoris_original_forward", None)
 
     def merge_to(self, multiplier=1.0):
         if self.not_supported:

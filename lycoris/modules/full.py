@@ -203,12 +203,22 @@ class FullModule(LycorisBaseModule):
             and self.training
             and torch.rand(1) < self.module_dropout
         ):
-            original = True
+            return self.org_forward(x, *args, **kwargs)
+
+        base = self.org_forward(x, *args, **kwargs)
+        weight, bias = self.make_weight(self.multiplier, x.device)
+
+        base_weight = self._current_weight().to(weight.device)
+        delta_weight = weight - base_weight
+
+        org_bias = self._current_bias()
+        if bias is not None:
+            bias = bias.to(x.device)
+
+        if org_bias is not None and bias is not None:
+            delta_bias = bias - org_bias.to(bias.device)
         else:
-            original = False
-        if original:
-            return self.org_forward(x)
-        scale = self.multiplier
-        weight, bias = self.make_weight(scale, x.device)
-        kw_dict = self.kw_dict | {"weight": weight, "bias": bias}
-        return self.op(x, **kw_dict)
+            delta_bias = bias
+
+        delta = self.op(x, weight=delta_weight, bias=delta_bias, **self.kw_dict)
+        return base + delta
