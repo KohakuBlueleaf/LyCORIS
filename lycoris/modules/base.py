@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -59,6 +60,19 @@ class ModuleCustomSD(nn.Module):
             return super().state_dict(
                 *args, destination=destination, prefix=prefix, keep_vars=keep_vars
             )
+
+
+@dataclass
+class _MergeContext:
+    precise: bool
+    target_device: torch.device
+    target_dtype: torch.dtype
+    compute_dtype: torch.dtype
+    param_device: torch.device | None
+    param_dtype: torch.dtype | None
+    module: nn.Module
+    weight_param: torch.Tensor
+    bias_param: torch.Tensor | None
 
 
 class LycorisBaseModule(ModuleCustomSD):
@@ -272,23 +286,24 @@ class LycorisBaseModule(ModuleCustomSD):
             return
         self.org_module[0].forward = self.org_forward
 
-    def merge_to(self, multiplier=1.0):
+    def merge_to(self, multiplier=1.0, *, precise: bool = False):
         if self.not_supported:
             return
-        self_device = next(self.parameters()).device
-        self_dtype = next(self.parameters()).dtype
-        self.to(self.org_weight)
-        weight, bias = self.get_merged_weight(
-            multiplier, self.org_weight.shape, self.org_weight.device
-        )
-        self.org_weight = weight.to(self.org_weight)
-        if bias is not None:
-            bias = bias.to(self.org_weight)
-            if self.org_module[0].bias is not None:
-                self.org_module[0].bias.data.copy_(bias)
-            else:
-                self.org_module[0].bias = nn.Parameter(bias)
-        self.to(self_device, self_dtype)
+
+        ctx = self._prepare_merge_context(precise)
+
+        if precise:
+            weight_prec, bias_prec = self._compute_precise_result(ctx, multiplier)
+            self._apply_precise_weights(ctx, weight_prec, bias_prec)
+        else:
+            weight, bias = self.get_merged_weight(
+                multiplier,
+                ctx.weight_param.shape,
+                ctx.target_device,
+            )
+            self._apply_merged_weights(ctx, weight, bias)
+
+        self._restore_merge_context(ctx)
 
     def onfly_merge(self, multiplier=1.0):
         if self.not_supported:
@@ -345,3 +360,182 @@ class LycorisBaseModule(ModuleCustomSD):
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
+
+    def _prepare_merge_context(self, precise: bool) -> _MergeContext:
+        module = self.org_module[0]
+        weight_param = module.weight
+        bias_param = module.bias
+
+        params = tuple(self.parameters())
+        first_param = params[0] if params else None
+        param_device = first_param.device if first_param is not None else None
+        param_dtype = first_param.dtype if first_param is not None else None
+
+        target_device = weight_param.device
+        target_dtype = weight_param.dtype
+        compute_dtype = torch.float64 if precise else target_dtype
+
+        if first_param is not None:
+            self.to(device=target_device, dtype=compute_dtype)
+        else:
+            self.to(target_device)
+            if precise:
+                self.to(dtype=compute_dtype)
+
+        if precise:
+            self._ensure_precise_snapshot(module, weight_param, bias_param)
+            self._load_precise_snapshot(
+                module,
+                weight_param,
+                bias_param,
+                target_device,
+                compute_dtype,
+            )
+
+        return _MergeContext(
+            precise=precise,
+            target_device=target_device,
+            target_dtype=target_dtype,
+            compute_dtype=compute_dtype,
+            param_device=param_device,
+            param_dtype=param_dtype,
+            module=module,
+            weight_param=weight_param,
+            bias_param=bias_param,
+        )
+
+    def _apply_merged_weights(
+        self,
+        ctx: _MergeContext,
+        weight: torch.Tensor,
+        bias: torch.Tensor | None,
+    ) -> None:
+        merged_weight = weight.to(ctx.target_dtype)
+        ctx.weight_param.data.copy_(merged_weight)
+
+        if bias is not None:
+            merged_bias = bias.to(ctx.target_dtype)
+            if ctx.bias_param is not None:
+                ctx.bias_param.data.copy_(merged_bias)
+            else:
+                ctx.module.bias = nn.Parameter(merged_bias)
+        elif ctx.bias_param is None:
+            ctx.module.bias = None
+
+        if ctx.precise:
+            ctx.module._lycoris_precise_weight_current = weight.to(torch.float64).cpu()
+            if ctx.bias_param is not None:
+                if bias is not None:
+                    ctx.module._lycoris_precise_bias_current = bias.to(
+                        torch.float64
+                    ).cpu()
+                else:
+                    ctx.module._lycoris_precise_bias_current = (
+                        ctx.module._lycoris_precise_bias_base
+                    )
+
+    def _restore_merge_context(self, ctx: _MergeContext) -> None:
+        if ctx.param_device is not None and ctx.param_dtype is not None:
+            self.to(device=ctx.param_device, dtype=ctx.param_dtype)
+        elif ctx.param_device is not None:
+            self.to(ctx.param_device)
+        elif ctx.param_dtype is not None:
+            self.to(dtype=ctx.param_dtype)
+
+    def _compute_precise_result(
+        self, ctx: _MergeContext, multiplier: float
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        base_weight = ctx.module._lycoris_precise_weight_current
+        diff_weight, diff_bias = self.get_diff_weight(
+            multiplier=1.0, device=ctx.target_device
+        )
+        diff_weight_prec = diff_weight.to(torch.float64).cpu()
+        new_weight = base_weight + diff_weight_prec * multiplier
+
+        new_bias = None
+        if diff_bias is not None:
+            diff_bias_prec = diff_bias.to(torch.float64).cpu()
+            base_bias = ctx.module._lycoris_precise_bias_current
+            if base_bias is None:
+                base_bias = torch.zeros_like(diff_bias_prec)
+            new_bias = base_bias + diff_bias_prec * multiplier
+        else:
+            new_bias = ctx.module._lycoris_precise_bias_current
+
+        ctx.module._lycoris_precise_weight_current = new_weight.clone()
+        if diff_bias is not None:
+            ctx.module._lycoris_precise_bias_current = (
+                new_bias.clone() if new_bias is not None else None
+            )
+
+        return new_weight, new_bias
+
+    def _apply_precise_weights(
+        self,
+        ctx: _MergeContext,
+        weight_prec: torch.Tensor,
+        bias_prec: torch.Tensor | None,
+    ) -> None:
+        ctx.weight_param.data.copy_(weight_prec.to(ctx.target_device, ctx.target_dtype))
+
+        if bias_prec is not None:
+            if ctx.bias_param is not None:
+                ctx.bias_param.data.copy_(
+                    bias_prec.to(ctx.target_device, ctx.target_dtype)
+                )
+            else:
+                ctx.module.bias = nn.Parameter(
+                    bias_prec.to(ctx.target_device, ctx.target_dtype)
+                )
+        elif ctx.bias_param is None:
+            ctx.module.bias = None
+
+    @staticmethod
+    def _ensure_precise_snapshot(
+        module: nn.Module,
+        weight: torch.Tensor,
+        bias: torch.Tensor | None,
+    ) -> None:
+        if not hasattr(module, "_lycoris_precise_weight_base"):
+            base = weight.detach().cpu().double()
+            module._lycoris_precise_weight_base = base
+            module._lycoris_precise_weight_current = base.clone()
+        if not hasattr(module, "_lycoris_precise_weight_current"):
+            module._lycoris_precise_weight_current = (
+                module._lycoris_precise_weight_base.clone()
+            )
+
+        if not hasattr(module, "_lycoris_precise_bias_base"):
+            if bias is not None:
+                base_bias = bias.detach().cpu().double()
+            else:
+                base_bias = None
+            module._lycoris_precise_bias_base = base_bias
+            module._lycoris_precise_bias_current = (
+                base_bias.clone() if base_bias is not None else None
+            )
+        if not hasattr(module, "_lycoris_precise_bias_current"):
+            module._lycoris_precise_bias_current = (
+                module._lycoris_precise_bias_base.clone()
+                if module._lycoris_precise_bias_base is not None
+                else None
+            )
+
+    @staticmethod
+    def _load_precise_snapshot(
+        module: nn.Module,
+        weight_param: torch.Tensor,
+        bias_param: torch.Tensor | None,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> None:
+        weight_param.data.copy_(
+            module._lycoris_precise_weight_current.to(device=device, dtype=dtype)
+        )
+        if bias_param is not None:
+            bias_snapshot = module._lycoris_precise_bias_current
+            if bias_snapshot is None and module._lycoris_precise_bias_base is not None:
+                bias_snapshot = module._lycoris_precise_bias_base
+                module._lycoris_precise_bias_current = bias_snapshot
+            if bias_snapshot is not None:
+                bias_param.data.copy_(bias_snapshot.to(device=device, dtype=dtype))
