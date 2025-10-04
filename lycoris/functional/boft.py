@@ -57,13 +57,13 @@ def diff_weight(org_weight, *weights, constraint=None):
         g = 2
         k = 2**i * r_b
         inp = (
-            inp.unflatten(-1, (-1, g, k))
-            .transpose(-2, -1)
-            .flatten(-3)
-            .unflatten(-1, (-1, b))
+            inp.unflatten(0, (-1, g, k))
+            .transpose(1, 2)
+            .flatten(0, 2)
+            .unflatten(0, (-1, b))
         )
-        inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
-        inp = inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
+        inp = torch.einsum("b i j, b j ...-> b i ...", bi, inp)
+        inp = inp.flatten(0, 1).unflatten(0, (-1, k, g)).transpose(1, 2).flatten(0, 2)
 
     if rescale is not None:
         inp = inp * rescale

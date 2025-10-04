@@ -39,7 +39,9 @@ class StackSummary:
     outputs: list[torch.Tensor]
 
 
-def apply_wrapper(model: nn.Module, preset: dict[str, list[str]], **kwargs) -> LycorisNetwork:
+def apply_wrapper(
+    model: nn.Module, preset: dict[str, list[str]], **kwargs
+) -> LycorisNetwork:
     LycorisNetwork.apply_preset(preset)
     wrapper = create_lycoris(model, **kwargs)
     wrapper.apply_to()
@@ -99,9 +101,13 @@ def verify_stack(model: nn.Module, seeds: list[int]) -> StackSummary:
 
 def describe_stack(summary: StackSummary) -> None:
     print(f"Applied wrappers: {len(summary.wrappers)}")
-    for idx, (wrapper, output) in enumerate(zip(summary.wrappers, summary.outputs[1:]), 1):
+    for idx, (wrapper, output) in enumerate(
+        zip(summary.wrappers, summary.outputs[1:]), 1
+    ):
         delta = F.mse_loss(output, summary.outputs[idx - 1]).item()
-        print(f"  Wrapper {idx}: {wrapper.loras[0].__class__.__name__} delta={delta:.6f}")
+        print(
+            f"  Wrapper {idx}: {wrapper.loras[0].__class__.__name__} delta={delta:.6f}"
+        )
 
 
 def remove_wrappers(summary: StackSummary, indices: list[int]) -> torch.Tensor:
@@ -139,7 +145,8 @@ def train_on_mnist(summary: StackSummary, *, data_root: str) -> None:
     test_loader = data.DataLoader(test_ds, batch_size=32)
 
     optimiser = torch.optim.AdamW(
-        chain.from_iterable(wrapper.parameters() for wrapper in summary.wrappers), lr=5e-3
+        chain.from_iterable(wrapper.parameters() for wrapper in summary.wrappers),
+        lr=5e-3,
     )
 
     summary.model.train()

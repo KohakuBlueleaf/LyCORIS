@@ -12,9 +12,12 @@ PRESET = {
             "SingleDiTBlock",  # SD3.5
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
-            "WanAttentionBlock", # Wan
-            "HunyuanVideoTransformerBlock", # FramePack
-            "HunyuanVideoSingleTransformerBlock", # FramePack
+            "WanAttentionBlock",  # Wan
+            "HunyuanVideoTransformerBlock",  # FramePack
+            "HunyuanVideoSingleTransformerBlock",  # FramePack
+            "JointTransformerBlock",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2
+            "QwenImageTransformerBlock",  # Qwen
         ],
         "unet_target_name": [
             "conv_in",
@@ -28,6 +31,10 @@ PRESET = {
             "CLIPMLP",
             "MT5Block",
             "BertLayer",
+            "Gemma2Attention",
+            "Gemma2FlashAttention2",
+            "Gemma2SdpaAttention",
+            "Gemma2MLP",
         ],
         "text_encoder_target_name": [],
     },
@@ -42,9 +49,12 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
-            "WanAttentionBlock", # Wan
-            "HunyuanVideoTransformerBlock", # FramePack
-            "HunyuanVideoSingleTransformerBlock", # FramePack
+            "WanAttentionBlock",  # Wan
+            "HunyuanVideoTransformerBlock",  # FramePack
+            "HunyuanVideoSingleTransformerBlock",  # FramePack
+            "JointTransformerBlock",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2
+            "QwenImageTransformerBlock",  # Qwen
         ],
         "unet_target_name": [
             "time_embedding.linear_1",
@@ -56,6 +66,10 @@ PRESET = {
             "CLIPMLP",
             "MT5Block",
             "BertLayer",
+            "Gemma2Attention",
+            "Gemma2FlashAttention2",
+            "Gemma2SdpaAttention",
+            "Gemma2MLP",
         ],
         "text_encoder_target_name": [],
     },
@@ -69,9 +83,12 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
-            "WanAttentionBlock", # Wan
-            "HunyuanVideoTransformerBlock", # FramePack
-            "HunyuanVideoSingleTransformerBlock", # FramePack
+            "WanAttentionBlock",  # Wan
+            "HunyuanVideoTransformerBlock",  # FramePack
+            "HunyuanVideoSingleTransformerBlock",  # FramePack
+            "JointTransformerBlock",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2
+            "QwenImageTransformerBlock",  # Qwen
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [
@@ -80,6 +97,10 @@ PRESET = {
             "CLIPMLP",
             "MT5Block",
             "BertLayer",
+            "Gemma2Attention",
+            "Gemma2FlashAttention2",
+            "Gemma2SdpaAttention",
+            "Gemma2MLP",
         ],
         "text_encoder_target_name": [],
     },
@@ -95,6 +116,9 @@ PRESET = {
             "CLIPSdpaAttention",
             "BertAttention",
             "MT5LayerSelfAttention",
+            "Gemma2Attention",
+            "Gemma2FlashAttention2",
+            "Gemma2SdpaAttention",
         ],
         "text_encoder_target_name": [],
     },
@@ -111,9 +135,12 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
-            "WanAttentionBlock", # Wan
-            "HunyuanVideoTransformerBlock", # FramePack
-            "HunyuanVideoSingleTransformerBlock", # FramePack
+            "WanAttentionBlock",  # Wan
+            "HunyuanVideoTransformerBlock",  # FramePack
+            "HunyuanVideoSingleTransformerBlock",  # FramePack
+            "JointTransformerBlock",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2
+            "QwenImageTransformerBlock",  # Qwen
         ],
         "unet_target_name": [
             "conv_in",
@@ -134,9 +161,12 @@ PRESET = {
             "SingleDiTBlock",
             "MMDoubleStreamBlock",  # HunYuanVideo
             "MMSingleStreamBlock",  # HunYuanVideo
-            "WanAttentionBlock", # Wan
-            "HunyuanVideoTransformerBlock", # FramePack
-            "HunyuanVideoSingleTransformerBlock", # FramePack
+            "WanAttentionBlock",  # Wan
+            "HunyuanVideoTransformerBlock",  # FramePack
+            "HunyuanVideoSingleTransformerBlock",  # FramePack
+            "JointTransformerBlock",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2
+            "QwenImageTransformerBlock",  # Qwen
         ],
         "unet_target_name": [],
         "text_encoder_target_module": [],
