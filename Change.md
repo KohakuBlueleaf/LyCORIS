@@ -1,5 +1,20 @@
 # Change Log
 
+## 2025/10/04 update to 3.3.0
+
+#### New Features
+
+* Support multi adapter from #266, thanks @bghira !
+
+#### Improvements
+
+* Support more model such as Gemma2, HunyuanVideo, Wan ...
+
+#### Bug fixes
+
+* BOFT shape issue resolved.
+
+
 ## 2025/04/23 update to 3.2.0
 
 #### New Features

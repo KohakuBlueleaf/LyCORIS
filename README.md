@@ -263,21 +263,19 @@ See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more informatio
 
 For full log, please see [Change.md](Change.md)
 
-### 2025/04/23 update to 3.2.0
+### 2025/10/04 update to 3.3.0
 
 #### New Features
 
-* Support lora-plus learning rate scaling
-* Support HunYuanVideo model and Wan2.1 model
-* LyCORIS now have `onfly_merge` and `onfly_restore` method. Which can be used in inference time to merge the weights of LyCORIS into the original model. This will save the memory and speed up the inference time.
+* Support multi adapter from #266, thanks @bghira !
 
 #### Improvements
 
-* [BREAKING CHANGES] Now LyCORIS will use `wd_on_output=True` by default. This will make the weight norm more consistent with the original paper.
+* Support more model such as Gemma2, HunyuanVideo, Wan ...
 
 #### Bug fixes
 
-* `bypass_mode=False` will turn off the bypass mode correctly now.
+* BOFT shape issue resolved.
 
 ## Todo list
 
