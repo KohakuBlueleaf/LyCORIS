@@ -62,6 +62,7 @@ def create_network(
     bypass_mode = str_bool(kwargs.get("bypass_mode", False))
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
+    use_constant_bias = str_bool(kwargs.get("use_constant_bias", False))
     train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
     # lora_plus
     loraplus_lr_ratio = (
@@ -131,6 +132,7 @@ def create_network(
         bypass_mode=bypass_mode,
         rs_lora=rs_lora,
         unbalanced_factorization=unbalanced_factorization,
+        use_constant_bias=use_constant_bias,
         train_t5xxl=train_t5xxl,
         warn_on_unmatched=warn_on_unmatched,
     )

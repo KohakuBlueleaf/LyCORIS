@@ -81,6 +81,7 @@ ALGO_REGISTRY: Dict[str, AlgoSpec] = {
             "use_scalar",
             "weight_decompose",
             "wd_on_output",
+            "use_constant_bias",
         ),
         notes="High dimensions may require lower learning rates to remain stable.",
     ),

@@ -9,16 +9,23 @@ from .general import FUNC_LIST
 
 class HadaWeight(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, w1d, w1u, w2d, w2u, scale=torch.tensor(1)):
+    def forward(ctx, w1d, w1u, w2d, w2u, scale=torch.tensor(1), constant_bias=False):
         ctx.save_for_backward(w1d, w1u, w2d, w2u, scale)
-        diff_weight = ((w1u @ w1d) * (w2u @ w2d)) * scale
+        ctx.constant_bias = constant_bias
+        rebuild2 = w2u @ w2d
+        if constant_bias:
+            rebuild2 = 1 + rebuild2
+        diff_weight = ((w1u @ w1d) * rebuild2) * scale
         return diff_weight
 
     @staticmethod
     def backward(ctx, grad_out):
         (w1d, w1u, w2d, w2u, scale) = ctx.saved_tensors
         grad_out = grad_out * scale
-        temp = grad_out * (w2u @ w2d)
+        rebuild2 = w2u @ w2d
+        if ctx.constant_bias:
+            rebuild2 = 1 + rebuild2
+        temp = grad_out * rebuild2
         grad_w1u = temp @ w1d.T
         grad_w1d = w1u.T @ temp
 
@@ -27,16 +34,20 @@ class HadaWeight(torch.autograd.Function):
         grad_w2d = w2u.T @ temp
 
         del temp
-        return grad_w1d, grad_w1u, grad_w2d, grad_w2u, None
+        return grad_w1d, grad_w1u, grad_w2d, grad_w2u, None, None
 
 
 class HadaWeightTucker(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, t1, w1d, w1u, t2, w2d, w2u, scale=torch.tensor(1)):
+    def forward(ctx, t1, w1d, w1u, t2, w2d, w2u, scale=torch.tensor(1), constant_bias=False):
         ctx.save_for_backward(t1, w1d, w1u, t2, w2d, w2u, scale)
+        ctx.constant_bias = constant_bias
 
         rebuild1 = torch.einsum("i j ..., j r, i p -> p r ...", t1, w1d, w1u)
         rebuild2 = torch.einsum("i j ..., j r, i p -> p r ...", t2, w2d, w2u)
+
+        if constant_bias:
+            rebuild2 = 1 + rebuild2
 
         return rebuild1 * rebuild2 * scale
 
@@ -47,6 +58,9 @@ class HadaWeightTucker(torch.autograd.Function):
 
         temp = torch.einsum("i j ..., j r -> i r ...", t2, w2d)
         rebuild = torch.einsum("i j ..., i r -> r j ...", temp, w2u)
+
+        if ctx.constant_bias:
+            rebuild = 1 + rebuild
 
         grad_w = rebuild * grad_out
         del rebuild
@@ -72,15 +86,15 @@ class HadaWeightTucker(torch.autograd.Function):
         grad_w2d = torch.einsum("i r ..., i j ... -> r j", t2, grad_temp)
         grad_t2 = torch.einsum("i j ..., j r -> i r ...", grad_temp, w2d.T)
         del grad_temp
-        return grad_t1, grad_w1d, grad_w1u, grad_t2, grad_w2d, grad_w2u, None
+        return grad_t1, grad_w1d, grad_w1u, grad_t2, grad_w2d, grad_w2u, None, None
 
 
-def make_weight(w1d, w1u, w2d, w2u, scale):
-    return HadaWeight.apply(w1d, w1u, w2d, w2u, scale)
+def make_weight(w1d, w1u, w2d, w2u, scale, constant_bias=False):
+    return HadaWeight.apply(w1d, w1u, w2d, w2u, scale, constant_bias)
 
 
-def make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, scale):
-    return HadaWeightTucker.apply(t1, w1d, w1u, t2, w2d, w2u, scale)
+def make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, scale, constant_bias=False):
+    return HadaWeightTucker.apply(t1, w1d, w1u, t2, w2d, w2u, scale, constant_bias)
 
 
 def weight_gen(org_weight, rank, tucker=True):
@@ -116,7 +130,7 @@ def weight_gen(org_weight, rank, tucker=True):
     return w1d, w1u, w2d, w2u, t1, t2
 
 
-def diff_weight(*weights, gamma=1.0):
+def diff_weight(*weights, gamma=1.0, constant_bias=False):
     """### diff_weight
 
     Get ΔW = BA, where BA is low rank decomposition
@@ -124,6 +138,7 @@ def diff_weight(*weights, gamma=1.0):
     Args:
         wegihts (tuple[torch.Tensor]): (w1d, w2d, w1u, w2u[, t1, t2])
         gamma (float, optional): scale factor, normally alpha/rank here
+        constant_bias (bool, optional): if True, use (W1) * (1 + W2) formulation
 
     Returns:
         torch.Tensor: ΔW
@@ -133,7 +148,7 @@ def diff_weight(*weights, gamma=1.0):
         R, I = w1d.shape
         R, O = w1u.shape
         R, R, *k = t1.shape
-        result = make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, gamma)
+        result = make_weight_tucker(t1, w1d, w1u, t2, w2d, w2u, gamma, constant_bias)
     else:
         R, I, *k = w1d.shape
         O, R, *_ = w1u.shape
@@ -141,7 +156,7 @@ def diff_weight(*weights, gamma=1.0):
         w1u = w1u.reshape(-1, w1u.size(1))
         w2d = w2d.reshape(w2d.size(0), -1)
         w2u = w2u.reshape(-1, w2u.size(1))
-        result = make_weight(w1d, w1u, w2d, w2u, gamma)
+        result = make_weight(w1d, w1u, w2d, w2u, gamma, constant_bias)
 
     result = result.reshape(O, I, *k)
     return result

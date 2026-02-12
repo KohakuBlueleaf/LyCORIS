@@ -79,6 +79,13 @@ Arguments to put in `network_args` for kohya sd scripts
 * Use $Y = WX + \Delta WX$  instead of $Y=(W+\Delta W)X$
 * Designed for bnb 8bit/4bit linear layer. (QLyCORIS)
 
+### Constant Bias
+
+- Enabled with `use_constant_bias=True`
+- Valid for LoHa
+- Changes the Hadamard product from `(W1) * (W2)` to `(W1) * (1 + W2)`, matching the original FedPara paper's formulation
+- When W2 is zero-initialized, this makes the initial delta equal to W1 rather than zero
+
 ### Normalization Layers
 
 - Enabled with `train_norm=True`

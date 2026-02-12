@@ -24,6 +24,7 @@ class LohaModule(LycorisBaseModule):
         "hada_t2",
         "alpha",
         "dora_scale",
+        "use_constant_bias",
     ]
     weight_list_det = ["hada_w1_a"]
 
@@ -44,6 +45,7 @@ class LohaModule(LycorisBaseModule):
         wd_on_out=True,
         bypass_mode=None,
         rs_lora=False,
+        use_constant_bias=False,
         **kwargs,
     ):
         super().__init__(
@@ -62,6 +64,7 @@ class LohaModule(LycorisBaseModule):
         self.lora_dim = lora_dim
         self.tucker = False
         self.rs_lora = rs_lora
+        self.use_constant_bias = use_constant_bias
 
         w_shape = self.shape
         if self.module_type.startswith("conv"):
@@ -155,7 +158,8 @@ class LohaModule(LycorisBaseModule):
 
     @classmethod
     def make_module_from_state_dict(
-        cls, lora_name, orig_module, w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale
+        cls, lora_name, orig_module, w1a, w1b, w2a, w2b, t1, t2, alpha, dora_scale,
+        use_constant_bias=None,
     ):
         module = cls(
             lora_name,
@@ -165,6 +169,7 @@ class LohaModule(LycorisBaseModule):
             float(alpha),
             use_tucker=t1 is not None,
             weight_decompose=dora_scale is not None,
+            use_constant_bias=use_constant_bias is not None and bool(use_constant_bias),
         )
         module.hada_w1_a.copy_(w1a)
         module.hada_w1_b.copy_(w1b)
@@ -204,6 +209,7 @@ class LohaModule(LycorisBaseModule):
                 self.hada_t1,
                 self.hada_t2,
                 gamma=scale,
+                constant_bias=self.use_constant_bias,
             )
         else:
             weight = loha_diff_weight(
@@ -214,6 +220,7 @@ class LohaModule(LycorisBaseModule):
                 None,
                 None,
                 gamma=scale,
+                constant_bias=self.use_constant_bias,
             )
         if shape is not None:
             weight = weight.reshape(shape)
@@ -276,6 +283,8 @@ class LohaModule(LycorisBaseModule):
         if self.tucker:
             destination["hada_t1"] = self.hada_t1
             destination["hada_t2"] = self.hada_t2
+        if self.use_constant_bias:
+            destination["use_constant_bias"] = torch.tensor(True)
         return destination
 
     @torch.no_grad()
