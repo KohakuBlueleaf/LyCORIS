@@ -20,8 +20,9 @@ FULL_UNET_MODULES = [
     "JointTransformerBlock",  # lumina-image-2
     "FinalLayer",  # lumina-image-2
     "QwenImageTransformerBlock",  # Qwen
+    "LensTransformerBlock",  # Lens
     "ZImageTransformerBlock",
-    "AceStepEncoderLayer", 
+    "AceStepEncoderLayer",
     "AceStepDiTLayer",
 ]
 
@@ -70,6 +71,7 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
@@ -97,6 +99,7 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
@@ -146,6 +149,7 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",

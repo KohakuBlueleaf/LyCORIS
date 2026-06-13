@@ -259,8 +259,9 @@ class LycorisNetworkKohya(LycorisNetwork):
         "JointTransformerBlock",  # lumina-image-2
         "FinalLayer",  # lumina-image-2
         "QwenImageTransformerBlock",  # Qwen
+        "LensTransformerBlock",  # Lens
         "ZImageTransformerBlock",
-        "AceStepEncoderLayer", 
+        "AceStepEncoderLayer",
         "AceStepDiTLayer",
     ]
     UNET_TARGET_REPLACE_NAME = [
