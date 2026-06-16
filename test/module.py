@@ -4,6 +4,7 @@ from parameterized import parameterized
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from lycoris.modules import (
     LycorisBaseModule,
@@ -182,3 +183,66 @@ class LycorisModuleTests(unittest.TestCase):
         torch.sum(test_output).backward()
         state_dict = net.state_dict()
         net.load_state_dict(state_dict)
+
+    def test_kohya_lokr_discovers_fp8_linear_and_handles_bf16_no_autocast(self):
+        from lycoris.kohya import create_network
+
+        class Fp8Linear(nn.Module):
+            def __init__(self, in_features, out_features, compute_dtype):
+                super().__init__()
+                self.in_features = in_features
+                self.out_features = out_features
+                self.compute_dtype = compute_dtype
+                self.register_buffer("weight", torch.ones(out_features, in_features))
+                self.register_buffer("weight_scale", torch.full((out_features,), 0.01))
+                self.bias = None
+
+            def forward(self, x):
+                scale = self.weight_scale.to(device=x.device, dtype=x.dtype)
+                if scale.ndim == 1:
+                    scale = scale.unsqueeze(1)
+                weight = self.weight.to(device=x.device, dtype=x.dtype) * scale
+                return F.linear(x, weight, self.bias)
+
+        class Ideogram4TransformerBlock(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.adaln_modulation = nn.Linear(4, 8, bias=True).to(torch.bfloat16)
+                self.qkv = Fp8Linear(4, 4, compute_dtype=torch.bfloat16)
+
+            def forward(self, x):
+                return self.adaln_modulation(x), self.qkv(x)
+
+        model = nn.Sequential(Ideogram4TransformerBlock())
+        network = create_network(
+            1.0,
+            2,
+            1.0,
+            None,
+            None,
+            model,
+            algo="lokr",
+            preset="full-lin",
+            conv_dim=0,
+            dora_wd=True,
+        )
+        fp8_loras = [
+            lora
+            for lora in network.unet_loras
+            if lora.org_module[0].__class__.__name__ == "Fp8Linear"
+        ]
+        self.assertGreaterEqual(len(network.unet_loras), 2)
+        self.assertEqual(len(fp8_loras), 1)
+        self.assertTrue(fp8_loras[0].bypass_mode)
+        self.assertTrue(fp8_loras[0].is_quant)
+        self.assertTrue(fp8_loras[0].wd)
+        with self.assertRaisesRegex(RuntimeError, "weight-only FP8"):
+            fp8_loras[0].merge_to()
+
+        network.apply_to(None, model, apply_text_encoder=False, apply_unet=True)
+        x = torch.randn(2, 3, 4, dtype=torch.bfloat16)
+        y_adaln, y_fp8 = model(x)
+        self.assertEqual(y_adaln.dtype, torch.bfloat16)
+        self.assertEqual(y_fp8.dtype, torch.bfloat16)
+        self.assertTrue(torch.isfinite(y_adaln.float()).all())
+        self.assertTrue(torch.isfinite(y_fp8.float()).all())

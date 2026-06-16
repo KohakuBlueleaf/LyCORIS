@@ -175,7 +175,7 @@ class LokrModule(LycorisBaseModule):
         self.wd = weight_decompose
         self.wd_on_out = wd_on_out
         if self.wd:
-            org_weight = org_module.weight.cpu().clone().float()
+            org_weight = self._current_weight().cpu().clone().float()
             self.dora_norm_dims = org_weight.dim() - 1
             if self.wd_on_out:
                 self.dora_scale = nn.Parameter(
@@ -466,9 +466,15 @@ class LokrModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, h, scale=1):
+        device = h.device
+        dtype = h.dtype
+
+        def to_input_dtype(tensor):
+            return tensor.to(device=device, dtype=dtype)
+
         is_conv = self.module_type.startswith("conv")
         if self.use_w2:
-            ba = self.lokr_w2
+            ba = to_input_dtype(self.lokr_w2)
         else:
             a = self.lokr_w2_b
             b = self.lokr_w2_a
@@ -477,14 +483,18 @@ class LokrModule(LycorisBaseModule):
                 t = self.lokr_t2
                 a = a.view(*a.shape, *[1] * (len(t.shape) - 2))
                 b = b.view(*b.shape, *[1] * (len(t.shape) - 2))
+                t = to_input_dtype(t)
             elif is_conv:
                 a = a.view(*a.shape, *self.shape[2:])
                 b = b.view(*b.shape, *[1] * (len(self.shape) - 2))
+            a = to_input_dtype(a)
+            b = to_input_dtype(b)
 
         if self.use_w1:
             c = self.lokr_w1
         else:
             c = self.lokr_w1_a @ self.lokr_w1_b
+        c = to_input_dtype(c)
         uq = c.size(1)
 
         if is_conv:
@@ -535,7 +545,7 @@ class LokrModule(LycorisBaseModule):
             hc = hc.transpose(-1, -2)
             h = hc.reshape(*hc.shape[:-2], -1)
 
-        return self.drop(h * scale * self.scalar)
+        return self.drop(h * scale * self.scalar.to(device=device, dtype=dtype))
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
@@ -561,7 +571,7 @@ class LokrModule(LycorisBaseModule):
         else:
             new_weight = base_weight + diff_weight * self.multiplier
 
-        delta_weight = new_weight - base_weight
+        delta_weight = (new_weight - base_weight).to(device=x.device, dtype=x.dtype)
         delta = self.op(x, delta_weight, None, **self.kw_dict)
         return base + delta
 
