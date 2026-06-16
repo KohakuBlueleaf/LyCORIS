@@ -260,6 +260,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "FinalLayer",  # lumina-image-2
         "QwenImageTransformerBlock",  # Qwen
         "LensTransformerBlock",  # Lens
+        "Ideogram4TransformerBlock",  # Ideogram 4
         "ZImageTransformerBlock",
         "AceStepEncoderLayer",
         "AceStepDiTLayer",
