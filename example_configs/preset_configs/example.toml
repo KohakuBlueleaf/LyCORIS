@@ -20,6 +20,7 @@ unet_target_module = [
   "ZImageTransformerBlock",
   "AceStepEncoderLayer",
   "AceStepDiTLayer",
+  "TextFusionBlock",          # Krea 2
 ]
 unet_target_name = [
   "conv_in",

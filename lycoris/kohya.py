@@ -265,6 +265,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "ZImageTransformerBlock",
         "AceStepEncoderLayer",
         "AceStepDiTLayer",
+        "TextFusionBlock",  # Krea 2
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",

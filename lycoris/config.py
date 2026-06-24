@@ -25,6 +25,7 @@ FULL_UNET_MODULES = [
     "ZImageTransformerBlock",
     "AceStepEncoderLayer",
     "AceStepDiTLayer",
+    "TextFusionBlock",  # Krea 2
 ]
 
 FULL_UNET_NAMES = [
@@ -77,6 +78,7 @@ BUILTIN_PRESET_CONFIGS = {
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
         ],
         unet_target_name=[
             "time_embedding.linear_1",
@@ -106,6 +108,7 @@ BUILTIN_PRESET_CONFIGS = {
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
         ],
         unet_target_name=[],
         text_encoder_target_module=FULL_TEXT_ENCODER_MODULES,
@@ -157,6 +160,7 @@ BUILTIN_PRESET_CONFIGS = {
             "ZImageTransformerBlock",
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
         ],
         unet_target_name=[],
         text_encoder_target_module=[],
