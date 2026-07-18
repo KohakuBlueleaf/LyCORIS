@@ -97,3 +97,17 @@ However, newer methods may only be available in the latest release / the dev bra
 * constraint and rescaled also supported.
 * TODO
 * Ref: [Parameter-Efficient Orthogonal Finetuning via Butterfly Factorization](https://arxiv.org/abs/2311.06243)
+
+### T-LoRA
+
+* Triggered by `algo=tlora`
+* Timestep-aware LoRA designed specifically for diffusion models.
+* Uses SVD-based orthogonal initialization for independent, non-interfering rank components.
+* Supports timestep-dependent rank masking: fewer ranks at high noise (structure), more at low noise (detail).
+* Recommended settings:
+  * dim: 4-16 (orthogonal init is more parameter-efficient)
+  * alpha: 1 to dim
+  * sig_type: "principal" (default), "last", or "middle"
+* Training frameworks must call `set_timestep_mask()` before each forward pass.
+* Residual subtraction ensures zero-shot preservation (LoRA contributes nothing at initialization).
+* Ref: [T-LoRA: Timestep-aware LoRA for Diffusion Models](https://github.com/rosinality/T-LoRA)

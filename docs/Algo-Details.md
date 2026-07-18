@@ -142,3 +142,89 @@ We can reduce the number of parameters to the order of square root of matrix wid
 
 ## Sparse Bias
 Todo...
+
+
+## T-LoRA
+
+### Motivation
+
+Standard LoRA uses random initialization for its low-rank matrices. This means different rank components can learn correlated features, leading to interference. T-LoRA addresses this through SVD-based orthogonal initialization, ensuring each rank component captures independent information.
+
+Additionally, diffusion models have different requirements at different noise levels:
+- **High noise (early denoising)**: Need structure-level adaptation
+- **Low noise (late denoising)**: Need detail-level adaptation
+
+T-LoRA enables timestep-dependent rank masking to dynamically control how many ranks are active during training.
+
+### Mathematical Formulation
+
+For a weight matrix $W \in \mathbb{R}^{m \times n}$, we compute its SVD:
+
+$W = U \Sigma V^T$
+
+We then initialize T-LoRA components from the top-k (or bottom-k, or middle-k) singular vectors:
+
+$Q = V_{:k}^T \in \mathbb{R}^{k \times n}$ (down projection, orthogonal rows)<br>
+$P = U_{:,:k} \in \mathbb{R}^{m \times k}$ (up projection, orthogonal columns)<br>
+$\lambda = \Sigma_{:k} \in \mathbb{R}^{k}$ (learnable singular values)
+
+The weight delta is computed as:
+
+$\Delta W = P \cdot \text{diag}(\lambda \odot mask) \cdot Q - P_{base} \cdot \text{diag}(\lambda_{base} \odot mask) \cdot Q_{base}$
+
+The subtraction of the base state ensures that at initialization (when P, Q, $\lambda$ equal their base values), the delta is zero regardless of the mask.
+
+### Timestep-Dependent Rank Masking
+
+The mask is computed based on the current denoising timestep:
+
+```python
+r = int(((max_timestep - timestep) / max_timestep) ** alpha * (max_rank - min_rank)) + min_rank
+mask = [1, 1, ..., 1, 0, 0, ..., 0]  # First r entries are 1
+```
+
+This creates a progression:
+- At t=1000 (pure noise): only min_rank ranks active
+- At t=500 (mid-denoising): roughly half ranks active
+- At t=0 (final detail): all ranks active
+
+### Orthogonality Regularization
+
+T-LoRA can optionally include an orthogonality regularization loss:
+
+$L_{ortho} = ||P^T P - I||_F^2 + ||Q Q^T - I||_F^2$
+
+This encourages P and Q to remain orthogonal throughout training, preserving the independence of rank components.
+
+### sig_type Options
+
+- **principal**: Use top-k singular vectors (largest singular values). Best for preserving the model's main learned features.
+- **last**: Use bottom-k singular vectors (smallest singular values). Perturbs the "unused" subspace of the original weights.
+- **middle**: Use middle-k singular vectors. Balances between principal and unused subspaces.
+
+### Usage with Training Frameworks
+
+Training frameworks must set the timestep mask before each forward pass:
+
+```python
+from lycoris.modules.tlora import set_timestep_mask, compute_timestep_mask
+
+# In training loop:
+mask = compute_timestep_mask(
+    timestep=current_timestep,
+    max_timestep=1000,
+    max_rank=lora_dim,
+    min_rank=1,
+    alpha=1.0,
+)
+set_timestep_mask(mask)
+output = model(noisy_latents, timestep, ...)
+```
+
+### As a sequence of operations
+
+<p align="center">
+Input → Q (orthogonal projection) → scale by λ*mask → P (orthogonal projection) → Output
+</p>
+
+With residual subtraction from base state to ensure zero contribution at initialization.

@@ -24,6 +24,13 @@ from .modules.glora import GLoRAModule
 from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
+from .modules.tlora import (
+    TLoraModule,
+    set_timestep_mask,
+    get_timestep_mask,
+    clear_timestep_mask,
+    compute_timestep_mask,
+)
 from .modules import make_module
 
 from .wrapper import (

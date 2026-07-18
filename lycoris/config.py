@@ -18,7 +18,7 @@ FULL_UNET_MODULES = [
     "HunyuanVideoTransformerBlock",  # FramePack
     "HunyuanVideoSingleTransformerBlock",  # FramePack
     "JointTransformerBlock",  # lumina-image-2
-    "FinalLayer",  # lumina-image-2
+    "FinalLayer",  # lumina-image-2, Anima
     "QwenImageTransformerBlock",  # Qwen
     "LensTransformerBlock",  # Lens
     "Ideogram4TransformerBlock",  # Ideogram 4
@@ -26,6 +26,10 @@ FULL_UNET_MODULES = [
     "AceStepEncoderLayer",
     "AceStepDiTLayer",
     "TextFusionBlock",  # Krea 2
+    "Block",  # Anima
+    "PatchEmbed",  # Anima
+    "TimestepEmbedding",  # Anima
+    "LLMAdapterTransformerBlock",  # Anima
 ]
 
 FULL_UNET_NAMES = [
@@ -45,6 +49,10 @@ FULL_TEXT_ENCODER_MODULES = [
     "Gemma2FlashAttention2",
     "Gemma2SdpaAttention",
     "Gemma2MLP",
+    "Qwen3Attention",  # Anima / Qwen3
+    "Qwen3FlashAttention2",  # Anima / Qwen3
+    "Qwen3SdpaAttention",  # Anima / Qwen3
+    "Qwen3MLP",  # Anima / Qwen3
 ]
 
 
@@ -71,7 +79,7 @@ BUILTIN_PRESET_CONFIGS = {
             "HunyuanVideoTransformerBlock",  # FramePack
             "HunyuanVideoSingleTransformerBlock",  # FramePack
             "JointTransformerBlock",  # lumina-image-2
-            "FinalLayer",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
             "LensTransformerBlock",  # Lens
             "Ideogram4TransformerBlock",  # Ideogram 4
@@ -79,6 +87,10 @@ BUILTIN_PRESET_CONFIGS = {
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
             "TextFusionBlock",  # Krea 2
+            "Block",  # Anima
+            "PatchEmbed",  # Anima
+            "TimestepEmbedding",  # Anima
+            "LLMAdapterTransformerBlock",  # Anima
         ],
         unet_target_name=[
             "time_embedding.linear_1",
@@ -101,7 +113,7 @@ BUILTIN_PRESET_CONFIGS = {
             "HunyuanVideoTransformerBlock",  # FramePack
             "HunyuanVideoSingleTransformerBlock",  # FramePack
             "JointTransformerBlock",  # lumina-image-2
-            "FinalLayer",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
             "LensTransformerBlock",  # Lens
             "Ideogram4TransformerBlock",  # Ideogram 4
@@ -109,6 +121,10 @@ BUILTIN_PRESET_CONFIGS = {
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
             "TextFusionBlock",  # Krea 2
+            "Block",  # Anima
+            "PatchEmbed",  # Anima
+            "TimestepEmbedding",  # Anima
+            "LLMAdapterTransformerBlock",  # Anima
         ],
         unet_target_name=[],
         text_encoder_target_module=FULL_TEXT_ENCODER_MODULES,
@@ -153,7 +169,7 @@ BUILTIN_PRESET_CONFIGS = {
             "HunyuanVideoTransformerBlock",  # FramePack
             "HunyuanVideoSingleTransformerBlock",  # FramePack
             "JointTransformerBlock",  # lumina-image-2
-            "FinalLayer",  # lumina-image-2
+            "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
             "LensTransformerBlock",  # Lens
             "Ideogram4TransformerBlock",  # Ideogram 4
@@ -161,6 +177,10 @@ BUILTIN_PRESET_CONFIGS = {
             "AceStepEncoderLayer",
             "AceStepDiTLayer",
             "TextFusionBlock",  # Krea 2
+            "Block",  # Anima
+            "PatchEmbed",  # Anima
+            "TimestepEmbedding",  # Anima
+            "LLMAdapterTransformerBlock",  # Anima
         ],
         unet_target_name=[],
         text_encoder_target_module=[],

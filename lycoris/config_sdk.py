@@ -153,6 +153,26 @@ ALGO_REGISTRY: Dict[str, AlgoSpec] = {
         supported_args=(),
         notes="Most training setups use preset 'ia3' with dedicated module selection.",
     ),
+    "tlora": AlgoSpec(
+        name="tlora",
+        description="Timestep-aware LoRA with SVD-orthogonal initialization.",
+        supported_args=(
+            "dim",
+            "alpha",
+            "dropout",
+            "rank_dropout",
+            "module_dropout",
+            "bypass_mode",
+            "sig_type",
+            "use_data_init",
+            "mask_group_id",
+        ),
+        notes=(
+            "Uses SVD-based orthogonal initialization and supports timestep-dependent rank masking. "
+            "Set sig_type to 'principal', 'last', or 'middle' to select which singular vectors to use. "
+            "Training frameworks should call set_timestep_mask() before each forward pass."
+        ),
+    ),
 }
 
 

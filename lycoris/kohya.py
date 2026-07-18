@@ -64,6 +64,7 @@ def create_network(
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
     train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
+    train_llm_adapter = str_bool(kwargs.get("train_llm_adapter", False))
     # lora_plus
     loraplus_lr_ratio = (
         float(kwargs.get("loraplus_lr_ratio", None))
@@ -134,6 +135,7 @@ def create_network(
         unbalanced_factorization=unbalanced_factorization,
         train_t5xxl=train_t5xxl,
         warn_on_unmatched=warn_on_unmatched,
+        train_llm_adapter=train_llm_adapter,
     )
     if (
         loraplus_lr_ratio is not None
@@ -258,7 +260,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         "HunyuanVideoTransformerBlock",  # FramePack
         "HunyuanVideoSingleTransformerBlock",  # FramePack
         "JointTransformerBlock",  # lumina-image-2
-        "FinalLayer",  # lumina-image-2
+        "FinalLayer",  # lumina-image-2, Anima
         "QwenImageTransformerBlock",  # Qwen
         "LensTransformerBlock",  # Lens
         "Ideogram4TransformerBlock",  # Ideogram 4
@@ -266,6 +268,10 @@ class LycorisNetworkKohya(LycorisNetwork):
         "AceStepEncoderLayer",
         "AceStepDiTLayer",
         "TextFusionBlock",  # Krea 2
+        "Block",  # Anima
+        "PatchEmbed",  # Anima
+        "TimestepEmbedding",  # Anima
+        "LLMAdapterTransformerBlock",  # Anima
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -283,6 +289,10 @@ class LycorisNetworkKohya(LycorisNetwork):
         "Gemma2FlashAttention2",
         "Gemma2SdpaAttention",
         "Gemma2MLP",
+        "Qwen3Attention",  # Anima / Qwen3
+        "Qwen3FlashAttention2",  # Anima / Qwen3
+        "Qwen3SdpaAttention",  # Anima / Qwen3
+        "Qwen3MLP",  # Anima / Qwen3
     ]
     TEXT_ENCODER_TARGET_REPLACE_NAME = []
     LORA_PREFIX_UNET = "lora_unet"
@@ -331,6 +341,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         train_norm=False,
         train_t5xxl=False,
         warn_on_unmatched=True,
+        train_llm_adapter=False,
         **kwargs,
     ) -> None:
         torch.nn.Module.__init__(self)
@@ -338,6 +349,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.train_t5xxl = train_t5xxl
+        self.train_llm_adapter = train_llm_adapter
 
         # 初始化LoRA+相关属性
         self.loraplus_lr_ratio = None
@@ -550,10 +562,15 @@ class LycorisNetworkKohya(LycorisNetwork):
                 f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
             )
 
+        target_modules = list(LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE)
+        if not self.train_llm_adapter:
+            if "LLMAdapterTransformerBlock" in target_modules:
+                target_modules.remove("LLMAdapterTransformerBlock")
+
         self.unet_loras, unet_matched_modules, unet_matched_names = create_modules(
             LycorisNetworkKohya.LORA_PREFIX_UNET,
             unet,
-            LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
+            target_modules,
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME,
         )
         logger.info(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")

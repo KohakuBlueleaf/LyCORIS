@@ -93,3 +93,27 @@ Arguments to put in `network_args` for kohya sd scripts
 
 - Enabled with `constraint=FLOAT`
 - Valid for Diag-OFT
+
+### Singular Vector Type (T-LoRA)
+
+- Set with `sig_type=STRING`
+- Valid for T-LoRA
+- Options: `principal` (default), `last`, `middle`
+- Controls which singular vectors from SVD are used for initialization:
+  - `principal`: Top-k singular vectors (largest singular values)
+  - `last`: Bottom-k singular vectors (smallest singular values)
+  - `middle`: Middle-k singular vectors
+
+### Data-Dependent Initialization (T-LoRA)
+
+- Enabled with `use_data_init=True` (default)
+- Valid for T-LoRA
+- When True, performs SVD on the original layer weights
+- When False, performs SVD on a random matrix (data-independent)
+
+### Timestep Mask Group (T-LoRA)
+
+- Set with `mask_group_id=INT`
+- Valid for T-LoRA
+- Default: 0
+- For multi-network scenarios, allows different networks to use different timestep masks
