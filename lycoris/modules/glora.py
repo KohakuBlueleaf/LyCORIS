@@ -208,9 +208,12 @@ class GLoRAModule(LycorisBaseModule):
         return self.org_weight + diff_w, None
 
     def _bypass_forward(self, x, scale=1, diff=False):
-        scale = self.scale * scale
-        ax_mid = self.a2(x) * scale
-        bx_mid = self.b2(x) * scale
+        if self.module_type == "linear":
+            ax_mid = F.linear(x, self.a2.weight.to(x))
+            bx_mid = F.linear(x, self.b2.weight.to(x))
+        else:
+            ax_mid = self.a2(x)
+            bx_mid = self.b2(x)
 
         if self.rank_dropout and self.training:
             drop_a = (
@@ -230,12 +233,16 @@ class GLoRAModule(LycorisBaseModule):
                 drop_b = drop_b.view(*[1] * (dims - 1), -1)
             ax_mid = ax_mid * drop_a
             bx_mid = bx_mid * drop_b
-        return (
-            self.org_forward(
-                (0 if diff else x) + self.drop(self.a1(ax_mid)) * self.scale
-            )
-            + self.drop(self.b1(bx_mid)) * self.scale
-        )
+        if self.module_type == "linear":
+            ax = F.linear(ax_mid, self.a1.weight.to(ax_mid))
+            bx = F.linear(bx_mid, self.b1.weight.to(bx_mid))
+        else:
+            ax = self.a1(ax_mid)
+            bx = self.b1(bx_mid)
+        ax_scale = self.scalar.to(ax) * self.scale * scale
+        bx_scale = self.scalar.to(bx) * self.scale * scale
+        base_input = (0 if diff else x) + self.drop(ax) * ax_scale
+        return self.org_forward(base_input) + self.drop(bx) * bx_scale
 
     def bypass_forward_diff(self, x, scale=1):
         return self._bypass_forward(x, scale=scale, diff=True)
