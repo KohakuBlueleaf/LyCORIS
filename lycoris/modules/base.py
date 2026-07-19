@@ -28,6 +28,19 @@ def is_linear_like_module(module: nn.Module) -> bool:
     return isinstance(module, nn.Linear) or is_weight_only_fp8_linear(module)
 
 
+_FP8_BYPASS_ALGOS = frozenset({"lora", "locon", "loha", "lokr", "glora"})
+
+
+def is_supported_linear_module(
+    module: nn.Module, algo_name: str, *, weight_decompose: bool = False
+) -> bool:
+    if is_weight_only_fp8_linear(module):
+        return algo_name in _FP8_BYPASS_ALGOS and (
+            algo_name == "lokr" or not weight_decompose
+        )
+    return isinstance(module, nn.Linear)
+
+
 def dequantize_weight_only_fp8(module: nn.Module) -> torch.Tensor:
     weight = module.weight.to(torch.float32)
     scale = module.weight_scale.to(device=weight.device, dtype=torch.float32)
@@ -406,6 +419,10 @@ class LycorisBaseModule(ModuleCustomSD):
     def onfly_merge(self, multiplier=1.0):
         if self.not_supported:
             return
+        if is_weight_only_fp8_linear(self.org_module[0]):
+            raise RuntimeError(
+                "Merging LyCORIS modules into weight-only FP8 Linear is not supported."
+            )
         self_device = next(self.parameters()).device
         self_dtype = next(self.parameters()).dtype
         self.to(self.org_weight)

@@ -20,7 +20,7 @@ from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
 from .modules.tlora import TLoraModule
 from .modules import get_module, make_module
-from .modules.base import is_linear_like_module
+from .modules.base import is_supported_linear_module, is_weight_only_fp8_linear
 
 from .config import PRESET
 from .config_sdk import VALID_PRESET_KEYS
@@ -318,7 +318,11 @@ class LycorisNetwork(torch.nn.Module):
                     **kwargs,
                 )
             lora = None
-            if is_linear_like_module(module) and lora_dim > 0:
+            if is_supported_linear_module(
+                module,
+                algo_name,
+                weight_decompose=kwargs.get("weight_decompose", False),
+            ) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
             elif isinstance(
@@ -591,17 +595,27 @@ class LycorisNetwork(torch.nn.Module):
             logger.info(f"weights are loaded: {info}")
 
     def is_mergeable(self):
-        return True
+        return not any(
+            is_weight_only_fp8_linear(lora.org_module[0]) for lora in self.loras
+        )
+
+    def _ensure_mergeable(self):
+        if not self.is_mergeable():
+            raise RuntimeError(
+                "Merging LyCORIS modules into weight-only FP8 Linear is not supported."
+            )
 
     def restore(self):
         for lora in self.loras:
             lora.restore()
 
     def merge_to(self, weight=1.0, *, precise: bool = False):
+        self._ensure_mergeable()
         for lora in self.loras:
             lora.merge_to(weight, precise=precise)
 
     def onfly_merge(self, weight=1.0):
+        self._ensure_mergeable()
         for lora in self.loras:
             lora.onfly_merge(weight)
 

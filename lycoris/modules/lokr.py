@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import LycorisBaseModule
+from .base import LycorisBaseModule, is_weight_only_fp8_linear
 from ..functional import factorization, rebuild_tucker
 from ..functional.lokr import make_kron
 from ..logging import logger
@@ -545,19 +545,17 @@ class LokrModule(LycorisBaseModule):
             hc = hc.transpose(-1, -2)
             h = hc.reshape(*hc.shape[:-2], -1)
 
-        return self.drop(h * scale * self.scalar.to(device=device, dtype=dtype))
+        return self.drop(
+            h
+            * self.scale
+            * scale
+            * self.scalar.to(device=device, dtype=dtype)
+        )
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
-    def forward(self, x: torch.Tensor, *args, **kwargs):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x, *args, **kwargs)
-
-        if self.bypass_mode:
-            return self.bypass_forward(x, self.multiplier)
-
+    def _rebuild_forward(self, x, *args, **kwargs):
         base = self.org_forward(x, *args, **kwargs)
         base_weight = self._current_weight().to(x.device)
         diff_weight = self.get_weight(self.shape).to(base_weight.dtype) * self.scalar
@@ -574,6 +572,18 @@ class LokrModule(LycorisBaseModule):
         delta_weight = (new_weight - base_weight).to(device=x.device, dtype=x.dtype)
         delta = self.op(x, delta_weight, None, **self.kw_dict)
         return base + delta
+
+    def forward(self, x: torch.Tensor, *args, **kwargs):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x, *args, **kwargs)
+
+        fp8_weight_decompose = self.wd and is_weight_only_fp8_linear(
+            self.org_module[0]
+        )
+        if self.bypass_mode and not fp8_weight_decompose:
+            return self.bypass_forward(x, self.multiplier)
+        return self._rebuild_forward(x, *args, **kwargs)
 
 
 if __name__ == "__main__":
