@@ -20,7 +20,12 @@ FULL_UNET_MODULES = [
     "JointTransformerBlock",  # lumina-image-2
     "FinalLayer",  # lumina-image-2, Anima
     "QwenImageTransformerBlock",  # Qwen
+    "LensTransformerBlock",  # Lens
+    "Ideogram4TransformerBlock",  # Ideogram 4
     "ZImageTransformerBlock",
+    "AceStepEncoderLayer",
+    "AceStepDiTLayer",
+    "TextFusionBlock",  # Krea 2
     "Block",  # Anima
     "PatchEmbed",  # Anima
     "TimestepEmbedding",  # Anima
@@ -76,7 +81,12 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
+            "Ideogram4TransformerBlock",  # Ideogram 4
             "ZImageTransformerBlock",
+            "AceStepEncoderLayer",
+            "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
             "Block",  # Anima
             "PatchEmbed",  # Anima
             "TimestepEmbedding",  # Anima
@@ -105,7 +115,12 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
+            "Ideogram4TransformerBlock",  # Ideogram 4
             "ZImageTransformerBlock",
+            "AceStepEncoderLayer",
+            "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
             "Block",  # Anima
             "PatchEmbed",  # Anima
             "TimestepEmbedding",  # Anima
@@ -156,7 +171,12 @@ BUILTIN_PRESET_CONFIGS = {
             "JointTransformerBlock",  # lumina-image-2
             "FinalLayer",  # lumina-image-2, Anima
             "QwenImageTransformerBlock",  # Qwen
+            "LensTransformerBlock",  # Lens
+            "Ideogram4TransformerBlock",  # Ideogram 4
             "ZImageTransformerBlock",
+            "AceStepEncoderLayer",
+            "AceStepDiTLayer",
+            "TextFusionBlock",  # Krea 2
             "Block",  # Anima
             "PatchEmbed",  # Anima
             "TimestepEmbedding",  # Anima

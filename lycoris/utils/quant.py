@@ -80,6 +80,13 @@ def log_bypass():
 
 
 @cache
+def log_fp8_bypass():
+    return logger.warning(
+        "Using weight-only FP8 Linear with LyCORIS will enable force-bypass mode."
+    )
+
+
+@cache
 def log_suspect():
     return logger.warning(
         "Non-native Linear detected but bypass_mode is not set. "

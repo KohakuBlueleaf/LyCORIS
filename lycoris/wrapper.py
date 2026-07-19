@@ -20,6 +20,7 @@ from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
 from .modules.tlora import TLoraModule
 from .modules import get_module, make_module
+from .modules.base import is_linear_like_module
 
 from .config import PRESET
 from .config_sdk import VALID_PRESET_KEYS
@@ -317,7 +318,7 @@ class LycorisNetwork(torch.nn.Module):
                     **kwargs,
                 )
             lora = None
-            if isinstance(module, torch.nn.Linear) and lora_dim > 0:
+            if is_linear_like_module(module) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
             elif isinstance(

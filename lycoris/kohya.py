@@ -20,6 +20,7 @@ from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
 from .modules import make_module, get_module
+from .modules.base import is_linear_like_module
 
 from .config import PRESET
 from .utils.preset import read_preset
@@ -261,7 +262,12 @@ class LycorisNetworkKohya(LycorisNetwork):
         "JointTransformerBlock",  # lumina-image-2
         "FinalLayer",  # lumina-image-2, Anima
         "QwenImageTransformerBlock",  # Qwen
+        "LensTransformerBlock",  # Lens
+        "Ideogram4TransformerBlock",  # Ideogram 4
         "ZImageTransformerBlock",
+        "AceStepEncoderLayer",
+        "AceStepDiTLayer",
+        "TextFusionBlock",  # Krea 2
         "Block",  # Anima
         "PatchEmbed",  # Anima
         "TimestepEmbedding",  # Anima
@@ -398,7 +404,7 @@ class LycorisNetworkKohya(LycorisNetwork):
                     **kwargs,
                 )
             lora = None
-            if isinstance(module, torch.nn.Linear) and lora_dim > 0:
+            if is_linear_like_module(module) and lora_dim > 0:
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
             elif isinstance(
