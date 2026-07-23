@@ -73,8 +73,9 @@ class LoConModule(LycorisBaseModule):
 
         if self.module_type.startswith("conv"):
             self.isconv = True
-            # For general LoCon
-            in_dim = org_module.in_channels
+            # For general LoCon. in_dim follows torch Conv weight layout (in/groups)
+            # so rebuild_weight matches F.conv*d when groups != 1 (#260).
+            in_dim = org_module.in_channels // org_module.groups
             k_size = org_module.kernel_size
             stride = org_module.stride
             padding = org_module.padding
@@ -82,6 +83,11 @@ class LoConModule(LycorisBaseModule):
             use_tucker = use_tucker and any(i != 1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
+            if org_module.groups != 1 and self.bypass_mode:
+                # Adapter Conv modules are groups=1 and take in/groups channels;
+                # bypass forward on the full activation is not valid for grouped
+                # originals, so force the weight-rebuild path.
+                self.bypass_mode = False
             if use_tucker and any(i != 1 for i in k_size):
                 self.lora_down = self.module(in_dim, lora_dim, 1, bias=False)
                 self.lora_mid = self.module(

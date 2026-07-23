@@ -65,7 +65,7 @@ class LohaModule(LycorisBaseModule):
 
         w_shape = self.shape
         if self.module_type.startswith("conv"):
-            in_dim = org_module.in_channels
+            in_dim = org_module.in_channels // org_module.groups
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             self.shape = (out_dim, in_dim, *k_size)

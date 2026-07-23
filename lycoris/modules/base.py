@@ -157,9 +157,10 @@ class LycorisBaseModule(ModuleCustomSD):
             self.kw_dict = {}
         elif isinstance(org_module, nn.Conv1d):
             self.module_type = "conv1d"
+            # Weight layout matches torch.nn.Conv*d: (out, in/groups, *kernel)
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv1d
@@ -174,7 +175,7 @@ class LycorisBaseModule(ModuleCustomSD):
             self.module_type = "conv2d"
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv2d
@@ -189,7 +190,7 @@ class LycorisBaseModule(ModuleCustomSD):
             self.module_type = "conv3d"
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv3d
