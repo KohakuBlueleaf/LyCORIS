@@ -19,7 +19,6 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA :: 12",
     "Environment :: GPU :: NVIDIA CUDA :: 12 :: 12.6",
     "Environment :: GPU :: NVIDIA CUDA :: 13",
-    "Environment :: GPU :: NVIDIA CUDA :: 13 :: 13.2",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python",
