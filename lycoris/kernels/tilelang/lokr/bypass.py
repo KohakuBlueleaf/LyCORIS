@@ -21,6 +21,16 @@ def _pad16(v: int) -> int:
     return p
 
 
+#: Same register-tile bound as the Triton twin (see triton.lokr.bypass); the
+#: dispatcher reads it off whichever fused backends are available.
+MAX_KRON_FACTOR = 128
+
+
+def kron_factors_supported(a: int, b: int, c: int, d: int) -> bool:
+    """Whether factor dims (a, b, c, d) fit the apply kernel's tiles."""
+    return max(a, b, c, d) <= MAX_KRON_FACTOR
+
+
 @tilelang.jit(out_idx=[3])
 def _lokr_bypass_fwd(TT, A, B, C, D, bt, dtype, threads=128):
     pa, pb, pc, pd = _pad16(A), _pad16(B), _pad16(C), _pad16(D)
@@ -169,7 +179,7 @@ def lokr_bypass_fwd(x, w1, w2, gamma=1.0):
     t = x.shape[0]
     a, b = w1.shape
     c, d = w2.shape
-    if max(_pad16(a), _pad16(b), _pad16(c), _pad16(d)) > 128:
+    if max(_pad16(a), _pad16(b), _pad16(c), _pad16(d)) > MAX_KRON_FACTOR:
         raise ValueError("kron apply factors too large for the kernel")
     xc, w1c, w2c = x.contiguous(), w1.contiguous(), w2.contiguous()
     dt = str(x.dtype).split(".")[-1]
