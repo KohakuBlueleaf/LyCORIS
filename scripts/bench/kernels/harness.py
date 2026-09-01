@@ -19,16 +19,21 @@ import torch
 
 from lycoris.kernels.plans.device import resolve_device
 
-_FLUSH_BYTES = 256 * 1024 * 1024
 _flush_buffers: dict[int, torch.Tensor] = {}
 
 
 def flush_l2() -> None:
-    """Evict whatever the previous iteration left in L2 (keyed per device)."""
+    """Evict whatever the previous iteration left in L2 (keyed per device).
+
+    Sized to twice the card's own L2 rather than a fixed 256 MiB: the write is
+    on the critical path of every timed iteration, and 2x is already enough to
+    guarantee eviction.
+    """
     index = torch.cuda.current_device()
     buf = _flush_buffers.get(index)
     if buf is None:
-        buf = torch.empty(_FLUSH_BYTES // 4, dtype=torch.int32, device="cuda")
+        l2 = torch.cuda.get_device_properties(index).L2_cache_size
+        buf = torch.empty(2 * l2 // 4, dtype=torch.int32, device="cuda")
         _flush_buffers[index] = buf
     buf.zero_()
 
@@ -53,7 +58,7 @@ def gpu_busy(index: int = 0) -> tuple[int, int]:
         return -1, -1
 
 
-def bench_ms(fn, warmup: int = 25, iters: int = 50, flush: bool = True) -> float:
+def bench_ms(fn, warmup: int = 3, iters: int = 8, flush: bool = True) -> float:
     """MEDIAN wall time in ms — device PLUS host dispatch.
 
     Median, not min, so it pairs coherently with the mean host-issue time:
@@ -76,47 +81,37 @@ def bench_ms(fn, warmup: int = 25, iters: int = 50, flush: bool = True) -> float
     return statistics.median(s.elapsed_time(e) for s, e in zip(beg, end))
 
 
-def device_ms(fn, warmup: int = 20, iters: int = 50, rounds: int = 3) -> float:
-    """Best of ``rounds`` profile windows, each averaging ``iters`` calls.
+def device_ms(fn, warmup: int = 5, iters: int = 15, rounds: int = 2) -> float:
+    """Device time per call, in ms: one event pair around a back-to-back batch.
 
-    A single window over 10 calls put run-to-run spread on a 8 us row at 3x,
-    which is larger than the differences being judged.
-    """
-    return min(_device_window(fn, warmup, iters) for _ in range(rounds))
+    ``iters`` calls are issued with no sync between them, so the queue stays
+    full and the host gaps hide behind execution — elapsed/iters is then the
+    device cost, and where dispatch is slower than the kernel the row's
+    ``host_share`` says so. Best of ``rounds``, since a single window put
+    run-to-run spread on an 8 us row at 3x.
 
-
-def _device_window(fn, warmup: int, iters: int) -> float:
-    """Summed device-kernel time per call, in ms — device work, no dispatch.
-
-    From the profiler rather than a CUDA-graph replay: capture cannot express
-    a path that reads device memory on the host (``torch.linalg.inv`` in the
-    OFT reference is one), and a failed capture invalidates the stream, which
-    then fails the NEXT unrelated call. Summing kernel durations also works
-    for a backward, which graph capture frequently cannot take at all.
-
-    Gaps between kernels are excluded by construction, so this is device work
-    and not a wall time; the launch paths here are serial, so summing
-    per-kernel self time does not double-count concurrency.
+    Two events per round, not a profiler session: kineto costs ~0.9 s of fixed
+    overhead per session against kernels that run in microseconds, which was
+    1428 sessions and 22 minutes across one suite run.
     """
     for _ in range(warmup):
         fn()
     torch.cuda.synchronize()
-    with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CUDA]
-    ) as prof:
+    best = float("inf")
+    for _ in range(rounds):
+        beg = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize()
+        beg.record()
         for _ in range(iters):
             fn()
+        end.record()
         torch.cuda.synchronize()
-    total_us = sum(
-        getattr(e, "self_device_time_total", None)
-        or getattr(e, "self_cuda_time_total", 0.0)
-        for e in prof.events()
-        if e.device_type == torch.autograd.DeviceType.CUDA
-    )
-    return total_us / iters / 1e3
+        best = min(best, beg.elapsed_time(end) / iters)
+    return best
 
 
-def host_ms(fn, warmup: int = 10, iters: int = 30) -> float:
+def host_ms(fn, warmup: int = 3, iters: int = 10) -> float:
     """Host time to ISSUE ``fn``, with no device sync inside the loop."""
     for _ in range(warmup):
         fn()
@@ -130,7 +125,7 @@ def host_ms(fn, warmup: int = 10, iters: int = 30) -> float:
 
 
 def interleave(
-    arms: dict, rounds: int = 3, warmup: int = 10, iters: int = 20, device: bool = True
+    arms: dict, rounds: int = 2, warmup: int = 3, iters: int = 8, device: bool = True
 ) -> dict:
     """(wall, host, device) per arm.
 
