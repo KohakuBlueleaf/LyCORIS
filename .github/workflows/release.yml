@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or sha to release"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          version=$(python scripts/ci/version.py read)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "releasing ${version}"
+
+      # A tag that disagrees with pyproject is a mis-cut release: stop before
+      # anything is uploaded, since PyPI filenames cannot be reused.
+      - name: Tag must match pyproject
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          test "${tag}" = "${{ steps.version.outputs.version }}" \
+            || { echo "tag ${tag} != pyproject ${{ steps.version.outputs.version }}"; exit 1; }
+
+      - name: Build sdist + wheel
+        run: |
+          pip install build
+          python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      # Trusted publishing: configure this repo + workflow as a publisher on
+      # PyPI, and no API token needs to exist anywhere.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-github:
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="${{ needs.build.outputs.version }}"
+          tag="v${version}"
+          notes=$(python scripts/ci/release_notes.py --version "${version}")
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create "${tag}" --title "LyCORIS ${version}" --notes "${notes}"
+          else
+            gh release edit "${tag}" --title "LyCORIS ${version}" --notes "${notes}"
+          fi
+          for f in dist/*; do gh release upload "${tag}" "$f" --clobber; done

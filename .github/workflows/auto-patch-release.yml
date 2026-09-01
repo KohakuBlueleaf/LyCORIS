@@ -1,0 +1,79 @@
+name: Auto Patch Release
+
+on:
+  schedule:
+    # 05:00 UTC weekly, Monday
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Evaluate and report, do not tag"
+        required: false
+        default: true
+        type: boolean
+      min_commits:
+        description: "Commits on main since the last tag before a patch is cut"
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Decide whether a patch is due
+        id: decide
+        shell: bash
+        run: |
+          current=$(python scripts/ci/version.py read)
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
+          span=${last:+${last}..HEAD}
+          count=$(git rev-list --count --no-merges ${span:-HEAD})
+          min="${{ inputs.min_commits || 3 }}"
+          echo "current=${current} last=${last:-none} commits=${count} min=${min}"
+          if [ "${count}" -ge "${min}" ] && [ "v${current}" = "${last:-}" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            # Either nothing has landed, or pyproject is already ahead of the
+            # last tag — which means a human is mid-release; stay out of it.
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "next=$(python scripts/ci/version.py bump patch)" >> "$GITHUB_OUTPUT"
+
+      - name: Report only
+        if: steps.decide.outputs.release != 'true' || inputs.dry_run
+        run: |
+          echo "release=${{ steps.decide.outputs.release }}"
+          echo "would cut ${{ steps.decide.outputs.next }}"
+
+      - name: Stamp, tag and push
+        if: steps.decide.outputs.release == 'true' && !inputs.dry_run
+        shell: bash
+        run: |
+          next="${{ steps.decide.outputs.next }}"
+          python scripts/ci/version.py write "${next}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "bump to version ${next}"
+          git tag "v${next}"
+          git push origin main --follow-tags
+
+      # The tag push above cannot start another workflow (GITHUB_TOKEN pushes
+      # do not trigger `on: push`), so Release is dispatched explicitly.
+      - name: Dispatch the release workflow
+        if: steps.decide.outputs.release == 'true' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml -f ref="v${{ steps.decide.outputs.next }}"

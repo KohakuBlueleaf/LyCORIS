@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Formatting and the breakage-only ruff set (pyproject pins which rules
+  # block). Style opinions do not gate a merge; syntax and undefined names do.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install black ruff
+      - run: black --check lycoris/ scripts/ test/
+      - run: ruff check lycoris/ scripts/ test/
+
+  # No GPU on the runners: this is the CPU-reachable half, and importing each
+  # module in isolation is where an import cycle shows up.
+  import-check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (CPU torch)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      - name: Import every module
+        shell: bash
+        run: python scripts/ci/import_check.py
+      - name: CPU smoke — every algorithm, forward and backward
+        shell: bash
+        run: python scripts/ci/cpu_smoke.py
+
+  package-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          pip install build
+          python -m build
+      - name: Install the wheel into a clean venv
+        run: |
+          python -m venv .venv-wheel
+          . .venv-wheel/bin/activate
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install dist/*.whl
+          python -c "import lycoris; print(lycoris.__file__)"
+          python -c "from lycoris.kernels import available_backends; print(available_backends())"
