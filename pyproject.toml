@@ -36,6 +36,7 @@ dependencies = [
     "toml",
     "tqdm",
     "numpy",
+    "safetensors",
 ]
 urls = { "Homepage" = "https://github.com/KohakuBlueleaf/LyCORIS" }
 
@@ -43,13 +44,13 @@ urls = { "Homepage" = "https://github.com/KohakuBlueleaf/LyCORIS" }
 dev = [
     "coverage",
     "parameterized",
-    "safetensors",
     "diffusers>=0.40.0",
 ]
 # The fused kernels are optional: without them everything falls back to torch.
 kernels = [
     "triton; sys_platform == 'linux'",
     "triton-windows; sys_platform == 'win32'",
+    "tilelang",
 ]
 
 [tool.setuptools.packages.find]
