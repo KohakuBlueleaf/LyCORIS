@@ -35,6 +35,7 @@ dependencies = [
     "einops",
     "toml",
     "tqdm",
+    "numpy",
 ]
 urls = { "Homepage" = "https://github.com/KohakuBlueleaf/LyCORIS" }
 
@@ -42,7 +43,6 @@ urls = { "Homepage" = "https://github.com/KohakuBlueleaf/LyCORIS" }
 dev = [
     "coverage",
     "parameterized",
-    "numpy",
     "safetensors",
     "diffusers>=0.40.0",
 ]
