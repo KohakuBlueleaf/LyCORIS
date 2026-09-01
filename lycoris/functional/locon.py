@@ -2,9 +2,10 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .general import rebuild_tucker, FUNC_LIST
+from ..kernels.autograd.locon import locon_bypass_diff, locon_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose, static_scale
 
 
 def weight_gen(org_weight, rank, tucker=True):
@@ -34,47 +35,25 @@ def weight_gen(org_weight, rank, tucker=True):
         return down, up, None
 
 
-def diff_weight(*weights: tuple[torch.Tensor], gamma=1.0):
-    """### diff_weight
+def _diff_weight(d, u, m, gamma):
+    """ΔW = gamma·(up @ down); with a tucker mid, ΔW = gamma·(mid ×_p up ×_q down).
 
-    Get ΔW = BA, where BA is low rank decomposition
-
-    Args:
-        weights (tuple[torch.Tensor]): (down, up[, mid])
-        gamma (float, optional): scale factor, normally alpha/rank here
-
-    Returns:
-        torch.Tensor: ΔW
+    Reference body: what the compile tier compiles and the fused kernels match.
     """
-    d, u, m = weights
-    R, I, *k = d.shape
-    O, R, *_ = u.shape
+    out_dim, in_dim = u.shape[0], d.shape[1]
     u = u * gamma
-
     if m is None:
+        k = d.shape[2:]
         result = u.reshape(-1, u.size(1)) @ d.reshape(d.size(0), -1)
     else:
-        R, R, *k = m.shape
+        k = m.shape[2:]
         u = u.reshape(u.size(0), -1).transpose(0, 1)
-        d = d.reshape(d.size(0), -1)
-        result = rebuild_tucker(m, u, d)
-    return result.reshape(O, I, *k)
+        result = rebuild_tucker(m, u, d.reshape(d.size(0), -1))
+    return result.reshape(out_dim, in_dim, *k)
 
 
-def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}):
-    """### bypass_forward_diff
-
-    Args:
-        x (torch.Tensor): input tensor
-        weights (tuple[torch.Tensor]): (down, up[, mid])
-        gamma (float, optional): scale factor, normally alpha/rank here
-        extra_args (dict, optional): extra args for forward func, \
-            e.g. padding, stride for Conv1/2/3d
-
-    Returns:
-        torch.Tensor: output tensor
-    """
-    d, u, m = weights
+def _bypass_diff(x, d, u, m, gamma, extra_args):
+    """y = gamma·up(down(x)), the down/mid/up chain in the layer's own op."""
     if m is not None:
         down = FUNC_LIST[d.dim()](x, d)
         mid = FUNC_LIST[d.dim()](down, m, **extra_args)
@@ -83,3 +62,50 @@ def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}):
         down = FUNC_LIST[d.dim()](x, d, **extra_args)
         up = FUNC_LIST[d.dim()](down, u)
     return up * gamma
+
+
+def diff_weight(*weights: tuple[torch.Tensor], gamma=1.0, backend=None):
+    """### diff_weight
+
+    Get ΔW = BA, where BA is low rank decomposition
+
+    Args:
+        weights (tuple[torch.Tensor]): (down, up[, mid])
+        gamma (float, optional): scale factor, normally alpha/rank here
+        backend (str, optional): pin one of triton/tilelang/compile/torch;
+            the default picks per call, in that order
+
+    Returns:
+        torch.Tensor: ΔW
+    """
+    d, u, m = weights
+    pick = choose((d, u, m), supported=static_scale(gamma), backend=backend)
+    if pick in FUSED:
+        return locon_diff_weight(d, u, m, gamma, backend=pick)
+    if pick == "compile":
+        return call_compiled(_diff_weight, d, u, m, gamma)
+    return _diff_weight(d, u, m, gamma)
+
+
+def bypass_forward_diff(x, org_out, *weights, gamma=1.0, extra_args={}, backend=None):
+    """### bypass_forward_diff
+
+    Args:
+        x (torch.Tensor): input tensor
+        weights (tuple[torch.Tensor]): (down, up[, mid])
+        gamma (float, optional): scale factor, normally alpha/rank here
+        extra_args (dict, optional): extra args for forward func, \
+            e.g. padding, stride for Conv1/2/3d
+        backend (str, optional): pin one of triton/tilelang/compile/torch
+
+    Returns:
+        torch.Tensor: output tensor
+    """
+    d, u, m = weights
+    linear = m is None and d.dim() == 2 and not extra_args
+    pick = choose((x, d, u), supported=linear and static_scale(gamma), backend=backend)
+    if pick in FUSED:
+        return locon_bypass_diff(x, d, u, gamma, backend=pick)
+    if pick == "compile":
+        return call_compiled(_bypass_diff, x, d, u, m, gamma, extra_args)
+    return _bypass_diff(x, d, u, m, gamma, extra_args)

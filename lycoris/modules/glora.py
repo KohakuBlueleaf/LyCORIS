@@ -6,6 +6,25 @@ import torch.nn.functional as F
 
 from .base import LycorisBaseModule
 from ..functional import tucker_weight_from_conv
+from ..kernels.autograd.glora import glora_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose
+
+
+def _glora_weight(org_weight, a1, a2, b1, b2, bm, gamma):
+    """ΔW = gamma·(W·a1·a2 + b1·b2); the b half is tucker-chained when bm is given."""
+    if bm is not None:
+        wb = tucker_weight_from_conv(b1, b2, bm)
+    else:
+        wb = b1.view(b1.size(0), -1) @ b2.view(b2.size(0), -1)
+        wb = wb.view(*org_weight.shape)
+    wa1 = a1.view(a1.size(0), -1)
+    wa2 = a2.view(a2.size(0), -1)
+    if org_weight.dim() > 2:
+        w_wa1 = torch.einsum("o i ..., i j -> o j ...", org_weight, wa1)
+        w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
+    else:
+        w_wa2 = (org_weight @ wa1) @ wa2
+    return (wb + w_wa2) * gamma
 
 
 class GLoRAModule(LycorisBaseModule):
@@ -179,23 +198,25 @@ class GLoRAModule(LycorisBaseModule):
             )
 
     def make_weight(self, device=None):
-        wa1 = self.a1.weight.view(self.a1.weight.size(0), -1)
-        wa2 = self.a2.weight.view(self.a2.weight.size(0), -1)
         orig = self.org_weight
-
-        if self.tucker:
-            wb = tucker_weight_from_conv(self.b1.weight, self.b2.weight, self.bm.weight)
+        bm = self.bm.weight if self.tucker else None
+        args = (
+            orig,
+            self.a1.weight,
+            self.a2.weight,
+            self.b1.weight,
+            self.b2.weight,
+        )
+        # W@a1 keeps its spatial axes on a conv, which the flat 2D fused
+        # rebuild cannot express.
+        backend = choose((*args, bm), supported=bm is None and orig.dim() == 2)
+        if backend in FUSED:
+            weight = glora_diff_weight(*args, gamma=self.scale, backend=backend)
+        elif backend == "compile":
+            weight = call_compiled(_glora_weight, *args, bm, self.scale)
         else:
-            wb1 = self.b1.weight.view(self.b1.weight.size(0), -1)
-            wb2 = self.b2.weight.view(self.b2.weight.size(0), -1)
-            wb = wb1 @ wb2
-            wb = wb.view(*orig.shape)
-        if orig.dim() > 2:
-            w_wa1 = torch.einsum("o i ..., i j -> o j ...", orig, wa1)
-            w_wa2 = torch.einsum("o i ..., i j -> o j ...", w_wa1, wa2)
-        else:
-            w_wa2 = (orig @ wa1) @ wa2
-        return (wb + w_wa2) * self.scale * self.scalar
+            weight = _glora_weight(*args, bm, self.scale)
+        return weight * self.scalar
 
     def get_diff_weight(self, multiplier=1.0, shape=None, device=None):
         weight = self.make_weight(device) * multiplier

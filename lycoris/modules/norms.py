@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..functional.general import add_scaled
 from ..logging import warning_once
 
 
@@ -73,19 +74,16 @@ class NormModule(LycorisBaseModule):
             org_bias = self.org_module[0].bias.to(device, dtype=self.b_norm.dtype)
         else:
             org_bias = None
-        if self.rank_dropout and self.training:
-            drop = (torch.rand(self.dim, device=device) < self.rank_dropout).to(
-                self.w_norm.device
+        if not (self.rank_dropout and self.training):
+            return (
+                add_scaled(org_weight, self.w_norm.to(device), scale),
+                (
+                    None
+                    if org_bias is None
+                    else add_scaled(org_bias, self.b_norm.to(device), scale)
+                ),
             )
-            if self.rank_dropout_scale:
-                drop /= drop.mean()
-        else:
-            drop = 1
-        drop = (
-            torch.rand(self.dim, device=device) < self.rank_dropout
-            if self.rank_dropout and self.training
-            else 1
-        )
+        drop = torch.rand(self.dim, device=device) < self.rank_dropout
         weight = self.w_norm.to(device) * drop * scale
         if org_bias is not None:
             bias = self.b_norm.to(device) * drop * scale

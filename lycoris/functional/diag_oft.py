@@ -1,10 +1,12 @@
-import math
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-from .general import factorization, FUNC_LIST
+from .general import factorization
+from ..kernels.autograd.diag_oft import diag_oft_bypass_diff, diag_oft_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose
+
+# The in-kernel Cayley solves one block per CTA in registers; past 32 the
+# Gauss-Jordan tile stops fitting and the eager inverse is the fallback.
+MAX_BLOCK = 32
 
 
 def get_r(oft_blocks, I=None, constraint=0):
@@ -45,18 +47,8 @@ def weight_gen(org_weight, max_block_size=-1, rescale=False):
         return oft_blocks, None
 
 
-def diff_weight(org_weight, *weights, constraint=None):
-    """### diff_weight
-
-    Args:
-        org_weight (torch.Tensor): the weight tensor of original model
-        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
-        constraint (float, optional): constraint for oft
-
-    Returns:
-        torch.Tensor: ΔW
-    """
-    oft_blocks, rescale = weights
+def _diff_weight(org_weight, oft_blocks, rescale, constraint):
+    """ΔW = (R − I)·W blockwise, with the rescale row scaling folded in."""
     I = torch.eye(oft_blocks.shape[1], device=oft_blocks.device)
     r = get_r(oft_blocks, I, constraint)
 
@@ -72,27 +64,42 @@ def diff_weight(org_weight, *weights, constraint=None):
     ).view(-1, *shape)
     if rescale is not None:
         weight = rescale * weight
-        weight = weight + (rescale - 1) * org_weight
+        weight = weight + (rescale - 1) * org_weight.reshape(weight.shape)
     return weight
 
 
-def bypass_forward_diff(x, org_out, *weights, constraint=None, need_transpose=False):
-    """### bypass_forward_diff
+def diff_weight(org_weight, *weights, constraint=None, backend=None):
+    """### diff_weight
+
+    The fused path runs Cayley, the rescale fold and the identity shift in one
+    kernel, so R is never materialised.
 
     Args:
-        x (torch.Tensor): the input tensor for original model
-        org_out (torch.Tensor): the output tensor from original model
+        org_weight (torch.Tensor): the weight tensor of original model
         weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
         constraint (float, optional): constraint for oft
-        need_transpose (bool, optional):
-            whether to transpose the input and output,
-            set to `True` if the original model have "dim" not in the last axis.
-            For example: Convolution layers
+        backend (str, optional): pin one of triton/tilelang/compile/torch
 
     Returns:
-        torch.Tensor: output tensor
+        torch.Tensor: ΔW
     """
     oft_blocks, rescale = weights
+    pick = choose(
+        (org_weight, oft_blocks, rescale),
+        supported=oft_blocks.shape[-1] <= MAX_BLOCK,
+        backend=backend,
+    )
+    if pick in FUSED:
+        return diag_oft_diff_weight(
+            org_weight, oft_blocks, rescale, constraint, backend=pick
+        )
+    if pick == "compile":
+        return call_compiled(_diff_weight, org_weight, oft_blocks, rescale, constraint)
+    return _diff_weight(org_weight, oft_blocks, rescale, constraint)
+
+
+def _bypass_diff(x, org_out, oft_blocks, rescale, constraint, need_transpose):
+    """Δy = (R − I)·y on the channel axis, R shared by every token."""
     block_num, block_size, _ = oft_blocks.shape
     I = torch.eye(block_size, device=oft_blocks.device)
     r = get_r(oft_blocks, I, constraint)
@@ -103,10 +110,44 @@ def bypass_forward_diff(x, org_out, *weights, constraint=None, need_transpose=Fa
     oft_out = torch.einsum(
         "k n m, ... k n -> ... k m", r - I, org_out.view(*shape, block_num, block_size)
     )
-    out = oft_out.view(*shape, -1)
+    out = oft_out.reshape(*shape, -1)
     if rescale is not None:
         out = rescale.transpose(-1, 0) * out
         out = out + (rescale - 1).transpose(-1, 0) * org_out
     if need_transpose:
         out = out.transpose(1, -1)
     return out
+
+
+def bypass_forward_diff(
+    x, org_out, *weights, constraint=None, need_transpose=False, backend=None
+):
+    """### bypass_forward_diff
+
+    Args:
+        x (torch.Tensor): the input tensor for original model
+        org_out (torch.Tensor): the output tensor from original model
+        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
+        constraint (float, optional): constraint for oft
+        need_transpose (bool, optional): `True` when "dim" is not the last
+            axis, as in convolution layers
+        backend (str, optional): pin one of triton/tilelang/compile/torch
+
+    Returns:
+        torch.Tensor: output tensor
+    """
+    oft_blocks, rescale = weights
+    pick = choose(
+        (org_out, oft_blocks, rescale),
+        supported=oft_blocks.shape[-1] <= MAX_BLOCK,
+        backend=backend,
+    )
+    if pick in FUSED:
+        return diag_oft_bypass_diff(
+            org_out, oft_blocks, rescale, constraint, need_transpose, backend=pick
+        )
+    if pick == "compile":
+        return call_compiled(
+            _bypass_diff, x, org_out, oft_blocks, rescale, constraint, need_transpose
+        )
+    return _bypass_diff(x, org_out, oft_blocks, rescale, constraint, need_transpose)

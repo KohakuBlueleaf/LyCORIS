@@ -5,7 +5,14 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..kernels.autograd.dylora import dylora_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose, static_scale
 from ..utils import product
+
+
+def _dylora_weight(down, up, gamma):
+    """ΔW = gamma·(up @ down) over the rank blocks in play."""
+    return up @ (down * gamma)
 
 
 class DyLoraModule(LycorisBaseModule):
@@ -114,7 +121,14 @@ class DyLoraModule(LycorisBaseModule):
             down, up, scale = self.get_random_rank_weight()
         else:
             down, up, scale = self.get_weight(rank)
-        w = up @ (down * (scale * multiplier))
+        gamma = scale * multiplier
+        backend = choose((down, up), supported=static_scale(gamma))
+        if backend in FUSED:
+            w = dylora_diff_weight(down, up, gamma=gamma, backend=backend)
+        elif backend == "compile":
+            w = call_compiled(_dylora_weight, down, up, gamma)
+        else:
+            w = _dylora_weight(down, up, gamma)
         if device is not None:
             w = w.to(device)
         if shape is not None:

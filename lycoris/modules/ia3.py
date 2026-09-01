@@ -2,6 +2,21 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..kernels.autograd.ia3 import ia3_bypass, ia3_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose
+
+
+def _ia3_weight(org_weight, weight, on_input, multiplier, diff):
+    """W · (w·mult + [not diff]), broadcast along the in- or out-channel axis."""
+    scale = weight * multiplier + int(not diff)
+    if on_input:
+        return org_weight * scale
+    return (org_weight.transpose(0, 1) * scale).transpose(0, 1)
+
+
+def _ia3_scale(x, weight, multiplier, diff):
+    """x · (w·mult + [not diff]) on x's own channel axis."""
+    return x * (weight * multiplier + int(not diff))
 
 
 class IA3Module(LycorisBaseModule):
@@ -89,17 +104,20 @@ class IA3Module(LycorisBaseModule):
         self.org_module[0].forward = self.forward
 
     def make_weight(self, multiplier=1, shape=None, device=None, diff=False):
-        weight = self.weight * multiplier + int(not diff)
-        if self.train_input:
-            diff = self.org_weight * weight
+        org_weight = self.org_weight
+        args = (org_weight, self.weight, self.train_input, multiplier, diff)
+        backend = choose((org_weight, self.weight))
+        if backend in FUSED:
+            out = ia3_diff_weight(*args, backend=backend)
+        elif backend == "compile":
+            out = call_compiled(_ia3_weight, *args)
         else:
-            diff = self.org_weight.transpose(0, 1) * weight
-            diff = diff.transpose(0, 1)
+            out = _ia3_weight(*args)
         if shape is not None:
-            diff = diff.view(shape)
+            out = out.view(shape)
         if device is not None:
-            diff = diff.to(device)
-        return diff
+            out = out.to(device)
+        return out
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(
@@ -111,14 +129,20 @@ class IA3Module(LycorisBaseModule):
         diff = self.make_weight(multiplier=multiplier, shape=shape, device=device)
         return diff, None
 
+    def _channel_scale(self, x, scale, diff):
+        """x scaled on its channel axis: last for linear, 1 for conv."""
+        axis = 1 if self.module_type.startswith("conv") else -1
+        backend = choose((x, self.weight))
+        if backend in FUSED:
+            return ia3_bypass(x, self.weight, axis, scale, diff, backend=backend)
+        if backend == "compile":
+            return call_compiled(_ia3_scale, x, self.weight, scale, diff)
+        return _ia3_scale(x, self.weight, scale, diff)
+
     def _bypass_forward(self, x, scale=1, diff=False):
-        weight = self.weight * scale + int(not diff)
         if self.train_input:
-            x = x * weight
-        out = self.org_forward(x)
-        if not self.train_input:
-            out = out * weight
-        return out
+            return self.org_forward(self._channel_scale(x, scale, diff))
+        return self._channel_scale(self.org_forward(x), scale, diff)
 
     def bypass_forward_diff(self, x, scale=1):
         return self._bypass_forward(x, scale, diff=True)

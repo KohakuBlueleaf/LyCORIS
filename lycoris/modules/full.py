@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..functional.general import add_scaled
 from ..logging import logger
 
 
@@ -148,10 +149,18 @@ class FullModule(LycorisBaseModule):
             state_dict[f"{prefix}bias"] = diff_bias + self.bias.data.to(diff_bias)
 
     def make_weight(self, scale=1, device=None):
+        dropping = bool(self.rank_dropout) and self.training
+        if self.is_diff and not dropping:
+            # self.weight IS the diff here, so the merge is one scaled add.
+            weight = add_scaled(self.org_weight.to(device), self.weight, scale)
+            bias = None
+            if self.bias is not None and self.org_bias is not None:
+                # org_bias is cached as a one-element list, like _org_weight.
+                bias = add_scaled(self.org_bias[0].to(device), self.bias, scale)
+            return weight, bias
+
         drop = (
-            torch.rand(self.dim, device=device) > self.rank_dropout
-            if self.rank_dropout and self.training
-            else 1
+            torch.rand(self.dim, device=device) > self.rank_dropout if dropping else 1
         )
         if drop != 1 or scale != 1 or self.is_diff:
             diff_w, diff_b = self.get_diff_weight(scale, device=device)

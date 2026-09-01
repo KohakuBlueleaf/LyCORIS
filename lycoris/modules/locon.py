@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import LycorisBaseModule
-from ..functional.general import rebuild_tucker
+from ..functional.general import weight_decompose
+from ..functional.locon import bypass_forward_diff as bypass_diff, diff_weight
 from ..logging import logger
 
 
@@ -198,15 +199,10 @@ class LoConModule(LycorisBaseModule):
     def make_weight(self, device=None):
         wa = self.lora_up.weight.to(device)
         wb = self.lora_down.weight.to(device)
-        if self.tucker:
-            t = self.lora_mid.weight
-            wa = wa.view(wa.size(0), -1).transpose(0, 1)
-            wb = wb.view(wb.size(0), -1)
-            weight = rebuild_tucker(t, wa, wb)
-        else:
-            weight = wa.view(wa.size(0), -1) @ wb.view(wb.size(0), -1)
-
-        weight = weight.view(self.shape)
+        t = self.lora_mid.weight.to(device) if self.tucker else None
+        # gamma=1: self.scale belongs to the caller and self.scalar can be a
+        # parameter, so neither folds into the rebuild's scale.
+        weight = diff_weight(wb, wa, t, gamma=1.0).view(self.shape)
         if self.training and self.rank_dropout:
             drop = (torch.rand(weight.size(0), device=device) > self.rank_dropout).to(
                 weight.dtype
@@ -237,27 +233,7 @@ class LoConModule(LycorisBaseModule):
         return merged, None
 
     def apply_weight_decompose(self, weight, multiplier=1):
-        weight = weight.to(self.dora_scale.dtype)
-        if self.wd_on_out:
-            weight_norm = (
-                weight.reshape(weight.shape[0], -1)
-                .norm(dim=1)
-                .reshape(weight.shape[0], *[1] * self.dora_norm_dims)
-            ) + torch.finfo(weight.dtype).eps
-        else:
-            weight_norm = (
-                weight.transpose(0, 1)
-                .reshape(weight.shape[1], -1)
-                .norm(dim=1, keepdim=True)
-                .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
-                .transpose(0, 1)
-            ) + torch.finfo(weight.dtype).eps
-
-        scale = self.dora_scale.to(weight.device) / weight_norm
-        if multiplier != 1:
-            scale = multiplier * (scale - 1) + 1
-
-        return weight * scale
+        return weight_decompose(weight, self.dora_scale, multiplier, self.wd_on_out)
 
     def custom_state_dict(self):
         destination = {}
@@ -284,12 +260,13 @@ class LoConModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, x, scale=1):
-        if self.tucker:
-            mid = self.lora_mid(self.lora_down(x))
-        else:
-            mid = self.lora_down(x)
-
         if self.rank_dropout and self.training:
+            # The mask lives on the r axis between down and up, so this case
+            # keeps the chain split; every other case is one dispatched call.
+            if self.tucker:
+                mid = self.lora_mid(self.lora_down(x))
+            else:
+                mid = self.lora_down(x)
             drop = (
                 torch.rand(self.lora_dim, device=mid.device) > self.rank_dropout
             ).to(mid.dtype)
@@ -300,8 +277,31 @@ class LoConModule(LycorisBaseModule):
             else:
                 drop = drop.view(*[1] * (dims - 1), -1)
             mid = mid * drop
+            return self.dropout(self.lora_up(mid) * self.scalar * self.scale * scale)
 
-        return self.dropout(self.lora_up(mid) * self.scalar * self.scale * scale)
+        # Geometry from the conv that carries it, not the org module: neither
+        # lora conv is built with the org dilation or groups.
+        op = self.lora_mid if self.tucker else self.lora_down
+        extra_args = (
+            {
+                "stride": op.stride,
+                "padding": op.padding,
+                "dilation": op.dilation,
+                "groups": op.groups,
+            }
+            if self.isconv
+            else {}
+        )
+        diff = bypass_diff(
+            x,
+            None,
+            self.lora_down.weight,
+            self.lora_up.weight,
+            self.lora_mid.weight if self.tucker else None,
+            gamma=self.scale * scale,
+            extra_args=extra_args,
+        )
+        return self.dropout(diff * self.scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)

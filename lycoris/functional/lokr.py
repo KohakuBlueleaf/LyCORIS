@@ -6,6 +6,8 @@ import torch.nn.functional as F
 
 from .general import rebuild_tucker, FUNC_LIST
 from .general import factorization
+from ..kernels.autograd.lokr import lokr_kron_bypass, lokr_kron_weight, rank_scale
+from ..kernels.select import FUSED, call_compiled, choose, static_scale
 
 
 def make_kron(w1, w2, scale):
@@ -121,24 +123,8 @@ def weight_gen(
     return w1, w1a, w1b, w2, w2a, w2b, t2
 
 
-def diff_weight(*weights, gamma=1.0):
-    """### diff_weight
-
-    Args:
-        weights (tuple[torch.Tensor]): (w1, w1a, w1b, w2, w2a, w2b, t)
-        gamma (float, optional): scale factor, normally alpha/rank here
-
-    Returns:
-        torch.Tensor: ΔW
-    """
-    w1, w1a, w1b, w2, w2a, w2b, t = weights
-    if w1a is not None:
-        rank = w1a.shape[1]
-    elif w2a is not None:
-        rank = w2a.shape[1]
-    else:
-        rank = gamma
-    scale = gamma / rank
+def _kron_weight(w1, w1a, w1b, w2, w2a, w2b, t, scale):
+    """ΔW = scale · kron(w1, w2), each half rebuilt from its factors first."""
     if w1 is None:
         w1 = w1a @ w1b
     if w2 is None:
@@ -151,25 +137,67 @@ def diff_weight(*weights, gamma=1.0):
     return make_kron(w1, w2, scale)
 
 
-def bypass_forward_diff(h, org_out, *weights, gamma=1.0, extra_args={}):
-    """### bypass_forward_diff
+def _plain_w2(w2, w2b, t):
+    """The kron's second half is a plain matrix, which is the fused layout.
+
+    A conv w2 keeps spatial axes that kron must broadcast over, and a tucker
+    w2 rebuilds into exactly that shape.
+    """
+    return w2.dim() == 2 if w2 is not None else (t is None and w2b.dim() == 2)
+
+
+def kron_weight(w1, w1a, w1b, w2, w2a, w2b, t=None, scale=1.0, backend=None):
+    """ΔW = scale · kron(w1, w2) with the backend chosen per call.
+
+    Only the larger side is ever factorized, so at most one of w1/w2 arrives
+    as a pair and the fused kernel generates that side's tile in-register.
+    """
+    tensors = (w1, w1a, w1b, w2, w2a, w2b, t)
+    pick = choose(
+        tensors,
+        supported=_plain_w2(w2, w2b, t) and static_scale(scale),
+        backend=backend,
+    )
+    if pick in FUSED:
+        return lokr_kron_weight(
+            w1, w1a, w1b, w2, w2a, w2b, t, scale=scale, backend=pick
+        )
+    if pick == "compile":
+        return call_compiled(_kron_weight, w1, w1a, w1b, w2, w2a, w2b, t, scale)
+    return _kron_weight(w1, w1a, w1b, w2, w2a, w2b, t, scale)
+
+
+def diff_weight(*weights, gamma=1.0, backend=None):
+    """### diff_weight
 
     Args:
         weights (tuple[torch.Tensor]): (w1, w1a, w1b, w2, w2a, w2b, t)
         gamma (float, optional): scale factor, normally alpha/rank here
-        extra_args (dict, optional): extra args for forward func, \
-            e.g. padding, stride for Conv1/2/3d
+        backend (str, optional): pin one of triton/tilelang/compile/torch
 
     Returns:
-        torch.Tensor: output tensor
+        torch.Tensor: ΔW
     """
     w1, w1a, w1b, w2, w2a, w2b, t = weights
+    return kron_weight(
+        w1,
+        w1a,
+        w1b,
+        w2,
+        w2a,
+        w2b,
+        t,
+        scale=rank_scale(w1a, w2a, gamma),
+        backend=backend,
+    )
+
+
+def _kron_bypass(h, w1, w1a, w1b, w2, w2a, w2b, t, scale, extra_args):
+    """y = scale · vec(w1 · unvec(h) · w2ᵀ), as a grouped op chain on h."""
     use_w1 = w1 is not None
     use_w2 = w2 is not None
     tucker = t is not None
     dim = t.dim() if tucker else w2.dim() if w2 is not None else w2b.dim()
-    rank = w1b.size(0) if not use_w1 else w2b.size(0) if not use_w2 else gamma
-    scale = gamma / rank
     is_conv = dim > 2
     op = FUNC_LIST[dim]
 
@@ -245,3 +273,59 @@ def bypass_forward_diff(h, org_out, *weights, gamma=1.0, extra_args={}):
         h = hc.reshape(*hc.shape[:-2], -1)
 
     return h * scale
+
+
+def kron_bypass(
+    h, w1, w1a, w1b, w2, w2a, w2b, t=None, scale=1.0, extra_args={}, backend=None
+):
+    """Bypass apply of scale · kron(w1, w2), backend chosen per call.
+
+    The fused path is the linear layout: one kernel per token tile computing
+    w1 @ X @ w2ᵀ, so ΔW (a·c by b·d) is never built.
+    """
+    pick = choose(
+        (h, w1, w1a, w1b, w2, w2a, w2b),
+        supported=_plain_w2(w2, w2b, t) and not extra_args and static_scale(scale),
+        backend=backend,
+    )
+    if pick in FUSED:
+        return lokr_kron_bypass(
+            h, w1, w1a, w1b, w2, w2a, w2b, t, scale=scale, backend=pick
+        )
+    if pick == "compile":
+        return call_compiled(
+            _kron_bypass, h, w1, w1a, w1b, w2, w2a, w2b, t, scale, extra_args
+        )
+    return _kron_bypass(h, w1, w1a, w1b, w2, w2a, w2b, t, scale, extra_args)
+
+
+def bypass_forward_diff(h, org_out, *weights, gamma=1.0, extra_args={}, backend=None):
+    """### bypass_forward_diff
+
+    Args:
+        weights (tuple[torch.Tensor]): (w1, w1a, w1b, w2, w2a, w2b, t)
+        gamma (float, optional): scale factor, normally alpha/rank here
+        extra_args (dict, optional): extra args for forward func, \
+            e.g. padding, stride for Conv1/2/3d
+        backend (str, optional): pin one of triton/tilelang/compile/torch
+
+    Returns:
+        torch.Tensor: output tensor
+    """
+    w1, w1a, w1b, w2, w2a, w2b, t = weights
+    # The bypass reads rank off the b factors (w1b/w2b), the rebuild off the a
+    # factors; both name the same rank of the one factorized side.
+    rank = w1b.size(0) if w1 is None else w2b.size(0) if w2 is None else gamma
+    return kron_bypass(
+        h,
+        w1,
+        w1a,
+        w1b,
+        w2,
+        w2a,
+        w2b,
+        t,
+        scale=gamma / rank,
+        extra_args=extra_args,
+        backend=backend,
+    )

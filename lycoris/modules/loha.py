@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 
 from .base import LycorisBaseModule
+from ..functional.general import weight_decompose
+from ..functional.loha import bypass_forward_diff as loha_bypass_diff
 from ..functional.loha import diff_weight as loha_diff_weight
 
 
@@ -242,27 +244,7 @@ class LohaModule(LycorisBaseModule):
         return merged, None
 
     def apply_weight_decompose(self, weight, multiplier=1):
-        weight = weight.to(self.dora_scale.dtype)
-        if self.wd_on_out:
-            weight_norm = (
-                weight.reshape(weight.shape[0], -1)
-                .norm(dim=1)
-                .reshape(weight.shape[0], *[1] * self.dora_norm_dims)
-            ) + torch.finfo(weight.dtype).eps
-        else:
-            weight_norm = (
-                weight.transpose(0, 1)
-                .reshape(weight.shape[1], -1)
-                .norm(dim=1, keepdim=True)
-                .reshape(weight.shape[1], *[1] * self.dora_norm_dims)
-                .transpose(0, 1)
-            ) + torch.finfo(weight.dtype).eps
-
-        scale = self.dora_scale.to(weight.device) / weight_norm
-        if multiplier != 1:
-            scale = multiplier * (scale - 1) + 1
-
-        return weight * scale
+        return weight_decompose(weight, self.dora_scale, multiplier, self.wd_on_out)
 
     def custom_state_dict(self):
         destination = {}
@@ -292,8 +274,33 @@ class LohaModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, x, scale=1):
-        diff_weight = self.get_weight(self.shape) * self.scalar * scale
-        return self.drop(self.op(x, diff_weight, **self.kw_dict))
+        if (
+            self.module_type != "linear"
+            or self.tucker
+            or (self.training and self.rank_dropout)
+        ):
+            # Rank dropout masks ΔW's rows, and a conv ΔW carries the org
+            # weight's spatial shape that the 2D factors here have flattened.
+            diff_weight = self.get_weight(self.shape) * self.scalar * scale
+            return self.drop(self.op(x, diff_weight, **self.kw_dict))
+        gamma = torch.tensor(
+            self.scale * scale,
+            dtype=self.hada_w1_b.dtype,
+            device=self.hada_w1_b.device,
+        )
+        diff = loha_bypass_diff(
+            x,
+            None,
+            self.hada_w1_b,
+            self.hada_w1_a,
+            self.hada_w2_b,
+            self.hada_w2_a,
+            None,
+            None,
+            gamma=gamma,
+            extra_args=self.kw_dict,
+        )
+        return self.drop(diff * self.scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)

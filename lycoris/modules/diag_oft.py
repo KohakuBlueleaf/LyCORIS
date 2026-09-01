@@ -6,6 +6,8 @@ import torch.nn.functional as F
 
 from .base import LycorisBaseModule
 from ..functional import factorization
+from ..functional.diag_oft import bypass_forward_diff as oft_bypass_diff
+from ..functional.diag_oft import diff_weight as oft_diff_weight
 from ..logging import logger
 
 
@@ -129,6 +131,19 @@ class DiagOFTModule(LycorisBaseModule):
         return r
 
     def make_weight(self, scale=1, device=None, diff=False):
+        if scale == 1 and not (self.training and self.rank_dropout):
+            # R itself is the operator here, so at scale 1 with no rank drop
+            # the whole thing is one dispatched call.
+            delta = oft_diff_weight(
+                self.org_weight.to(device),
+                self.oft_blocks,
+                self.rescale if self.rescaled else None,
+                constraint=self.constraint,
+            )
+            if not diff:
+                delta = delta + self.org_weight.to(device, dtype=delta.dtype)
+            return delta.to(self.oft_blocks.dtype)
+
         r = self.get_r()
         _, *shape = self.org_weight.shape
         org_weight = self.org_weight.to(device, dtype=r.dtype)
@@ -171,9 +186,21 @@ class DiagOFTModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def _bypass_forward(self, x, scale=1, diff=False):
-        r = self.get_r()
         org_out = self.org_forward(x)
-        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
+        need_transpose = self.op in {F.conv2d, F.conv1d, F.conv3d}
+        if scale == 1 and not (self.dropout != 0 and self.training):
+            delta = oft_bypass_diff(
+                x,
+                org_out,
+                self.oft_blocks,
+                self.rescale if self.rescaled else None,
+                constraint=self.constraint,
+                need_transpose=need_transpose,
+            )
+            return delta if diff else org_out + delta
+
+        r = self.get_r()
+        if need_transpose:
             org_out = org_out.transpose(1, -1)
         *shape, _ = org_out.shape
         org_out = org_out.view(*shape, self.block_num, self.block_size)
@@ -187,13 +214,14 @@ class DiagOFTModule(LycorisBaseModule):
             r * scale * mask + (1 - scale) * self.I * neg_mask,
             org_out,
         )
-        if diff:
-            out = out - org_out
         out = oft_out.view(*shape, -1)
+        org_flat = org_out.reshape(out.shape)
         if self.rescaled:
             out = self.rescale.transpose(-1, 0) * out
-            out = out + (self.rescale.transpose(-1, 0) - 1) * org_out
-        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
+            out = out + (self.rescale.transpose(-1, 0) - 1) * org_flat
+        if diff:
+            out = out - org_flat
+        if need_transpose:
             out = out.transpose(1, -1)
         return out
 

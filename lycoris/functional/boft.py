@@ -8,6 +8,8 @@ from einops import rearrange
 
 from .general import power2factorization, FUNC_LIST
 from .diag_oft import get_r
+from ..kernels.autograd.boft import boft_bypass_diff, boft_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose
 
 
 def weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
@@ -34,18 +36,8 @@ def weight_gen(org_weight, max_block_size, boft_m=-1, rescale=False):
         return oft_blocks, None
 
 
-def diff_weight(org_weight, *weights, constraint=None):
-    """### boft_diff_weight
-
-    Args:
-        org_weight (torch.Tensor): the weight tensor of original model
-        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
-        constraint (float, optional): constraint for oft
-
-    Returns:
-        torch.Tensor: ΔW
-    """
-    oft_blocks, rescale = weights
+def _diff_weight(org_weight, oft_blocks, rescale, constraint, scale):
+    """ΔW = butterfly(W)·rescale − W: m stages, stage i mixing within 2^i·b."""
     m, num, b, _ = oft_blocks.shape
     r_b = b // 2
     I = torch.eye(b, device=oft_blocks.device)
@@ -56,6 +48,9 @@ def diff_weight(org_weight, *weights, constraint=None):
         bi = r[i]  # b_num, b_size, b_size
         g = 2
         k = 2**i * r_b
+        # Multiplier interpolates each stage toward identity, not the result.
+        if scale != 1:
+            bi = bi * scale + (1 - scale) * I
         inp = (
             inp.unflatten(0, (-1, g, k))
             .transpose(1, 2)
@@ -71,23 +66,34 @@ def diff_weight(org_weight, *weights, constraint=None):
     return inp - org
 
 
-def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False):
-    """### boft_bypass_forward_diff
+def diff_weight(org_weight, *weights, constraint=None, scale=1, backend=None):
+    """### boft_diff_weight
 
     Args:
-        x (torch.Tensor): the input tensor for original model
-        org_out (torch.Tensor): the output tensor from original model
+        org_weight (torch.Tensor): the weight tensor of original model
         weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
         constraint (float, optional): constraint for oft
-        need_transpose (bool, optional):
-            whether to transpose the input and output,
-            set to `True` if the original model have "dim" not in the last axis.
-            For example: Convolution layers
+        scale (float, optional): multiplier, folded into every stage
+        backend (str, optional): pin one of triton/tilelang/compile/torch
 
     Returns:
-        torch.Tensor: output tensor
+        torch.Tensor: ΔW
     """
     oft_blocks, rescale = weights
+    pick = choose((org_weight, oft_blocks, rescale), backend=backend)
+    if pick in FUSED:
+        return boft_diff_weight(
+            org_weight, oft_blocks, rescale, constraint, scale, backend=pick
+        )
+    if pick == "compile":
+        return call_compiled(
+            _diff_weight, org_weight, oft_blocks, rescale, constraint, scale
+        )
+    return _diff_weight(org_weight, oft_blocks, rescale, constraint, scale)
+
+
+def _bypass_diff(org_out, oft_blocks, rescale, constraint, need_transpose, scale):
+    """Δy = butterfly(y)·rescale − y on the channel axis."""
     m, num, b, _ = oft_blocks.shape
     r_b = b // 2
     I = torch.eye(b, device=oft_blocks.device)
@@ -100,6 +106,8 @@ def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False
         bi = r[i]  # b_num, b_size, b_size
         g = 2
         k = 2**i * r_b
+        if scale != 1:
+            bi = bi * scale + (1 - scale) * I
         # ... (c g k) ->... (c k g)
         # ... (d b) -> ... d b
         inp = (
@@ -120,3 +128,45 @@ def bypass_forward_diff(org_out, *weights, constraint=None, need_transpose=False
     if need_transpose:
         inp = inp.transpose(1, -1)
     return inp
+
+
+def bypass_forward_diff(
+    org_out, *weights, constraint=None, need_transpose=False, scale=1, backend=None
+):
+    """### boft_bypass_forward_diff
+
+    Args:
+        org_out (torch.Tensor): the output tensor from original model
+        weights (tuple[torch.Tensor]): (oft_blocks[, rescale_weight])
+        constraint (float, optional): constraint for oft
+        need_transpose (bool, optional): `True` when "dim" is not the last
+            axis, as in convolution layers
+        scale (float, optional): multiplier, folded into every stage
+        backend (str, optional): pin one of triton/tilelang/compile/torch
+
+    Returns:
+        torch.Tensor: output tensor
+    """
+    oft_blocks, rescale = weights
+    pick = choose((org_out, oft_blocks, rescale), backend=backend)
+    if pick in FUSED:
+        return boft_bypass_diff(
+            org_out,
+            oft_blocks,
+            rescale,
+            constraint,
+            scale,
+            need_transpose=need_transpose,
+            backend=pick,
+        )
+    if pick == "compile":
+        return call_compiled(
+            _bypass_diff,
+            org_out,
+            oft_blocks,
+            rescale,
+            constraint,
+            need_transpose,
+            scale,
+        )
+    return _bypass_diff(org_out, oft_blocks, rescale, constraint, need_transpose, scale)

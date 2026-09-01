@@ -6,4 +6,6 @@ from .general import (
     tucker_weight,
     tucker_weight_from_conv,
     apply_dora_scale,
+    add_scaled,
+    weight_decompose,
 )

@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..kernels.autograd.dora import apply_dora
+from ..kernels.autograd.full import full_diff_weight
+from ..kernels.select import FUSED, call_compiled, choose, static_scale
 
 FUNC_LIST = [None, None, F.linear, F.conv1d, F.conv2d, F.conv3d]
 
@@ -90,6 +93,73 @@ def tucker_weight_from_conv(up, down, mid):
 def tucker_weight(wa, wb, t):
     temp = torch.einsum("i j ..., j r -> i r ...", t, wb)
     return torch.einsum("i j ..., i r -> r j ...", temp, wa)
+
+
+def _add_scaled(base, delta, gamma):
+    """W = W_org + gamma·ΔW."""
+    return base + delta * gamma
+
+
+def add_scaled(base, delta, gamma=1.0, backend=None):
+    """W_org + gamma·ΔW in one pass — the full and norm merge.
+
+    Eager reads delta twice (scale, then add); the fused op reads each operand
+    once and writes once.
+    """
+    pick = choose((base, delta), supported=static_scale(gamma), backend=backend)
+    if pick in FUSED:
+        return full_diff_weight(base, delta, gamma, backend=pick)
+    if pick == "compile":
+        return call_compiled(_add_scaled, base, delta, gamma)
+    return _add_scaled(base, delta, gamma)
+
+
+def _weight_decompose(weight, dora_scale, multiplier, wd_on_out):
+    """W' = W · (mult·(m/‖W‖ − 1) + 1), the norm per out row or per in column."""
+    weight = weight.to(dora_scale.dtype)
+    norm_dims = weight.dim() - 1
+    if wd_on_out:
+        weight_norm = (
+            weight.reshape(weight.shape[0], -1)
+            .norm(dim=1)
+            .reshape(weight.shape[0], *[1] * norm_dims)
+        ) + torch.finfo(weight.dtype).eps
+    else:
+        weight_norm = (
+            weight.transpose(0, 1)
+            .reshape(weight.shape[1], -1)
+            .norm(dim=1, keepdim=True)
+            .reshape(weight.shape[1], *[1] * norm_dims)
+            .transpose(0, 1)
+        ) + torch.finfo(weight.dtype).eps
+
+    scale = dora_scale.to(weight.device) / weight_norm
+    if multiplier != 1:
+        scale = multiplier * (scale - 1) + 1
+    return weight * scale
+
+
+def weight_decompose(weight, dora_scale, multiplier=1, wd_on_out=True, backend=None):
+    """DoRA epilogue on an already-merged weight — dora, doha and dokr alike.
+
+    One fused kernel: the norm and the rescale share the pass over W, so W is
+    read once instead of the eager chain's three times. wd_on_out=False on a
+    conv needs a per-in-channel norm over (out, spatial), which no 2D row view
+    expresses, so that case takes the tier below.
+    """
+    flat = wd_on_out or weight.dim() == 2
+    pick = choose(
+        (weight, dora_scale),
+        supported=flat and static_scale(multiplier),
+        backend=backend,
+    )
+    if pick in FUSED:
+        return apply_dora(weight, dora_scale, multiplier, wd_on_out, backend=pick)
+    if pick == "compile":
+        return call_compiled(
+            _weight_decompose, weight, dora_scale, multiplier, wd_on_out
+        )
+    return _weight_decompose(weight, dora_scale, multiplier, wd_on_out)
 
 
 def apply_dora_scale(org_weight, rebuild, dora_scale, scale):

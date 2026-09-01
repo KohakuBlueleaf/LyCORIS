@@ -9,6 +9,8 @@ from einops import rearrange
 
 from .base import LycorisBaseModule
 from ..functional import power2factorization
+from ..functional.boft import bypass_forward_diff as boft_bypass_diff
+from ..functional.boft import diff_weight as boft_diff_weight
 from ..logging import logger
 
 
@@ -143,36 +145,17 @@ class ButterflyOFTModule(LycorisBaseModule):
         return r
 
     def make_weight(self, scale=1, device=None, diff=False):
-        m = self.boft_m
-        b = self.boft_b
-        r_b = b // 2
-        r = self.get_r()
-        inp = org = self.org_weight.to(device, dtype=r.dtype)
-
-        for i in range(m):
-            bi = r[i]  # b_num, b_size, b_size
-            g = 2
-            k = 2**i * r_b
-            if scale != 1:
-                bi = bi * scale + (1 - scale) * self.I
-            inp = (
-                inp.unflatten(0, (-1, g, k))
-                .transpose(1, 2)
-                .flatten(0, 2)
-                .unflatten(0, (-1, b))
-            )
-            inp = torch.einsum("b i j, b j ...-> b i ...", bi, inp)
-            inp = (
-                inp.flatten(0, 1).unflatten(0, (-1, k, g)).transpose(1, 2).flatten(0, 2)
-            )
-
-        if self.rescaled:
-            inp = inp * self.rescale
-
-        if diff:
-            inp = inp - org
-
-        return inp.to(self.oft_blocks.dtype)
+        org = self.org_weight.to(device)
+        delta = boft_diff_weight(
+            org,
+            self.oft_blocks,
+            self.rescale if self.rescaled else None,
+            constraint=self.constraint,
+            scale=scale,
+        )
+        if not diff:
+            delta = delta + org.to(delta.dtype)
+        return delta.to(self.oft_blocks.dtype)
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         diff = self.make_weight(scale=multiplier, device=device, diff=True)
@@ -200,40 +183,16 @@ class ButterflyOFTModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def _bypass_forward(self, x, scale=1, diff=False):
-        m = self.boft_m
-        b = self.boft_b
-        r_b = b // 2
-        r = self.get_r()
-        inp = org = self.org_forward(x)
-        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
-            inp = inp.transpose(1, -1)
-
-        for i in range(m):
-            bi = r[i]  # b_num, b_size, b_size
-            g = 2
-            k = 2**i * r_b
-            if scale != 1:
-                bi = bi * scale + (1 - scale) * self.I
-            inp = (
-                inp.unflatten(-1, (-1, g, k))
-                .transpose(-2, -1)
-                .flatten(-3)
-                .unflatten(-1, (-1, b))
-            )
-            inp = torch.einsum("b i j, b j ... -> b i ...", bi, inp)
-            inp = (
-                inp.flatten(-2).unflatten(-1, (-1, k, g)).transpose(-2, -1).flatten(-3)
-            )
-
-        if self.rescaled:
-            inp = inp * self.rescale.transpose(0, -1)
-
-        if self.op in {F.conv2d, F.conv1d, F.conv3d}:
-            inp = inp.transpose(1, -1)
-
-        if diff:
-            inp = inp - org
-        return inp
+        org_out = self.org_forward(x)
+        delta = boft_bypass_diff(
+            org_out,
+            self.oft_blocks,
+            self.rescale if self.rescaled else None,
+            constraint=self.constraint,
+            need_transpose=self.op in {F.conv2d, F.conv1d, F.conv3d},
+            scale=scale,
+        )
+        return delta if diff else org_out + delta
 
     def bypass_forward_diff(self, x, scale=1):
         return self._bypass_forward(x, scale, diff=True)
