@@ -80,6 +80,16 @@ def save_figure(fig, path):
     print(f"figure -> {path}")
 
 
+def _log_scale(ax, values) -> None:
+    """Log the axis only when something positive was drawn on it.
+
+    An op with no backward leaves that panel's series entirely NaN, and
+    matplotlib refuses a log axis with no positive data.
+    """
+    if any(v is not None and v > 0 and not math.isnan(v) for v in values):
+        ax.set_yscale("log")
+
+
 def _cases(rows):
     seen = []
     for r in rows:
@@ -110,6 +120,7 @@ def _lines(ax, rows, cases, arms, value, phase=None, net=False, log=False):
     ``ms/net_ms`` — the same measurement, corrected, never recomputed.
     """
     xs = list(range(len(cases)))
+    drawn = []
     for arm in arms:
         by_case = {r["case"]: r for r in rows if r["arm"] == arm}
         raw = [value(by_case[c]) if c in by_case else float("nan") for c in cases]
@@ -127,6 +138,7 @@ def _lines(ax, rows, cases, arms, value, phase=None, net=False, log=False):
         else:
             shown = raw
         dash, mark = ARM_STYLE.get(arm, ("-", "o"))
+        drawn += list(shown)
         ax.plot(
             xs,
             shown,
@@ -155,13 +167,14 @@ def _lines(ax, rows, cases, arms, value, phase=None, net=False, log=False):
     ax.set_xticks(xs)
     ax.set_xticklabels(cases, rotation=45, ha="right", fontsize=7)
     if log:
-        ax.set_yscale("log")
+        _log_scale(ax, drawn)
     ax.legend(fontsize=8)
 
 
 def _pair(ax, rows, cases, arms, dev_key, wall_key, log=False):
     """Device time bold, wall faint behind it; the gap is the dispatch cost."""
     xs = list(range(len(cases)))
+    drawn = []
     for arm in arms:
         by_case = {r["case"]: r for r in rows if r["arm"] == arm}
         color = ARM_COLORS.get(arm, "#000000")
