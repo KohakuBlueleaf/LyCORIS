@@ -21,7 +21,9 @@ class ButterflyFusedFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, blocks, x, rescale, axis, cscale, scale, diff, backend):
         ops = get_ops(backend)
-        (blocks, x, rescale), _, out_dtype = promote(blocks, x, rescale)
+        # fp32 chain, as the eager reference does: rounding the buffer between
+        # the m stages costs m roundings rather than one.
+        (blocks, x, rescale), _, out_dtype = promote(blocks, x, rescale, policy="wide")
         out = ops.boft_fwd(
             blocks,
             x,
