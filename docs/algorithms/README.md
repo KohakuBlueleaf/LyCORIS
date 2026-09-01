@@ -1,6 +1,6 @@
 # Algorithms Implemented in LyCORIS
 
-See [Algo-Details.md](Algo-Details.md) and [Demo.md](Demo.md) for more examples and explanation
+See [details.md](details.md) and [demo.md](../resources/demo.md) for more examples and explanation
 
 All the methods below except for GLoKr are supported in a1111/sd-webui.
 However, newer methods may only be available in the latest release / the dev branch.

@@ -1,6 +1,6 @@
 # Demo, Example, Comparing
 
-**Warning: While the example images are always valid, it is better to check the [Guidelines](Guidelines.md) for more up-to-date information on algorithm comparison**
+**Warning: While the example images are always valid, it is better to check the [Guidelines](../algorithms/guidelines.md) for more up-to-date information on algorithm comparison**
 
 Check [our paper](https://arxiv.org/abs/2309.14859) for more examples
 

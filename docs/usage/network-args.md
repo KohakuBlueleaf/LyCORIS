@@ -5,7 +5,7 @@ Arguments to put in `network_args` for kohya sd scripts
 ### Algo
 
 - Set with `algo=ALGO_NAME`
-- Check [List of Implemented Algorithms](Algo-List.md) for algorithms to use
+- Check [List of Implemented Algorithms](../algorithms/README.md) for algorithms to use
 
 ### Preset
 
@@ -13,7 +13,7 @@ Arguments to put in `network_args` for kohya sd scripts
 - Pre-implemented: `full` (default), `attn-mlp`, `attn-only` etc.
 - Valid for all but (IA)^3
 - Use `preset=xxx.toml` to choose config file (for LyCORIS module settings)
-- More info in [Preset](Preset.md)
+- More info in [Preset](presets.md)
 
 ### Dimension
 
