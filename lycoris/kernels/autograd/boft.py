@@ -13,7 +13,7 @@ exception, same convention as diag_oft).
 import torch
 
 from ..ops import get_ops
-from ..precision import promote
+from ..precision import promote, restore
 from .diag_oft import _cscale
 
 
@@ -23,6 +23,11 @@ class ButterflyFusedFn(torch.autograd.Function):
         ops = get_ops(backend)
         # fp32 chain, as the eager reference does: rounding the buffer between
         # the m stages costs m roundings rather than one.
+        ctx.dtypes = (
+            blocks.dtype,
+            x.dtype,
+            rescale.dtype if rescale is not None else None,
+        )
         (blocks, x, rescale), _, out_dtype = promote(blocks, x, rescale, policy="wide")
         out = ops.boft_fwd(
             blocks,
@@ -51,7 +56,8 @@ class ButterflyFusedFn(torch.autograd.Function):
         else:
             (blocks, x), rescale = ctx.saved_tensors, None
         ops = get_ops(ctx.backend)
-        grad = grad.contiguous()
+        # The chain runs in the promoted dtype, so the incoming grad joins it.
+        grad = grad.contiguous().to(x.dtype)
         axis = ctx.axis % grad.dim()
         g_res = None
         g_chain = grad
@@ -69,7 +75,8 @@ class ButterflyFusedFn(torch.autograd.Function):
         )
         if ctx.diff:
             gx = gx - grad
-        return gb, gx, g_res, None, None, None, None, None
+        grads = restore([gb, gx, g_res], ctx.dtypes)
+        return (*grads, None, None, None, None, None)
 
 
 def boft_diff_weight(
