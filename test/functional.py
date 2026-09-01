@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 from lycoris.functional import locon, loha, lokr, diag_oft, boft
 
-
 EPS_DTYPE = {
     torch.float32: 5e-6,
     torch.float16: 5e-5,
@@ -72,12 +71,19 @@ class LycorisFunctionalTests(unittest.TestCase):
                 param = param.to(device, dtype)
                 params[idx] = param + torch.randn_like(param) * 0.01
 
-        if module in {boft, diag_oft}:
+        # bypass_forward_diff takes (x, org_out, *weights); boft needs only
+        # org_out, since it transforms the output rather than reading x.
+        if module is boft:
             diff_w = module.diff_weight(w, *params)
             diff_y = module.bypass_forward_diff(y, *params, need_transpose=w.ndim > 2)
+        elif module is diag_oft:
+            diff_w = module.diff_weight(w, *params)
+            diff_y = module.bypass_forward_diff(
+                x, y, *params, need_transpose=w.ndim > 2
+            )
         else:
             diff_w = module.diff_weight(*params)
-            diff_y = module.bypass_forward_diff(x, *params)
+            diff_y = module.bypass_forward_diff(x, y, *params)
 
         diff_y_from_diff_w = func(x, diff_w.to(x))
         self.assertTrue(

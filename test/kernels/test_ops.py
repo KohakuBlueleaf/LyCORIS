@@ -14,12 +14,12 @@ from itertools import product
 import torch
 from parameterized import parameterized
 
-from lycoris.kernels.dispatch import available_backends
+from lycoris.kernels.dispatch import fused_backends
 from lycoris.kernels.ops import get_ops
 from . import refs
 
 EPS = {torch.float16: 2e-2, torch.bfloat16: 5e-2, torch.float32: 5e-3}
-BACKENDS = [b for b in available_backends() if b != "torch"]
+BACKENDS = list(fused_backends())
 DTYPES = [torch.float16, torch.float32]
 CASES = list(product(BACKENDS, DTYPES))
 CUDA = torch.cuda.is_available()

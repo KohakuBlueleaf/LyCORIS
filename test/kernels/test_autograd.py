@@ -39,10 +39,10 @@ from lycoris.kernels.autograd import (
     norm_diff_weights,
     apply_dora,
 )
-from lycoris.kernels.dispatch import available_backends
+from lycoris.kernels.dispatch import fused_backends
 
 EPS = {torch.float16: 2e-2, torch.float32: 5e-3}
-BACKENDS = [b for b in available_backends() if b != "torch"]
+BACKENDS = list(fused_backends())
 CASES = list(product(BACKENDS, [torch.float16, torch.float32]))
 CUDA = torch.cuda.is_available()
 
