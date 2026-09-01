@@ -12,9 +12,9 @@ from .boft import ButterflyOFTModule
 from .glora import GLoRAModule
 from .dylora import DyLoraModule
 from .ia3 import IA3Module
+from .tlora import TLoraModule
 
 from ..functional.general import factorization
-
 
 MODULE_LIST = [
     LoConModule,
@@ -27,6 +27,7 @@ MODULE_LIST = [
     ButterflyOFTModule,
     GLoRAModule,
     DyLoraModule,
+    TLoraModule,
 ]
 
 

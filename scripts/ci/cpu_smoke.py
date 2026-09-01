@@ -26,6 +26,7 @@ from lycoris.modules.locon import LoConModule
 from lycoris.modules.loha import LohaModule
 from lycoris.modules.lokr import LokrModule
 from lycoris.modules.norms import NormModule
+from lycoris.modules.tlora import TLoraModule
 
 ALGOS = {
     "locon": (LoConModule, {}),
@@ -43,6 +44,7 @@ ALGOS = {
     "ia3-input": (IA3Module, {"train_on_input": True}),
     "glora": (GLoRAModule, {}),
     "dylora": (DyLoraModule, {"block_size": 2}),
+    "tlora": (TLoraModule, {}),
     "full": (FullModule, {}),
 }
 # The LoKr conv bypass reshapes the flattened w2b against the kernel window,
@@ -55,6 +57,10 @@ SKIP = {
     # only lines up when every block is active. Pre-existing.
     ("dylora", "linear", True),
     ("dylora", "conv", True),
+    # T-LoRA rebuilds a 1x1 kernel, so a k>1 conv never matches its base and
+    # falls back to a bypass whose adapter chain changes the spatial size.
+    ("tlora", "conv", False),
+    ("tlora", "conv", True),
 }
 # FullModule.apply_to() moves the weight onto itself and deletes the original,
 # which the org module's own forward still needs; call it unpatched instead.

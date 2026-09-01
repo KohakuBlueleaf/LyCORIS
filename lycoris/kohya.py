@@ -20,6 +20,7 @@ from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
 from .modules import make_module, get_module
+from .modules.base import is_supported_linear_module
 
 from .config import PRESET
 from .utils.preset import read_preset
@@ -28,7 +29,14 @@ from .logging import logger
 
 
 def create_network(
-    multiplier, network_dim, network_alpha, vae, text_encoder, unet, **kwargs
+    multiplier,
+    network_dim,
+    network_alpha,
+    vae,
+    text_encoder,
+    unet,
+    warn_on_unmatched=True,
+    **kwargs,
 ):
     for key, value in list(kwargs.items()):
         if key in deprecated_arg_dict:
@@ -63,6 +71,7 @@ def create_network(
     rs_lora = str_bool(kwargs.get("rs_lora", False))
     unbalanced_factorization = str_bool(kwargs.get("unbalanced_factorization", False))
     train_t5xxl = str_bool(kwargs.get("train_t5xxl", False))
+    train_llm_adapter = str_bool(kwargs.get("train_llm_adapter", False))
     # lora_plus
     loraplus_lr_ratio = (
         float(kwargs.get("loraplus_lr_ratio", None))
@@ -132,6 +141,8 @@ def create_network(
         rs_lora=rs_lora,
         unbalanced_factorization=unbalanced_factorization,
         train_t5xxl=train_t5xxl,
+        warn_on_unmatched=warn_on_unmatched,
+        train_llm_adapter=train_llm_adapter,
     )
     if (
         loraplus_lr_ratio is not None
@@ -256,8 +267,18 @@ class LycorisNetworkKohya(LycorisNetwork):
         "HunyuanVideoTransformerBlock",  # FramePack
         "HunyuanVideoSingleTransformerBlock",  # FramePack
         "JointTransformerBlock",  # lumina-image-2
-        "FinalLayer",  # lumina-image-2
+        "FinalLayer",  # lumina-image-2, Anima
         "QwenImageTransformerBlock",  # Qwen
+        "LensTransformerBlock",  # Lens
+        "Ideogram4TransformerBlock",  # Ideogram 4
+        "ZImageTransformerBlock",
+        "AceStepEncoderLayer",
+        "AceStepDiTLayer",
+        "TextFusionBlock",  # Krea 2
+        "Block",  # Anima
+        "PatchEmbed",  # Anima
+        "TimestepEmbedding",  # Anima
+        "LLMAdapterTransformerBlock",  # Anima
     ]
     UNET_TARGET_REPLACE_NAME = [
         "conv_in",
@@ -275,6 +296,10 @@ class LycorisNetworkKohya(LycorisNetwork):
         "Gemma2FlashAttention2",
         "Gemma2SdpaAttention",
         "Gemma2MLP",
+        "Qwen3Attention",  # Anima / Qwen3
+        "Qwen3FlashAttention2",  # Anima / Qwen3
+        "Qwen3SdpaAttention",  # Anima / Qwen3
+        "Qwen3MLP",  # Anima / Qwen3
     ]
     TEXT_ENCODER_TARGET_REPLACE_NAME = []
     LORA_PREFIX_UNET = "lora_unet"
@@ -322,6 +347,8 @@ class LycorisNetworkKohya(LycorisNetwork):
         norm_modules=NormModule,
         train_norm=False,
         train_t5xxl=False,
+        warn_on_unmatched=True,
+        train_llm_adapter=False,
         **kwargs,
     ) -> None:
         torch.nn.Module.__init__(self)
@@ -329,6 +356,7 @@ class LycorisNetworkKohya(LycorisNetwork):
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.train_t5xxl = train_t5xxl
+        self.train_llm_adapter = train_llm_adapter
 
         # 初始化LoRA+相关属性
         self.loraplus_lr_ratio = None
@@ -383,7 +411,14 @@ class LycorisNetworkKohya(LycorisNetwork):
                     **kwargs,
                 )
             lora = None
-            if isinstance(module, torch.nn.Linear) and lora_dim > 0:
+            if (
+                is_supported_linear_module(
+                    module,
+                    algo_name,
+                    weight_decompose=kwargs.get("weight_decompose", False),
+                )
+                and lora_dim > 0
+            ):
                 dim = dim or lora_dim
                 alpha = alpha or self.alpha
             elif isinstance(
@@ -455,15 +490,19 @@ class LycorisNetworkKohya(LycorisNetwork):
             root_module: torch.nn.Module,
             target_replace_modules,
             target_replace_names=[],
-        ) -> List:
+        ) -> tuple:
             logger.info("Create LyCORIS Module")
             loras = []
             next_config = {}
+            # Track which targets were matched
+            matched_modules = set()
+            matched_names = set()
             for name, module in root_module.named_modules():
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules and not any(
                     self.match_fn(t, name) for t in target_replace_names
                 ):
+                    matched_modules.add(module_name)
                     if module_name in self.MODULE_ALGO_MAP:
                         next_config = self.MODULE_ALGO_MAP[module_name]
                         algo = next_config.get("algo", network_module)
@@ -478,6 +517,13 @@ class LycorisNetworkKohya(LycorisNetwork):
                 elif name in target_replace_names or any(
                     self.match_fn(t, name) for t in target_replace_names
                 ):
+                    # Track which pattern matched and the module class
+                    matched_modules.add(module_name)
+                    if name in target_replace_names:
+                        matched_names.add(name)
+                    for t in target_replace_names:
+                        if self.match_fn(t, name):
+                            matched_names.add(t)
                     conf_from_name = self.find_conf_for_name(name)
                     if conf_from_name is not None:
                         next_config = conf_from_name
@@ -493,7 +539,7 @@ class LycorisNetworkKohya(LycorisNetwork):
                     next_config = {}
                     if lora is not None:
                         loras.append(lora)
-            return loras
+            return loras, matched_modules, matched_names
 
         if network_module == GLoRAModule:
             logger.info("GLoRA enabled, only train transformer")
@@ -505,6 +551,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME = []
 
         self.text_encoder_loras = []
+        te_matched_modules = set()
+        te_matched_names = set()
         if text_encoder:
             if isinstance(text_encoder, list):
                 text_encoders = text_encoder
@@ -514,26 +562,79 @@ class LycorisNetworkKohya(LycorisNetwork):
                 use_index = False
 
             for i, te in enumerate(text_encoders):
-                self.text_encoder_loras.extend(
-                    create_modules(
-                        LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
-                        + (f"{i+1}" if use_index else ""),
-                        te,
-                        LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
-                        LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
-                    )
+                loras, matched_mods, matched_nms = create_modules(
+                    LycorisNetworkKohya.LORA_PREFIX_TEXT_ENCODER
+                    + (f"{i+1}" if use_index else ""),
+                    te,
+                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE,
+                    LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME,
                 )
+                self.text_encoder_loras.extend(loras)
+                te_matched_modules.update(matched_mods)
+                te_matched_names.update(matched_nms)
             logger.info(
                 f"create LyCORIS for Text Encoder: {len(self.text_encoder_loras)} modules."
             )
 
-        self.unet_loras = create_modules(
+        target_modules = list(LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE)
+        if not self.train_llm_adapter:
+            if "LLMAdapterTransformerBlock" in target_modules:
+                target_modules.remove("LLMAdapterTransformerBlock")
+
+        self.unet_loras, unet_matched_modules, unet_matched_names = create_modules(
             LycorisNetworkKohya.LORA_PREFIX_UNET,
             unet,
-            LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE,
+            target_modules,
             LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME,
         )
         logger.info(f"create LyCORIS for U-Net: {len(self.unet_loras)} modules.")
+
+        # Warn about unmatched targets if enabled
+        if warn_on_unmatched:
+            # Check text encoder targets
+            if text_encoder:
+                te_unmatched_modules = (
+                    set(LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_MODULE)
+                    - te_matched_modules
+                )
+                te_unmatched_names = (
+                    set(LycorisNetworkKohya.TEXT_ENCODER_TARGET_REPLACE_NAME)
+                    - te_matched_names
+                )
+                if te_unmatched_modules:
+                    logger.warning(
+                        f"Text Encoder: No modules matched the following target module classes: {sorted(te_unmatched_modules)}"
+                    )
+                if te_unmatched_names:
+                    logger.warning(
+                        f"Text Encoder: No modules matched the following target names/patterns: {sorted(te_unmatched_names)}"
+                    )
+
+            # Check unet targets
+            unet_unmatched_modules = (
+                set(LycorisNetworkKohya.UNET_TARGET_REPLACE_MODULE)
+                - unet_matched_modules
+            )
+            unet_unmatched_names = (
+                set(LycorisNetworkKohya.UNET_TARGET_REPLACE_NAME) - unet_matched_names
+            )
+            if unet_unmatched_modules:
+                logger.warning(
+                    f"UNet: No modules matched the following target module classes: {sorted(unet_unmatched_modules)}"
+                )
+            if unet_unmatched_names:
+                logger.warning(
+                    f"UNet: No modules matched the following target names/patterns: {sorted(unet_unmatched_names)}"
+                )
+
+            # Warn if no modules created at all
+            total_modules = len(self.text_encoder_loras) + len(self.unet_loras)
+            if total_modules == 0:
+                logger.warning(
+                    "No LyCORIS modules were created. "
+                    "This may indicate a mismatch between your LyCORIS config and the model architecture. "
+                    "Please verify your preset/target settings match the model you are using."
+                )
 
         algo_table = {}
         for lora in self.text_encoder_loras + self.unet_loras:

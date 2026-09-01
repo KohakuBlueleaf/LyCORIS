@@ -17,7 +17,6 @@ from test.precision_merge_test import MergePrecisionTests
 from test.kernels.test_ops import OpsVsFp64
 from test.kernels.test_autograd import AutogradParity, SafeFallback
 
-
 # The kernel suites skip themselves without CUDA.
 TESTS = [
     LycorisModuleTests,

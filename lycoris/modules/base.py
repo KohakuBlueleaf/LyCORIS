@@ -6,12 +6,47 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.parametrize as parametrize
 
-from ..utils.quant import QuantLinears, log_bypass, log_suspect
+from ..utils.quant import QuantLinears, log_bypass, log_fp8_bypass, log_suspect
 
 try:
     from peft.tuners.tuners_utils import BaseTunerLayer
 except Exception:  # pragma: no cover - PEFT is optional
     BaseTunerLayer = None
+
+
+def is_weight_only_fp8_linear(module: nn.Module) -> bool:
+    return (
+        module.__class__.__name__ == "Fp8Linear"
+        and hasattr(module, "in_features")
+        and hasattr(module, "out_features")
+        and hasattr(module, "weight")
+        and hasattr(module, "weight_scale")
+    )
+
+
+def is_linear_like_module(module: nn.Module) -> bool:
+    return isinstance(module, nn.Linear) or is_weight_only_fp8_linear(module)
+
+
+_FP8_BYPASS_ALGOS = frozenset({"lora", "locon", "loha", "lokr", "glora"})
+
+
+def is_supported_linear_module(
+    module: nn.Module, algo_name: str, *, weight_decompose: bool = False
+) -> bool:
+    if is_weight_only_fp8_linear(module):
+        return algo_name in _FP8_BYPASS_ALGOS and (
+            algo_name == "lokr" or not weight_decompose
+        )
+    return isinstance(module, nn.Linear)
+
+
+def dequantize_weight_only_fp8(module: nn.Module) -> torch.Tensor:
+    weight = module.weight.to(torch.float32)
+    scale = module.weight_scale.to(device=weight.device, dtype=torch.float32)
+    if scale.ndim == 1:
+        scale = scale.unsqueeze(1)
+    return weight * scale
 
 
 class ModuleCustomSD(nn.Module):
@@ -114,7 +149,7 @@ class LycorisBaseModule(ModuleCustomSD):
                 org_module = base_layer
 
         self.module = type(org_module)
-        if isinstance(org_module, nn.Linear):
+        if is_linear_like_module(org_module):
             self.module_type = "linear"
             self.shape = (org_module.out_features, org_module.in_features)
             self.op = F.linear
@@ -122,9 +157,10 @@ class LycorisBaseModule(ModuleCustomSD):
             self.kw_dict = {}
         elif isinstance(org_module, nn.Conv1d):
             self.module_type = "conv1d"
+            # Weight layout matches torch.nn.Conv*d: (out, in/groups, *kernel)
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv1d
@@ -139,7 +175,7 @@ class LycorisBaseModule(ModuleCustomSD):
             self.module_type = "conv2d"
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv2d
@@ -154,7 +190,7 @@ class LycorisBaseModule(ModuleCustomSD):
             self.module_type = "conv3d"
             self.shape = (
                 org_module.out_channels,
-                org_module.in_channels,
+                org_module.in_channels // org_module.groups,
                 *org_module.kernel_size,
             )
             self.op = F.conv3d
@@ -188,13 +224,18 @@ class LycorisBaseModule(ModuleCustomSD):
         self.register_buffer("dtype_tensor", torch.tensor(0.0), persistent=False)
 
         self.is_quant = False
-        if isinstance(org_module, QuantLinears):
+        if is_weight_only_fp8_linear(org_module):
+            if not bypass_mode:
+                log_fp8_bypass()
+            self.is_quant = True
+            bypass_mode = True
+        elif isinstance(org_module, QuantLinears):
             if not bypass_mode:
                 log_bypass()
             self.is_quant = True
             bypass_mode = True
         if (
-            isinstance(org_module, nn.Linear)
+            is_linear_like_module(org_module)
             and org_module.__class__.__name__ != "Linear"
         ):
             if bypass_mode is None:
@@ -290,6 +331,8 @@ class LycorisBaseModule(ModuleCustomSD):
         self.org_module[0].weight.data.copy_(value)
 
     def _current_weight(self):
+        if is_weight_only_fp8_linear(self.org_module[0]):
+            return dequantize_weight_only_fp8(self.org_module[0])
         return self.org_module[0].weight.detach()
 
     def _current_bias(self):
@@ -354,6 +397,10 @@ class LycorisBaseModule(ModuleCustomSD):
     def merge_to(self, multiplier=1.0, *, precise: bool = False):
         if self.not_supported:
             return
+        if is_weight_only_fp8_linear(self.org_module[0]):
+            raise RuntimeError(
+                "Merging LyCORIS modules into weight-only FP8 Linear is not supported."
+            )
 
         ctx = self._prepare_merge_context(precise)
 
@@ -373,6 +420,10 @@ class LycorisBaseModule(ModuleCustomSD):
     def onfly_merge(self, multiplier=1.0):
         if self.not_supported:
             return
+        if is_weight_only_fp8_linear(self.org_module[0]):
+            raise RuntimeError(
+                "Merging LyCORIS modules into weight-only FP8 Linear is not supported."
+            )
         self_device = next(self.parameters()).device
         self_dtype = next(self.parameters()).dtype
         self.to(self.org_weight)

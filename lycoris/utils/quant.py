@@ -58,7 +58,6 @@ except Exception:
 
 from ..logging import logger
 
-
 QuantLinears = (
     Linear8bitLt,
     LinearFP4,
@@ -76,6 +75,13 @@ QuantLinears = (
 def log_bypass():
     return logger.warning(
         "Using bnb/quanto/optimum-quanto with LyCORIS will enable force-bypass mode."
+    )
+
+
+@cache
+def log_fp8_bypass():
+    return logger.warning(
+        "Using weight-only FP8 Linear with LyCORIS will enable force-bypass mode."
     )
 
 

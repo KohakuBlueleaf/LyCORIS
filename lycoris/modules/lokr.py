@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import LycorisBaseModule
+from .base import LycorisBaseModule, is_weight_only_fp8_linear
 from ..functional import factorization
 from ..functional.general import weight_decompose
 from ..functional.lokr import kron_bypass, kron_weight
@@ -88,7 +88,7 @@ class LokrModule(LycorisBaseModule):
         self.rs_lora = rs_lora
 
         if self.module_type.startswith("conv"):
-            in_dim = org_module.in_channels
+            in_dim = org_module.in_channels // org_module.groups
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             self.shape = (out_dim, in_dim, *k_size)
@@ -176,7 +176,7 @@ class LokrModule(LycorisBaseModule):
         self.wd = weight_decompose
         self.wd_on_out = wd_on_out
         if self.wd:
-            org_weight = org_module.weight.cpu().clone().float()
+            org_weight = self._current_weight().cpu().clone().float()
             self.dora_norm_dims = org_weight.dim() - 1
             if self.wd_on_out:
                 self.dora_scale = nn.Parameter(
@@ -444,24 +444,30 @@ class LokrModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, h, scale=1):
+        device = h.device
+        dtype = h.dtype
+
+        def to_input_dtype(tensor):
+            return tensor.to(device=device, dtype=dtype)
+
         is_conv = self.module_type.startswith("conv")
         if not is_conv:
             # Linear: the whole grouped chain is one dispatched call, and the
             # fused kernel never builds kron(w1, w2).
             diff = kron_bypass(
                 h,
-                self.lokr_w1 if self.use_w1 else None,
-                None if self.use_w1 else self.lokr_w1_a,
-                None if self.use_w1 else self.lokr_w1_b,
-                self.lokr_w2 if self.use_w2 else None,
-                None if self.use_w2 else self.lokr_w2_a,
-                None if self.use_w2 else self.lokr_w2_b,
+                to_input_dtype(self.lokr_w1) if self.use_w1 else None,
+                None if self.use_w1 else to_input_dtype(self.lokr_w1_a),
+                None if self.use_w1 else to_input_dtype(self.lokr_w1_b),
+                to_input_dtype(self.lokr_w2) if self.use_w2 else None,
+                None if self.use_w2 else to_input_dtype(self.lokr_w2_a),
+                None if self.use_w2 else to_input_dtype(self.lokr_w2_b),
                 None,
-                scale=scale,
+                scale=self.scale * scale,
             )
-            return self.drop(diff * self.scalar)
+            return self.drop(diff * self.scalar.to(device=device, dtype=dtype))
         if self.use_w2:
-            ba = self.lokr_w2
+            ba = to_input_dtype(self.lokr_w2)
         else:
             a = self.lokr_w2_b
             b = self.lokr_w2_a
@@ -470,14 +476,18 @@ class LokrModule(LycorisBaseModule):
                 t = self.lokr_t2
                 a = a.view(*a.shape, *[1] * (len(t.shape) - 2))
                 b = b.view(*b.shape, *[1] * (len(t.shape) - 2))
+                t = to_input_dtype(t)
             elif is_conv:
                 a = a.view(*a.shape, *self.shape[2:])
                 b = b.view(*b.shape, *[1] * (len(self.shape) - 2))
+            a = to_input_dtype(a)
+            b = to_input_dtype(b)
 
         if self.use_w1:
             c = self.lokr_w1
         else:
             c = self.lokr_w1_a @ self.lokr_w1_b
+        c = to_input_dtype(c)
         uq = c.size(1)
 
         if is_conv:
@@ -528,19 +538,14 @@ class LokrModule(LycorisBaseModule):
             hc = hc.transpose(-1, -2)
             h = hc.reshape(*hc.shape[:-2], -1)
 
-        return self.drop(h * scale * self.scalar)
+        return self.drop(
+            h * self.scale * scale * self.scalar.to(device=device, dtype=dtype)
+        )
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)
 
-    def forward(self, x: torch.Tensor, *args, **kwargs):
-        if self.module_dropout and self.training:
-            if torch.rand(1) < self.module_dropout:
-                return self.org_forward(x, *args, **kwargs)
-
-        if self.bypass_mode:
-            return self.bypass_forward(x, self.multiplier)
-
+    def _rebuild_forward(self, x, *args, **kwargs):
         base = self.org_forward(x, *args, **kwargs)
         base_weight = self._current_weight().to(x.device)
         diff_weight = self.get_weight(self.shape).to(base_weight.dtype) * self.scalar
@@ -554,9 +559,19 @@ class LokrModule(LycorisBaseModule):
         else:
             new_weight = base_weight + diff_weight * self.multiplier
 
-        delta_weight = new_weight - base_weight
+        delta_weight = (new_weight - base_weight).to(device=x.device, dtype=x.dtype)
         delta = self.op(x, delta_weight, None, **self.kw_dict)
         return base + delta
+
+    def forward(self, x: torch.Tensor, *args, **kwargs):
+        if self.module_dropout and self.training:
+            if torch.rand(1) < self.module_dropout:
+                return self.org_forward(x, *args, **kwargs)
+
+        fp8_weight_decompose = self.wd and is_weight_only_fp8_linear(self.org_module[0])
+        if self.bypass_mode and not fp8_weight_decompose:
+            return self.bypass_forward(x, self.multiplier)
+        return self._rebuild_forward(x, *args, **kwargs)
 
 
 if __name__ == "__main__":

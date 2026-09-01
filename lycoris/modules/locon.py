@@ -74,8 +74,9 @@ class LoConModule(LycorisBaseModule):
 
         if self.module_type.startswith("conv"):
             self.isconv = True
-            # For general LoCon
-            in_dim = org_module.in_channels
+            # For general LoCon. in_dim follows torch Conv weight layout (in/groups)
+            # so rebuild_weight matches F.conv*d when groups != 1 (#260).
+            in_dim = org_module.in_channels // org_module.groups
             k_size = org_module.kernel_size
             stride = org_module.stride
             padding = org_module.padding
@@ -83,6 +84,11 @@ class LoConModule(LycorisBaseModule):
             use_tucker = use_tucker and any(i != 1 for i in k_size)
             self.down_op = self.op
             self.up_op = self.op
+            if org_module.groups != 1 and self.bypass_mode:
+                # Adapter Conv modules are groups=1 and take in/groups channels;
+                # bypass forward on the full activation is not valid for grouped
+                # originals, so force the weight-rebuild path.
+                self.bypass_mode = False
             if use_tucker and any(i != 1 for i in k_size):
                 self.lora_down = self.module(in_dim, lora_dim, 1, bias=False)
                 self.lora_mid = self.module(
@@ -94,7 +100,7 @@ class LoConModule(LycorisBaseModule):
                     in_dim, lora_dim, k_size, stride, padding, bias=False
                 )
             self.lora_up = self.module(lora_dim, out_dim, 1, bias=False)
-        elif isinstance(org_module, nn.Linear):
+        elif self.module_type == "linear":
             self.isconv = False
             self.down_op = F.linear
             self.up_op = F.linear
@@ -263,7 +269,9 @@ class LoConModule(LycorisBaseModule):
         if self.rank_dropout and self.training:
             # The mask lives on the r axis between down and up, so this case
             # keeps the chain split; every other case is one dispatched call.
-            if self.tucker:
+            if self.module_type == "linear":
+                mid = F.linear(x, self.lora_down.weight.to(x))
+            elif self.tucker:
                 mid = self.lora_mid(self.lora_down(x))
             else:
                 mid = self.lora_down(x)
@@ -277,7 +285,12 @@ class LoConModule(LycorisBaseModule):
             else:
                 drop = drop.view(*[1] * (dims - 1), -1)
             mid = mid * drop
-            return self.dropout(self.lora_up(mid) * self.scalar * self.scale * scale)
+            if self.module_type == "linear":
+                output = F.linear(mid, self.lora_up.weight.to(mid))
+            else:
+                output = self.lora_up(mid)
+            scalar = self.scalar.to(device=output.device, dtype=output.dtype)
+            return self.dropout(output * scalar * self.scale * scale)
 
         # Geometry from the conv that carries it, not the org module: neither
         # lora conv is built with the org dilation or groups.
@@ -292,16 +305,19 @@ class LoConModule(LycorisBaseModule):
             if self.isconv
             else {}
         )
+        # .to(x) so a quantized or fp8 base still works: the adapter weights
+        # meet the activation, not the other way around.
         diff = bypass_diff(
             x,
             None,
-            self.lora_down.weight,
-            self.lora_up.weight,
-            self.lora_mid.weight if self.tucker else None,
+            self.lora_down.weight.to(x),
+            self.lora_up.weight.to(x),
+            self.lora_mid.weight.to(x) if self.tucker else None,
             gamma=self.scale * scale,
             extra_args=extra_args,
         )
-        return self.dropout(diff * self.scalar)
+        scalar = self.scalar.to(device=diff.device, dtype=diff.dtype)
+        return self.dropout(diff * scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)

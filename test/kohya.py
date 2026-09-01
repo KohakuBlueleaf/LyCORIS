@@ -19,7 +19,6 @@ from library.sdxl_model_util import (
     load_models_from_sdxl_checkpoint as load_sdxl,
 )
 
-
 algos: list[str] = [
     "lora",
     "loha",

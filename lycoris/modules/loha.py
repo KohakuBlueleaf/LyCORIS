@@ -67,7 +67,7 @@ class LohaModule(LycorisBaseModule):
 
         w_shape = self.shape
         if self.module_type.startswith("conv"):
-            in_dim = org_module.in_channels
+            in_dim = org_module.in_channels // org_module.groups
             k_size = org_module.kernel_size
             out_dim = org_module.out_channels
             self.shape = (out_dim, in_dim, *k_size)
@@ -274,6 +274,7 @@ class LohaModule(LycorisBaseModule):
         return scaled, orig_norm * ratio
 
     def bypass_forward_diff(self, x, scale=1):
+        scalar = self.scalar.to(device=x.device, dtype=x.dtype)
         if (
             self.module_type != "linear"
             or self.tucker
@@ -281,26 +282,24 @@ class LohaModule(LycorisBaseModule):
         ):
             # Rank dropout masks ΔW's rows, and a conv ΔW carries the org
             # weight's spatial shape that the 2D factors here have flattened.
-            diff_weight = self.get_weight(self.shape) * self.scalar * scale
+            diff_weight = self.get_weight(self.shape).to(x) * scalar * scale
             return self.drop(self.op(x, diff_weight, **self.kw_dict))
-        gamma = torch.tensor(
-            self.scale * scale,
-            dtype=self.hada_w1_b.dtype,
-            device=self.hada_w1_b.device,
-        )
+        # .to(x) so a quantized or fp8 base still works: the adapter weights
+        # meet the activation, not the other way around.
+        gamma = torch.tensor(self.scale * scale, dtype=x.dtype, device=x.device)
         diff = loha_bypass_diff(
             x,
             None,
-            self.hada_w1_b,
-            self.hada_w1_a,
-            self.hada_w2_b,
-            self.hada_w2_a,
+            self.hada_w1_b.to(x),
+            self.hada_w1_a.to(x),
+            self.hada_w2_b.to(x),
+            self.hada_w2_a.to(x),
             None,
             None,
             gamma=gamma,
             extra_args=self.kw_dict,
         )
-        return self.drop(diff * self.scalar)
+        return self.drop(diff * scalar)
 
     def bypass_forward(self, x, scale=1):
         return self.org_forward(x) + self.bypass_forward_diff(x, scale=scale)

@@ -34,7 +34,7 @@ def read() -> str:
 
 def write(version: str) -> None:
     text = PYPROJECT.read_text(encoding="utf-8")
-    new, count = PATTERN.subn(rf'\g<1>{version}\g<3>', text, count=1)
+    new, count = PATTERN.subn(rf"\g<1>{version}\g<3>", text, count=1)
     if count != 1:
         raise SystemExit("no version found in pyproject.toml")
     PYPROJECT.write_text(new, encoding="utf-8")
@@ -76,9 +76,7 @@ def nightly(version: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "action", choices=("read", "nightly", "bump", "set", "write")
-    )
+    ap.add_argument("action", choices=("read", "nightly", "bump", "set", "write"))
     ap.add_argument("value", nargs="?")
     args = ap.parse_args()
     current = read()
