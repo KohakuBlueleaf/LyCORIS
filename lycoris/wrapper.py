@@ -18,6 +18,7 @@ from .modules.norms import NormModule
 from .modules.full import FullModule
 from .modules.diag_oft import DiagOFTModule
 from .modules.boft import ButterflyOFTModule
+from .modules.ia3 import IA3Module
 from .modules import get_module, make_module
 
 from .config import PRESET
@@ -25,7 +26,6 @@ from .config_sdk import VALID_PRESET_KEYS
 from .utils.preset import read_preset
 from .utils import str_bool
 from .logging import logger
-
 
 network_module_dict = {
     "lora": LoConModule,
@@ -37,6 +37,7 @@ network_module_dict = {
     "full": FullModule,
     "diag-oft": DiagOFTModule,
     "boft": ButterflyOFTModule,
+    "ia3": IA3Module,
 }
 deprecated_arg_dict = {
     "disable_conv_cp": "use_tucker",
