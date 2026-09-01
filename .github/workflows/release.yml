@@ -9,7 +9,11 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag or sha to release"
+        description: "Tag, branch or sha to release"
+        required: false
+        default: ""
+      version:
+        description: "Stamp this version before building (nightlies pass X.Y.Z.devN)"
         required: false
         default: ""
 
@@ -17,12 +21,15 @@ permissions:
   contents: write
   id-token: write
 
+# The only workflow that builds or uploads, so PyPI needs one trusted
+# publisher: this file, environment `pypi`.
 jobs:
   build:
     name: Build distributions
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,13 +39,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Read version
+      - name: Resolve version
         id: version
         shell: bash
         run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            python scripts/ci/version.py write "${{ inputs.version }}"
+          fi
           version=$(python scripts/ci/version.py read)
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "releasing ${version}"
+          case "${version}" in
+            *dev*|*a*|*b*|*rc*) pre=true ;;
+            *) pre=false ;;
+          esac
+          {
+            echo "version=${version}"
+            echo "prerelease=${pre}"
+          } >> "$GITHUB_OUTPUT"
+          echo "releasing ${version} (prerelease=${pre})"
 
       # A tag that disagrees with pyproject is a mis-cut release: stop before
       # anything is uploaded, since a PyPI filename cannot be reused.
@@ -80,8 +97,6 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-      # Trusted publishing: this repo and workflow are registered as a
-      # publisher on PyPI, so no API token exists anywhere.
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-github:
@@ -91,6 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -106,10 +122,16 @@ jobs:
         run: |
           version="${{ needs.build.outputs.version }}"
           tag="v${version}"
+          flag=""
+          if [ "${{ needs.build.outputs.prerelease }}" = "true" ]; then
+            flag="--prerelease"
+          fi
           notes=$(python scripts/ci/release_notes.py --version "${version}")
           if ! gh release view "${tag}" >/dev/null 2>&1; then
-            gh release create "${tag}" --title "LyCORIS ${version}" --notes "${notes}"
+            gh release create "${tag}" --title "LyCORIS ${version}" \
+              --notes "${notes}" ${flag} --target "$(git rev-parse HEAD)"
           else
-            gh release edit "${tag}" --title "LyCORIS ${version}" --notes "${notes}"
+            gh release edit "${tag}" --title "LyCORIS ${version}" \
+              --notes "${notes}" ${flag}
           fi
           for f in dist/*; do gh release upload "${tag}" "$f" --clobber; done

@@ -14,7 +14,6 @@ Usage:
 
 import argparse
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,21 +56,15 @@ def bump(version: str, part: str) -> str:
 
 
 def nightly(version: str) -> str:
-    """PEP 440 dev release plus a +local segment naming the commit.
+    """PEP 440 dev release of the next patch: X.Y.(Z+1).devYYYYmmddHHMMSS.
 
-    Not uploadable to PyPI (it rejects +local), which is the point: nightlies
-    are installed from the GitHub release, never from the index.
+    No +local segment, so this uploads to PyPI and `pip install --pre` finds
+    it; the commit it was cut from is named in the release notes instead. The
+    timestamp orders monotonically and sorts below the X.Y.(Z+1) it precedes.
     """
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    sha = subprocess.run(
-        ["git", "rev-parse", "--short=7", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout.strip()
     major, minor, patch = base(version)
-    tail = f"+{sha}" if sha else ""
-    return f"{major}.{minor}.{patch + 1}.dev{stamp}{tail}"
+    return f"{major}.{minor}.{patch + 1}.dev{stamp}"
 
 
 def main() -> int:

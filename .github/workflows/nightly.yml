@@ -17,16 +17,14 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+  actions: write
 
 jobs:
-  version:
+  # Computes the version and hands off. Release is the only workflow that
+  # builds or uploads, so PyPI needs exactly one trusted publisher.
+  dispatch:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.compute.outputs.version }}
-      tag: ${{ steps.compute.outputs.tag }}
-      sha: ${{ steps.compute.outputs.sha }}
-      build: ${{ steps.gate.outputs.build }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,16 +34,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Computed once and passed down: a per-job `date` drifts by seconds
-      # between runners and the assets end up disagreeing on the version.
-      - name: Compute nightly version
+      - name: Compute the nightly version
         id: compute
         shell: bash
         run: |
           version=$(python scripts/ci/version.py nightly)
           {
             echo "version=${version}"
-            echo "tag=nightly-$(date -u +%Y%m%d)"
             echo "sha=$(git rev-parse HEAD)"
           } >> "$GITHUB_OUTPUT"
           echo "nightly ${version}"
@@ -57,7 +52,7 @@ jobs:
         shell: bash
         run: |
           last=$(gh release list --limit 30 --json tagName,body \
-            --jq '[.[] | select(.tagName | startswith("nightly-"))][0].body // ""' \
+            --jq '[.[] | select(.tagName | contains(".dev"))][0].body // ""' \
             | grep -oE '[0-9a-f]{40}' | head -n1 || true)
           if [ "${{ inputs.force }}" = "true" ] || [ "${last}" != "${{ steps.compute.outputs.sha }}" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -66,63 +61,11 @@ jobs:
             echo "dev is unchanged since ${last}; nothing to build"
           fi
 
-  build:
-    needs: [version]
-    if: needs.version.outputs.build == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: dev
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Stamp the nightly version
-        run: python scripts/ci/version.py write "${{ needs.version.outputs.version }}"
-
-      - name: Build sdist + wheel
-        run: |
-          pip install build
-          python -m build
-
-      - name: Publish the dated nightly release
+      - name: Dispatch the release workflow
+        if: steps.gate.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
-          tag="${{ needs.version.outputs.tag }}"
-          notes=$(printf '%s\n' \
-            "Automatic nightly build of \`dev\`." \
-            "" \
-            "Version: \`${{ needs.version.outputs.version }}\`" \
-            "Commit: ${{ needs.version.outputs.sha }}" \
-            "" \
-            "\`\`\`bash" \
-            "pip install --upgrade --pre --find-links \\" \
-            "  https://github.com/${GITHUB_REPOSITORY}/releases/expanded_assets/${tag} lycoris_lora" \
-            "\`\`\`")
-          if ! gh release view "${tag}" >/dev/null 2>&1; then
-            gh release create "${tag}" --title "Nightly ${tag#nightly-}" \
-              --notes "${notes}" --prerelease
-          else
-            gh release edit "${tag}" --title "Nightly ${tag#nightly-}" \
-              --notes "${notes}" --prerelease
-          fi
-          for f in dist/*; do gh release upload "${tag}" "$f" --clobber; done
-
-      # The install line above points at a dated release, so an entry that
-      # outlives its assets would hand users a 404.
-      - name: Prune old nightlies
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          gh release list --limit 100 --json tagName --jq '.[].tagName' \
-            | { grep -E '^nightly-[0-9]{8}$' || true; } | sort -r | tail -n +8 \
-            | while read -r tag; do
-                [ -n "${tag}" ] || continue
-                echo "pruning ${tag}"
-                gh release delete "${tag}" --cleanup-tag --yes
-              done
+          gh workflow run release.yml \
+            -f ref=dev \
+            -f version="${{ steps.compute.outputs.version }}"
