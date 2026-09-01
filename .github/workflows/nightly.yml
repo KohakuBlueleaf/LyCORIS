@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: "Build even if dev has not moved since the last nightly"
+        description: "Build even if main has not moved since the last nightly"
         required: false
         default: false
         type: boolean
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -45,7 +45,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "nightly ${version}"
 
-      - name: Skip when dev has not moved
+      - name: Skip when main has not moved
         id: gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,7 +58,7 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "dev is unchanged since ${last}; nothing to build"
+            echo "main is unchanged since ${last}; nothing to build"
           fi
 
       - name: Dispatch the release workflow
@@ -67,5 +67,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run release.yml \
-            -f ref=dev \
+            -f ref=main \
             -f version="${{ steps.compute.outputs.version }}"

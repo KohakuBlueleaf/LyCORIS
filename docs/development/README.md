@@ -41,7 +41,7 @@ or how it is invoked, **minor** for new algorithms, options and backends,
 
 | Channel | Trigger | Version | Where it lands |
 | --- | --- | --- | --- |
-| Nightly | daily cron on `dev`, or manual | `X.Y.(Z+1).devYYYYmmddHHMMSS` | PyPI pre-release + GitHub pre-release |
+| Nightly | daily cron on `main`, or manual | `X.Y.(Z+1).devYYYYmmddHHMMSS` | PyPI pre-release + GitHub pre-release |
 | Patch | weekly cron on `main`, or manual | `X.Y.Z+1` | tag → PyPI + GitHub release |
 | Release | pushing a `vX.Y.Z` tag, or manual | whatever `pyproject.toml` says | PyPI + GitHub release |
 
@@ -77,6 +77,6 @@ token needs to exist in the repository secrets.
 | File | Does |
 | --- | --- |
 | `.github/workflows/ci.yml` | format, lint, import/cycle check, CPU smoke, wheel install check |
-| `.github/workflows/nightly.yml` | computes a dev version from `dev` and dispatches Release, skipped when `dev` has not moved |
+| `.github/workflows/nightly.yml` | computes a dev version from `main` and dispatches Release, skipped when `main` has not moved |
 | `.github/workflows/auto-patch-release.yml` | cuts `X.Y.Z+1` when enough has landed on `main` (dry-run by default) |
 | `.github/workflows/release.yml` | the only builder: stamps the version if given one, publishes to PyPI by trusted publishing, cuts the GitHub release |
