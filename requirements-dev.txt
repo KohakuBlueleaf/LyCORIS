@@ -1,6 +1,0 @@
-coverage
-parameterized
-numpy
-safetensors
-tqdm
-diffusers==0.30.2

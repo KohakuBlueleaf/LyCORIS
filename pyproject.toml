@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=70.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lycoris_lora"
+version = "3.4.0"
+description = "Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion"
+authors = [
+    { name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "kohaku@kblueleaf.net" },
+    { name = "Yu-Guan Hsieh" },
+    { name = "Zhidong Gao" },
+]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: GPU :: NVIDIA CUDA :: 12",
+    "Environment :: GPU :: NVIDIA CUDA :: 12 :: 12.6",
+    "Environment :: GPU :: NVIDIA CUDA :: 13",
+    "Environment :: GPU :: NVIDIA CUDA :: 13 :: 13.2",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "torch",
+    "einops",
+    "toml",
+    "tqdm",
+]
+urls = { "Homepage" = "https://github.com/KohakuBlueleaf/LyCORIS" }
+
+[project.optional-dependencies]
+dev = [
+    "coverage",
+    "parameterized",
+    "numpy",
+    "safetensors",
+    "diffusers>=0.40.0",
+]
+# The fused kernels are optional: without them everything falls back to torch.
+kernels = [
+    "triton; sys_platform == 'linux'",
+    "triton-windows; sys_platform == 'win32'",
+]
+
+[tool.setuptools.packages.find]
+include = ["lycoris*"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# Breakage only (syntax, undefined names); style is black's job.
+select = ["E9", "F63", "F7", "F82"]
