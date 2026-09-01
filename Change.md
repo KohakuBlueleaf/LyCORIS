@@ -1,6 +1,51 @@
 # Change Log
 
-## 2024/11/12 update to 3.4.0
+## 2026/09/01 update to 4.0.0
+
+### Highlights
+
+Fused Triton/TileLang kernels for every algorithm, selected automatically, with
+the stock PyTorch path as the fallback. On an RTX 4090 the fused paths take
+1.4x–7.3x less device time than eager and 1.2x–6.2x less than `torch.compile`,
+at lower peak VRAM and with error at or below the eager path.
+
+### Full change log
+
+#### New Features
+
+* **Fused kernels (early experimental)** — hand-written Triton and TileLang
+  kernels for `lora`/`locon`, `loha`, `lokr`, `oft`, `boft`, `dora` (the
+  weight-decompose epilogue shared by dora/doha/dokr), `ia3`, `glora`,
+  `dylora`, `full` and `norm`. Up to four kernels per algorithm: merge
+  forward, merge backward, bypass forward, bypass backward — one launch per
+  direction, with ΔW and its gradient never materialised.
+* **Automatic backend selection** — per call, in the order
+  triton > tilelang > `torch.compile` > eager. A call whose operands or layout
+  are outside a kernel's scope steps one tier down, so there is no
+  configuration in which a call fails for lack of a kernel. Pin one with
+  `LYCORIS_KERNEL_BACKEND=auto|triton|tilelang|compile|torch`.
+* **The functional and module APIs dispatch to the kernels themselves.** Every
+  signature is unchanged; `torch.compile` is applied per op rather than to
+  your module, so a model mixing algorithms compiles each op once.
+* **Mixed dtype support across x and the module weights** — fp16, bf16 or fp32
+  independently, 16-bit matmul with fp32 accumulation, gradients returned in
+  each leaf's own dtype. fp16 and bf16 in the same call is rejected rather
+  than silently widened.
+* `lycoris.functional.general.weight_decompose` and `add_scaled`: the two ops
+  that belong to several algorithms rather than to one.
+* Analytic tile planner plus a measured tuner (`lycoris/kernels/plans/`) with
+  an on-disk table at `~/.cache/lycoris_kernels/tuning.json`, and a benchmark
+  suite under `scripts/bench/kernels/`.
+
+#### Improvements
+
+* Documentation reorganised into a nested tree with an index at
+  [docs/README.md](docs/README.md); new `docs/kernels/` section covering what
+  is fused, backend selection, precision and benchmarks.
+* Packaging moved to `pyproject.toml`.
+* CI, nightly builds and release automation added under `.github/workflows/`.
+
+## 2025/11/12 update to 3.4.0
 
 #### New Features
 

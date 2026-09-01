@@ -58,10 +58,6 @@ device (kernel) time, `fb` is the fwd+bwd wall, `vram` is peak fwd+bwd memory
 | oft | tilelang | 8 | 4.35 | 3.86 | 2.16 | 1.76 | 1.10 | 8.4 | 4.0 |
 | oft_bypass | triton | 3 | 7.26 | 6.15 | 2.15 | 1.89 | 1.06 | 2.4 | 2.2 |
 | oft_bypass | tilelang | 3 | 4.59 | 3.89 | 1.93 | 1.70 | 1.06 | 4.9 | 2.2 |
-| boft | triton | 4 | 3.41 | 2.31 | 1.59 | 0.97 | 1.57 | 10.8 | 2.3 |
-| boft | tilelang | 4 | 1.63 | 1.11 | 1.22 | 0.75 | 1.57 | 31.7 | 2.3 |
-| boft_bypass | triton | 3 | 1.46 | 1.19 | 1.20 | 0.89 | 1.52 | 10.7 | 2.4 |
-| boft_bypass | tilelang | 3 | 2.32 | 1.89 | 1.74 | 1.30 | 1.52 | 27.7 | 2.4 |
 
 Reading the rows that are below 1.0:
 

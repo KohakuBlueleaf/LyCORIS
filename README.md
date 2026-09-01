@@ -19,11 +19,14 @@ This project originated from LoCon (see archive branch).
 
 **If you want to check more in-depth experiment results and discussions for LyCORIS, you can check our [paper](https://openreview.net/forum?id=wfzXa8e783)**
 
+**Documentation starts at [docs/README.md](docs/README.md)** — it maps every
+document and source folder to the question it answers.
+
 ## Algorithm Overview
 
 LyCORIS currently contains LoRA (LoCon), LoHa, LoKr, (IA)^3, DyLoRA, Native fine-tuning (aka dreambooth).
 GLoRA and GLoKr are coming soon.
-Please check [List of Implemented Algorithms](docs/Algo-List.md) and [Guidelines](docs/Guidelines.md) for more details.
+Please check [List of Implemented Algorithms](docs/algorithms/README.md) and [Guidelines](docs/algorithms/guidelines.md) for more details.
 
 A simple comparison of some of these methods are provided below (to be taken with a grain of salt)
 
@@ -91,7 +94,7 @@ In any case, please install this package in the corresponding virtual environmen
   pip install .
   ```
 
-A detailed description of the network arguments is provided in [docs/Network-Args.md](docs/Network-Args.md).
+A detailed description of the network arguments is provided in [docs/usage/network-args.md](docs/usage/network-args.md).
 
 #### kohya script
 
@@ -133,7 +136,7 @@ For the moment being the outputs of HCP-Diffusion are not directly compatible wi
 You can perform conversion with [tools/batch_hcp_convert.py](tools/batch_hcp_convert.py).
 
 In the case of pivotal tuning, [tools/batch_bundle_convert.py](tools/batch_bundle_convert.py) can be further used to convert to and from bundle formats.
-Check [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
+Check [docs/usage/conversion-scripts.md](docs/usage/conversion-scripts.md) for more information.
 
 #### As standalone wrappers
 
@@ -173,8 +176,37 @@ You can check my [HakuPhi](https://github.com/KohakuBlueleaf/HakuPhi) project to
 
 After LyCORIS3.0.0, Parametrize API and Functional API have been added, which provide more different ways on utilizing LyCORIS library.
 
-Check API reference for more information.
+Check [API reference](docs/api/README.md) for more information.
 You can also take the [test suites](test/) as a kind of examples.
+
+### Fused kernels (experimental)
+
+Since 4.0.0 LyCORIS ships hand-written Triton and TileLang kernels for the hot
+paths of every algorithm, and picks one per call —
+**triton > tilelang > torch.compile > eager** — with an automatic fallback to
+the stock PyTorch path for anything out of scope. Your code does not change:
+the module, functional and wrapper APIs keep the same signatures.
+
+```bash
+pip install triton      # or: pip install tilelang
+```
+
+On an RTX 4090 this is **1.4x–7.3x** less device (kernel) time than eager and
+**1.2x–6.2x** less than `torch.compile` on the fused paths, with lower peak
+VRAM and error at or below the eager path — ΔW and its gradient are never
+materialised. Full table, method and caveats in
+[docs/kernels/benchmarks.md](docs/kernels/benchmarks.md).
+
+**This is an early experimental implementation.** If a result looks wrong, pin
+the stock path and tell us:
+
+```bash
+export LYCORIS_KERNEL_BACKEND=torch
+```
+
+See [docs/kernels/README.md](docs/kernels/README.md) for what is fused per
+algorithm, and [docs/kernels/backends.md](docs/kernels/backends.md) for the
+selection rules and environment variables.
 
 #### Bitsandbytes support
 
@@ -245,7 +277,7 @@ python3 batch_hcp_convert.py \
   --auto_scale_alpha --to_webui
 ```
 
-See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
+See [docs/usage/conversion-scripts.md](docs/usage/conversion-scripts.md) for more information.
 
 ### Conversion from and to bundle format
 
@@ -259,21 +291,34 @@ python3 batch_bundle_convert.py \
   --to_bundle --verbose 2 
 ```
 
-See [docs/Conversion-scripts.md](docs/Conversion-scripts.md) for more information.
+See [docs/usage/conversion-scripts.md](docs/usage/conversion-scripts.md) for more information.
 
 ## Change Log
 
 For full log, please see [Change.md](Change.md)
 
-### 2025/11/12 update to 3.4.0
+### 2026/09/01 update to 4.0.0
 
 #### New Features
 
-* Support high precision merge/unmerge, thanks @bghira !
+* **Fused kernels (early experimental)** — hand-written Triton and TileLang
+  kernels for every algorithm: `lora`/`locon`, `loha`, `lokr`, `oft`, `boft`,
+  `dora` (shared by dora/doha/dokr), `ia3`, `glora`, `dylora`, `full` and
+  `norm`. Up to four kernels each — merge forward, merge backward, bypass
+  forward, bypass backward — with ΔW and its gradient never materialised.
+* **Automatic backend selection** per call — triton > tilelang >
+  `torch.compile` > eager — with a fallback for anything out of scope. Pin it
+  with `LYCORIS_KERNEL_BACKEND`, or per call with the new `backend=` argument
+  on the functional API.
+* **Mixed dtype support** across x and the module weights: fp16, bf16 or fp32
+  independently, 16-bit matmul with fp32 accumulation, gradients returned in
+  each leaf's own dtype.
+* `weight_decompose` and `add_scaled` in `lycoris.functional.general`.
 
 #### Improvements
 
-* LyCORIS now use [config_sdk](/lycoris/config_sdk.py) for configuration related operation
+* Documentation reorganised into a nested tree, indexed at [docs/README.md](docs/README.md).
+* Packaging moved to `pyproject.toml`; CI, nightly and release workflows added.
 
 
 ## Todo list

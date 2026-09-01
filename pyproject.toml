@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lycoris_lora"
-version = "3.4.0"
+version = "4.0.0"
 description = "Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion"
 authors = [
     { name = "Shih-Ying Yeh(KohakuBlueLeaf)", email = "kohaku@kblueleaf.net" },

@@ -58,9 +58,7 @@ Measured on an RTX 4090, geometric mean over each family's shape sweep, device
 | `oft` merge | 5.7x | 5.1x |
 | `lora` merge | 4.9x | 3.1x |
 | `lokr` bypass | 4.3x | 2.6x |
-| `boft` merge | 3.4x | 2.3x |
 | `lokr` merge | 3.0x | 0.9x |
-| `boft` bypass | 1.5x | 1.2x |
 | `lora` bypass | 1.4x | 1.2x |
 
 Peak memory drops with it (1.06x–1.6x smaller on the fwd+bwd path): ΔW, its
