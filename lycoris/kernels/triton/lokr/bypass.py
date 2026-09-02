@@ -183,9 +183,24 @@ def _lokr_bypass_bwd_kernel(
     )
 
 
+#: The apply kernel holds every factor tile in registers, so each factor dim
+#: may pad to a power of two no larger than this.
+MAX_KRON_FACTOR = 128
+
+
+def kron_factors_supported(a: int, b: int, c: int, d: int) -> bool:
+    """Whether factor dims (a, b, c, d) fit the apply kernel's register tiles.
+
+    This is the dispatcher's scope test for the fused apply: oversized factors
+    (typical LoKr, whose second factor spans out/factor by in/factor) step
+    down a backend tier instead of raising at launch time.
+    """
+    return max(a, b, c, d) <= MAX_KRON_FACTOR
+
+
 def _pads(a: int, b: int, c: int, d: int) -> tuple[int, int, int, int]:
     pads = tuple(max(16, 1 << (max(1, v) - 1).bit_length()) for v in (a, b, c, d))
-    if max(pads) > 128:
+    if max(pads) > MAX_KRON_FACTOR:
         raise ValueError(f"kron apply factors too large for the kernel: {pads}")
     return pads
 

@@ -1,3 +1,5 @@
+import functools
+import importlib
 import math
 
 import torch
@@ -7,6 +9,7 @@ import torch.nn.functional as F
 from .general import rebuild_tucker, FUNC_LIST
 from .general import factorization
 from ..kernels.autograd.lokr import lokr_kron_bypass, lokr_kron_weight, rank_scale
+from ..kernels.dispatch import fused_backends
 from ..kernels.select import FUSED, call_compiled, choose, static_scale
 
 
@@ -146,6 +149,43 @@ def _plain_w2(w2, w2b, t):
     return w2.dim() == 2 if w2 is not None else (t is None and w2b.dim() == 2)
 
 
+@functools.cache
+def _apply_factor_cap() -> float:
+    """The factor-size bound declared by the available fused apply kernels.
+
+    The kron apply kernel holds every factor tile on chip, so each factor dim
+    is bounded (see kernels.*.lokr.bypass.MAX_KRON_FACTOR); the merge kernels
+    tile the output and carry no such bound. The strictest available fused
+    backend wins; none declaring a cap means the apply is treated as
+    unbounded.
+    """
+    caps = []
+    for name in fused_backends():
+        try:
+            mod = importlib.import_module(f"lycoris.kernels.{name}.lokr.bypass")
+        except Exception:  # a backend that cannot import is simply absent here
+            continue
+        cap = getattr(mod, "MAX_KRON_FACTOR", None)
+        if cap is not None:
+            caps.append(cap)
+    return min(caps) if caps else math.inf
+
+
+def _apply_supported(w1, w1a, w1b, w2, w2a, w2b, t) -> bool:
+    """The layout AND factor-size scope of the fused kron apply kernels.
+
+    Factor dims come off the parameters without building anything: a
+    factorized half rebuilds to the outer-product shape of its parts, so
+    (out/factor, in/factor) factors — the common LoKr case — are caught here
+    rather than at kernel launch.
+    """
+    if not _plain_w2(w2, w2b, t):
+        return False
+    a, b = w1.shape if w1 is not None else (w1a.shape[0], w1b.shape[1])
+    c, d = w2.shape if w2 is not None else (w2a.shape[0], w2b.shape[1])
+    return max(a, b, c, d) <= _apply_factor_cap()
+
+
 def kron_weight(w1, w1a, w1b, w2, w2a, w2b, t=None, scale=1.0, backend=None):
     """ΔW = scale · kron(w1, w2) with the backend chosen per call.
 
@@ -281,11 +321,15 @@ def kron_bypass(
     """Bypass apply of scale · kron(w1, w2), backend chosen per call.
 
     The fused path is the linear layout: one kernel per token tile computing
-    w1 @ X @ w2ᵀ, so ΔW (a·c by b·d) is never built.
+    w1 @ X @ w2ᵀ, so ΔW (a·c by b·d) is never built. That kernel holds the
+    factor tiles in registers, so factors beyond its size bound step down a
+    tier instead of failing at launch.
     """
     pick = choose(
         (h, w1, w1a, w1b, w2, w2a, w2b),
-        supported=_plain_w2(w2, w2b, t) and not extra_args and static_scale(scale),
+        supported=_apply_supported(w1, w1a, w1b, w2, w2a, w2b, t)
+        and not extra_args
+        and static_scale(scale),
         backend=backend,
     )
     if pick in FUSED:
