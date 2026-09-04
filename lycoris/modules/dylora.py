@@ -113,28 +113,6 @@ class DyLoraModule(LycorisBaseModule):
         return down, up, self.alpha / (b + 1)
 
     def get_random_rank_weight(self):
-        if torch.compiler.is_compiling():
-            # A Python random rank changes the concatenated tensor shapes and
-            # cannot be represented in one graph. Keep every block in the
-            # compiled graph and mask the inactive suffix instead.
-            active_blocks = torch.randint(
-                1,
-                self.block_count + 1,
-                (),
-                device=self.down_list[0].device,
-            )
-            mask = torch.arange(
-                self.block_count,
-                device=active_blocks.device,
-            ).repeat_interleave(self.block_size)
-            mask = (mask < active_blocks).to(self.down_list[0].dtype).unsqueeze(1)
-            down = (
-                torch.concat([self.down_list[i] for i in range(self.block_count)])
-                * mask
-            )
-            up = torch.concat([self.up_list[i] for i in range(self.block_count)], dim=1)
-            return down, up, self.alpha / active_blocks
-
         b = random.randint(0, self.block_count - 1)
         return self.get_weight(b * self.block_size)
 
