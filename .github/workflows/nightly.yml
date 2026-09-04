@@ -2,16 +2,19 @@ name: Nightly
 
 on:
   schedule:
-    # 03:00 UTC daily
+    # 03:00 UTC, once a day. This is the only automatic trigger: nothing about
+    # a nightly is per-push, so a commit landing at noon waits for tomorrow.
     - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       force:
-        description: "Build even if main has not moved since the last nightly"
+        description: "Build even when the gate says there is nothing new"
         required: false
         default: false
         type: boolean
 
+# Serialised, and never cancelled: a second run has to see the tags the first
+# one pushed, or both would decide the same commit is unbuilt.
 concurrency:
   group: nightly
   cancel-in-progress: false
@@ -21,8 +24,8 @@ permissions:
   actions: write
 
 jobs:
-  # Computes the version and hands off. Release is the only workflow that
-  # builds or uploads, so PyPI needs exactly one trusted publisher.
+  # Decides only. Release is the sole workflow that builds or uploads, so PyPI
+  # needs exactly one trusted publisher.
   dispatch:
     runs-on: ubuntu-latest
     steps:
@@ -30,36 +33,58 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # Release cuts its tag through `gh release create`, so the tags are
+          # the record of what has been published and the gate below reads
+          # them; a shallow clone without them would rebuild every night.
+          fetch-tags: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      - name: Decide whether a nightly is due
+        id: gate
+        shell: bash
+        run: |
+          head=$(git rev-parse HEAD)
+          today=$(date -u +%Y%m%d)
+
+          # Every release, stable or nightly, leaves a v* tag on the commit it
+          # was cut from. A tag already sitting on HEAD means main has not
+          # moved since the last one, and a rebuild would only differ by its
+          # timestamp — a duplicate under a new PyPI filename.
+          published=$(git tag --points-at HEAD --list 'v*' | head -n1)
+
+          # Second belt: the nightly version carries the UTC date it was cut
+          # on, so an extra dispatch or a re-run cannot cut a second nightly
+          # for the same day even if main did move.
+          already_today=$(git tag --list "v*.dev${today}*" | head -n1)
+
+          if [ "${{ inputs.force }}" = "true" ]; then
+            reason="forced"
+            build=true
+          elif [ -n "${published}" ]; then
+            reason="${head} is already released as ${published}"
+            build=false
+          elif [ -n "${already_today}" ]; then
+            reason="${already_today} was already cut today"
+            build=false
+          else
+            reason="main is at ${head}, unreleased"
+            build=true
+          fi
+
+          echo "build=${build}" >> "$GITHUB_OUTPUT"
+          echo "${reason}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Computed after the gate so the stamp names the moment of the build.
       - name: Compute the nightly version
         id: compute
+        if: steps.gate.outputs.build == 'true'
         shell: bash
         run: |
           version=$(python scripts/ci/version.py nightly)
-          {
-            echo "version=${version}"
-            echo "sha=$(git rev-parse HEAD)"
-          } >> "$GITHUB_OUTPUT"
-          echo "nightly ${version}"
-
-      - name: Skip when main has not moved
-        id: gate
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          last=$(gh release list --limit 30 --json tagName,body \
-            --jq '[.[] | select(.tagName | contains(".dev"))][0].body // ""' \
-            | grep -oE '[0-9a-f]{40}' | head -n1 || true)
-          if [ "${{ inputs.force }}" = "true" ] || [ "${last}" != "${{ steps.compute.outputs.sha }}" ]; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "main is unchanged since ${last}; nothing to build"
-          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "nightly ${version}" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Dispatch the release workflow
         if: steps.gate.outputs.build == 'true'

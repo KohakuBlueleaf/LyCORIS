@@ -49,6 +49,13 @@ or how it is invoked, **minor** for new algorithms, options and backends,
 and auto-patch compute a version and dispatch it — so PyPI needs exactly one
 trusted publisher, and there is one build path to keep working.
 
+The nightly gate reads the `v*` tags, which every release leaves on the commit
+it was cut from. It builds only when `main` carries no release tag at its tip
+**and** no nightly has been cut for the current UTC date — so a quiet day, a
+re-run and an extra manual dispatch all cost nothing, and a nightly is never a
+duplicate of the release before it. `workflow_dispatch` with `force: true`
+overrides both checks.
+
 A nightly is a plain PEP 440 dev release, so it installs from the index:
 
 ```bash
@@ -77,6 +84,6 @@ token needs to exist in the repository secrets.
 | File | Does |
 | --- | --- |
 | `.github/workflows/ci.yml` | format, lint, import/cycle check, CPU smoke, wheel install check |
-| `.github/workflows/nightly.yml` | computes a dev version from `main` and dispatches Release, skipped when `main` has not moved |
+| `.github/workflows/nightly.yml` | once a day: dispatches Release with a dev version, unless `main`'s tip is already tagged or today's nightly exists |
 | `.github/workflows/auto-patch-release.yml` | cuts `X.Y.Z+1` when enough has landed on `main` (dry-run by default) |
 | `.github/workflows/release.yml` | the only builder: stamps the version if given one, publishes to PyPI by trusted publishing, cuts the GitHub release |
