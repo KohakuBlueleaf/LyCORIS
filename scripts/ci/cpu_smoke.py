@@ -58,9 +58,7 @@ SKIP = {
     ("tlora", "conv", False),
     ("tlora", "conv", True),
 }
-# FullModule.apply_to() moves the weight onto itself and deletes the original,
-# which the org module's own forward still needs; call it unpatched instead.
-NO_APPLY = {"full"}
+NO_APPLY = set()
 
 
 def layer(kind):

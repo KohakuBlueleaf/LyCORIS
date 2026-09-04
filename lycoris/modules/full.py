@@ -148,6 +148,12 @@ class FullModule(LycorisBaseModule):
             diff_bias = state_dict.pop(f"{prefix}diff_b")
             state_dict[f"{prefix}bias"] = diff_bias + self.bias.data.to(diff_bias)
 
+    def _org_bias_tensor(self, device=None, dtype=None):
+        """The cached original bias, or None. Cached as a one-element list."""
+        if self.org_bias is None:
+            return None
+        return self.org_bias[0].to(device=device, dtype=dtype)
+
     def make_weight(self, scale=1, device=None):
         dropping = bool(self.rank_dropout) and self.training
         if self.is_diff and not dropping:
@@ -155,48 +161,54 @@ class FullModule(LycorisBaseModule):
             weight = add_scaled(self.org_weight.to(device), self.weight, scale)
             bias = None
             if self.bias is not None and self.org_bias is not None:
-                # org_bias is cached as a one-element list, like _org_weight.
-                bias = add_scaled(self.org_bias[0].to(device), self.bias, scale)
+                bias = add_scaled(self._org_bias_tensor(device), self.bias, scale)
             return weight, bias
 
-        drop = (
-            torch.rand(self.dim, device=device) > self.rank_dropout if dropping else 1
-        )
-        if drop != 1 or scale != 1 or self.is_diff:
-            diff_w, diff_b = self.get_diff_weight(scale, device=device)
-            weight = self.org_weight + diff_w * drop
-            if self.org_bias is not None:
-                bias = self.org_bias + diff_b * drop
-            else:
-                bias = None
-        else:
-            weight = self.weight
-            bias = self.bias
+        if not dropping and scale == 1:
+            # apply_to() folded the original in, so self.weight is the layer.
+            return self.weight, self.bias
+
+        # Rebuilt from the cached original rather than from the live module:
+        # apply_to() takes the weight off the original, so it is the only copy
+        # of the pre-training values left (#228).
+        diff_w, diff_b = self.get_diff_weight(scale, device=device)
+        if dropping:
+            drop = (torch.rand(self.dim, device=device) > self.rank_dropout).to(
+                diff_w.dtype
+            )
+            if self.rank_dropout_scale:
+                drop = drop / drop.mean()
+            # The mask is per output unit, so it broadcasts down the weight's
+            # leading axis and straight along the bias.
+            diff_w = diff_w * drop.view(-1, *[1] * (diff_w.dim() - 1))
+            if diff_b is not None:
+                diff_b = diff_b * drop
+
+        weight = self.org_weight.to(diff_w) + diff_w
+        org_bias = self._org_bias_tensor(diff_w.device)
+        bias = None if (org_bias is None or diff_b is None) else org_bias + diff_b
         return weight, bias
 
     def get_diff_weight(self, multiplier=1, shape=None, device=None):
         if self.is_diff:
+            diff = self.weight.to(device)
+            diff_b = None if self.bias is None else self.bias.to(device)
+        else:
+            # Post-apply_to: self.weight is the absolute weight and the
+            # original only survives in the cache.
+            org_weight = self.org_weight.to(device=device, dtype=self.weight.dtype)
+            diff = self.weight.to(device) - org_weight
             diff_b = None
-            if self.bias is not None:
-                diff_b = self.bias * multiplier
-            return self.weight * multiplier, diff_b
-        org_weight = self.org_module[0].weight.to(device, dtype=self.weight.dtype)
-        diff = self.weight.to(device) - org_weight
-        diff_b = None
-        if shape:
+            if self.bias is not None and self.org_bias is not None:
+                org_bias = self._org_bias_tensor(device, self.bias.dtype)
+                diff_b = self.bias.to(device) - org_bias
+        if shape is not None:
             diff = diff.view(shape)
-        if self.bias is not None:
-            org_bias = self.org_module[0].bias.to(device, dtype=self.bias.dtype)
-            diff_b = self.bias.to(device) - org_bias
-        if device is not None:
-            diff = diff.to(device)
-            if self.bias is not None:
-                diff_b = diff_b.to(device)
         if multiplier != 1:
             diff = diff * multiplier
             if diff_b is not None:
                 diff_b = diff_b * multiplier
-        return diff * multiplier, diff_b
+        return diff, diff_b
 
     def get_merged_weight(self, multiplier=1, shape=None, device=None):
         weight, bias = self.make_weight(multiplier, device)
@@ -207,11 +219,24 @@ class FullModule(LycorisBaseModule):
         return weight, bias
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
-        if (
+        dropped = bool(
             self.module_dropout
             and self.training
             and torch.rand(1) < self.module_dropout
-        ):
+        )
+
+        if not self.is_diff:
+            # apply_to() folded the original weight into this module and took
+            # it off the layer, so this call IS the layer's forward: delegating
+            # to org_forward would look for a weight that is no longer there.
+            if dropped:
+                weight = self.org_weight.to(x)
+                bias = self._org_bias_tensor(x.device, x.dtype)
+            else:
+                weight, bias = self.make_weight(self.multiplier, x.device)
+            return self.op(x, weight=weight, bias=bias, **self.kw_dict)
+
+        if dropped:
             return self.org_forward(x, *args, **kwargs)
 
         base = self.org_forward(x, *args, **kwargs)
