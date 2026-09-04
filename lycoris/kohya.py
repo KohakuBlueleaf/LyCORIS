@@ -307,6 +307,7 @@ class LycorisNetworkKohya(LycorisNetwork):
     MODULE_ALGO_MAP = {}
     NAME_ALGO_MAP = {}
     USE_FNMATCH = False
+    TARGET_EXCLUDE_NAME = []
 
     @classmethod
     def apply_preset(cls, preset):
@@ -328,6 +329,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             cls.NAME_ALGO_MAP = preset["name_algo_map"]
         if "use_fnmatch" in preset:
             cls.USE_FNMATCH = preset["use_fnmatch"]
+        if "exclude_name" in preset:
+            cls.TARGET_EXCLUDE_NAME = preset["exclude_name"]
         return cls
 
     def __init__(
@@ -454,16 +457,27 @@ class LycorisNetworkKohya(LycorisNetwork):
             root_module: torch.nn.Module,
             algo,
             configs={},
+            module_path: str = "",
         ):
             loras = {}
             lora_names = []
             for name, module in root_module.named_modules():
+                # exclude_name patterns are written against the model's own
+                # module paths, so the walk carries the path of the block it
+                # descended into rather than matching the relative name.
+                full_name = ".".join(part for part in (module_path, name) if part)
+                if self.is_excluded(full_name):
+                    continue
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
                     next_algo = next_config.get("algo", algo)
                     new_loras, new_lora_names = create_modules_(
-                        f"{prefix}_{name}", module, next_algo, next_config
+                        f"{prefix}_{name}",
+                        module,
+                        next_algo,
+                        next_config,
+                        module_path=full_name,
                     )
                     for lora_name, lora in zip(new_lora_names, new_loras):
                         if lora_name not in loras:
@@ -498,6 +512,8 @@ class LycorisNetworkKohya(LycorisNetwork):
             matched_modules = set()
             matched_names = set()
             for name, module in root_module.named_modules():
+                if self.is_excluded(name):
+                    continue
                 module_name = module.__class__.__name__
                 if module_name in target_replace_modules and not any(
                     self.match_fn(t, name) for t in target_replace_names
@@ -509,9 +525,13 @@ class LycorisNetworkKohya(LycorisNetwork):
                     else:
                         algo = network_module
                     loras.extend(
-                        create_modules_(f"{prefix}_{name}", module, algo, next_config)[
-                            0
-                        ]
+                        create_modules_(
+                            f"{prefix}_{name}",
+                            module,
+                            algo,
+                            next_config,
+                            module_path=name,
+                        )[0]
                     )
                     next_config = {}
                 elif name in target_replace_names or any(
@@ -658,6 +678,14 @@ class LycorisNetworkKohya(LycorisNetwork):
         if self.USE_FNMATCH:
             return fnmatch.fnmatch(name, pattern)
         return re.match(pattern, name)
+
+    def is_excluded(self, name: str) -> bool:
+        """A module path the preset's `exclude_name` rules keep out of scope."""
+        if not name or not self.TARGET_EXCLUDE_NAME:
+            return False
+        return name in self.TARGET_EXCLUDE_NAME or any(
+            self.match_fn(t, name) for t in self.TARGET_EXCLUDE_NAME
+        )
 
     def find_conf_for_name(
         self,

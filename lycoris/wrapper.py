@@ -368,11 +368,19 @@ class LycorisNetwork(torch.nn.Module):
             algo,
             current_lora_map: dict[str, Any],
             configs={},
+            exclude_names=(),
+            module_path: str = "",
         ):
             assert current_lora_map is not None, "No mapping supplied"
             loras = current_lora_map
             lora_names = []
             for name, module in root_module.named_modules():
+                # exclude_name patterns are written against the model's own
+                # module paths, so the walk carries the path of the block it
+                # descended into rather than matching the relative name.
+                full_name = ".".join(part for part in (module_path, name) if part)
+                if self.is_excluded(full_name, exclude_names):
+                    continue
                 module_name = module.__class__.__name__
                 if module_name in self.MODULE_ALGO_MAP and module is not root_module:
                     next_config = self.MODULE_ALGO_MAP[module_name]
@@ -383,6 +391,8 @@ class LycorisNetwork(torch.nn.Module):
                         next_algo,
                         loras,
                         configs=next_config,
+                        exclude_names=exclude_names,
+                        module_path=full_name,
                     )
                     loras = {**loras, **new_lora_map}
                     for lora_name, lora in zip(new_lora_names, new_loras):
@@ -429,9 +439,7 @@ class LycorisNetwork(torch.nn.Module):
             matched_modules = set()
             matched_names = set()
             for name, module in root_module.named_modules():
-                if name in target_exclude_names or any(
-                    self.match_fn(t, name) for t in target_exclude_names
-                ):
+                if self.is_excluded(name, target_exclude_names):
                     continue
 
                 module_name = module.__class__.__name__
@@ -451,6 +459,8 @@ class LycorisNetwork(torch.nn.Module):
                         algo,
                         lora_map,
                         configs=next_config,
+                        exclude_names=target_exclude_names,
+                        module_path=name,
                     )
                     lora_map = {**lora_map, **_lora_map}
                     loras.extend(lora_lst)
@@ -556,6 +566,13 @@ class LycorisNetwork(torch.nn.Module):
         if self.USE_FNMATCH:
             return fnmatch.fnmatch(name, pattern)
         return bool(re.match(pattern, name))
+
+    def is_excluded(self, name: str, patterns=None) -> bool:
+        """A module path the preset's `exclude_name` rules keep out of scope."""
+        patterns = self.TARGET_EXCLUDE_NAME if patterns is None else patterns
+        if not name or not patterns:
+            return False
+        return name in patterns or any(self.match_fn(t, name) for t in patterns)
 
     def find_conf_for_name(
         self,
