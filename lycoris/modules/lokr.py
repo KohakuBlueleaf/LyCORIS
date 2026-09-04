@@ -474,11 +474,20 @@ class LokrModule(LycorisBaseModule):
 
             if self.tucker:
                 t = self.lokr_t2
+                # rebuild_tucker contracts w2a over the *output* index of t, so
+                # w2a is stored (dim, vp) while the 1x1 conv that closes the
+                # chain needs (vp, dim); the plain path already stores it that
+                # way, hence the transpose here and not there.
                 a = a.view(*a.shape, *[1] * (len(t.shape) - 2))
-                b = b.view(*b.shape, *[1] * (len(t.shape) - 2))
+                b = b.transpose(0, 1).reshape(
+                    b.shape[1], b.shape[0], *[1] * (len(t.shape) - 2)
+                )
                 t = to_input_dtype(t)
             elif is_conv:
-                a = a.view(*a.shape, *self.shape[2:])
+                # w2_b is stored flattened as (dim, vq * k1 * k2 * ...), so the
+                # kernel window comes back out of that axis rather than being
+                # appended to it (#221).
+                a = a.view(a.shape[0], -1, *self.shape[2:])
                 b = b.view(*b.shape, *[1] * (len(self.shape) - 2))
             a = to_input_dtype(a)
             b = to_input_dtype(b)
@@ -491,9 +500,12 @@ class LokrModule(LycorisBaseModule):
         uq = c.size(1)
 
         if is_conv:
-            # (b, uq), vq, ...
-            b, _, *rest = h.shape
-            h_in_group = h.reshape(b * uq, -1, *rest)
+            # (n, uq), vq, ...
+            # Named `n`, not `b`: `b` is the second Kronecker factor above and
+            # unpacking the batch over it fed the batch size to conv as a
+            # weight (#221).
+            n, _, *rest = h.shape
+            h_in_group = h.reshape(n * uq, -1, *rest)
         else:
             # b, ..., uq, vq
             h_in_group = h.reshape(*h.shape[:-1], uq, -1)
@@ -514,10 +526,10 @@ class LokrModule(LycorisBaseModule):
                 hb = self.op(ha, b)
 
         if is_conv:
-            # (b, uq), vp, ..., f
-            # -> b, uq, vp, ..., f
-            # -> b, f, vp, ..., uq
-            hb = hb.view(b, -1, *hb.shape[1:])
+            # (n, uq), vp, ..., f
+            # -> n, uq, vp, ..., f
+            # -> n, f, vp, ..., uq
+            hb = hb.view(n, -1, *hb.shape[1:])
             h_cross_group = hb.transpose(1, -1)
         else:
             # b, ..., uq, vq
@@ -526,11 +538,11 @@ class LokrModule(LycorisBaseModule):
 
         hc = F.linear(h_cross_group, c)
         if is_conv:
-            # b, f, vp, ..., up
-            # -> b, up, vp, ... ,f
-            # -> b, c, ..., f
+            # n, f, vp, ..., up
+            # -> n, up, vp, ... ,f
+            # -> n, c, ..., f
             hc = hc.transpose(1, -1)
-            h = hc.reshape(b, -1, *hc.shape[3:])
+            h = hc.reshape(n, -1, *hc.shape[3:])
         else:
             # b, ..., vp, up
             # -> b, ..., up, vp

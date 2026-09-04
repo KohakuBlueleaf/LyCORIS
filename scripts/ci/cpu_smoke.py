@@ -37,6 +37,7 @@ ALGOS = {
     "lokr": (LokrModule, {"factor": 4}),
     "lokr-full": (LokrModule, {"factor": 4, "full_matrix": True}),
     "lokr-dora": (LokrModule, {"factor": 4, "weight_decompose": True}),
+    "lokr-tucker": (LokrModule, {"factor": 4, "use_tucker": True}),
     "oft": (DiagOFTModule, {"constraint": 0}),
     "oft-rescale": (DiagOFTModule, {"constraint": 0, "rescaled": True}),
     "boft": (ButterflyOFTModule, {"constraint": 0}),
@@ -47,12 +48,7 @@ ALGOS = {
     "tlora": (TLoraModule, {}),
     "full": (FullModule, {}),
 }
-# The LoKr conv bypass reshapes the flattened w2b against the kernel window,
-# which only holds for a 1x1 kernel. Pre-existing, and unrelated to dispatch.
 SKIP = {
-    ("lokr", "conv", True),
-    ("lokr-full", "conv", True),
-    ("lokr-dora", "conv", True),
     # DyLoRA's bypass reshapes the sliced factors to the full lora_dim, so it
     # only lines up when every block is active. Pre-existing.
     ("dylora", "linear", True),
