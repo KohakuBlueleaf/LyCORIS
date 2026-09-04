@@ -67,8 +67,13 @@ def choose(tensors, supported: bool = True, backend: str | None = None) -> str:
 
     The compile tier is device-only unless asked for by name: the CPU callers
     here are weight merges, where an inductor warmup costs more than the op it
-    replaces.
+    replaces.  An enclosing ``torch.compile`` owns the whole graph, so expose
+    the torch body to it instead of probing optional backends or nesting a
+    second compile.
     """
+    if torch.compiler.is_compiling():
+        return "torch"
+
     name = resolve_backend(backend)
     if name == "torch":
         return name

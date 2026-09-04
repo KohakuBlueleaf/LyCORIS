@@ -179,7 +179,10 @@ def _apply_supported(w1, w1a, w1b, w2, w2a, w2b, t) -> bool:
     (out/factor, in/factor) factors — the common LoKr case — are caught here
     rather than at kernel launch.
     """
-    if not _plain_w2(w2, w2b, t):
+    # Avoid the lazy backend imports in _apply_factor_cap while an enclosing
+    # compiler is tracing. choose() selects the torch body in this case, which
+    # the enclosing compiler captures as part of its graph.
+    if torch.compiler.is_compiling() or not _plain_w2(w2, w2b, t):
         return False
     a, b = w1.shape if w1 is not None else (w1a.shape[0], w1b.shape[1])
     c, d = w2.shape if w2 is not None else (w2a.shape[0], w2b.shape[1])
