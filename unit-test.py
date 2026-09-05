@@ -16,6 +16,7 @@ from test.kohya import LycorisKohyaWrapperTests
 from test.precision_merge_test import MergePrecisionTests
 from test.kernels.test_ops import OpsVsFp64
 from test.kernels.test_autograd import AutogradParity, SafeFallback
+from test.torch_compile import TorchCompileCompatibility
 
 # The kernel suites skip themselves without CUDA.
 TESTS = [
@@ -27,6 +28,7 @@ TESTS = [
     OpsVsFp64,
     AutogradParity,
     SafeFallback,
+    TorchCompileCompatibility,
 ]
 
 
