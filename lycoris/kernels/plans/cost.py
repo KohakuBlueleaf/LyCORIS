@@ -34,23 +34,55 @@ SENTINEL_MATERIALIZE = TilePlan(0, 0, 0, 0, 1, float("inf"), "materialize")
 SENTINEL_CONE = TilePlan(4, 64, 0, 4, 1, float("inf"), "cone")
 
 
-def warp_tile(bm: int, bn: int, warps: int) -> tuple[int, int]:
-    """Warp split of a CTA tile, squarest legal; (0, 0) when none exists."""
+def mma_n(dev: Device) -> int:
+    """Columns a warp's MMA tile covers: 16 on Volta (TileLang's sm_70 GEMM
+    partitions warps in 16x16 units), 8 from Turing on."""
+    return 16 if (dev.cc_major, dev.cc_minor) == (7, 0) else MMA_N
+
+
+def warp_tile(
+    bm: int, bn: int, warps: int, n_unit: int = MMA_N, exact: bool = False
+) -> tuple[int, int]:
+    """Warp split of a CTA tile, squarest legal; (0, 0) when none exists.
+
+    ``exact`` additionally requires every warp to own whole MMA tiles (the
+    TileLang GEMM partition rule)."""
     best = (0, 0)
     for wm_count in (1, 2, 4, 8):
         wn_count = warps // wm_count
         if wn_count < 1 or wm_count * wn_count != warps:
             continue
         wm, wn = bm // wm_count, bn // wn_count
-        if wm < MMA_M or wn < MMA_N:
+        if wm < MMA_M or wn < n_unit:
+            continue
+        if exact and (bm % (wm_count * MMA_M) or bn % (wn_count * n_unit)):
             continue
         if best == (0, 0) or abs(wm - wn) < abs(best[0] - best[1]):
             best = (wm, wn)
     return best
 
 
-def warps_legal(c_shapes: list[tuple[int, int]], warps: int) -> bool:
-    return all(warp_tile(m, n, warps) != (0, 0) for m, n in c_shapes)
+def warps_legal(
+    c_shapes: list[tuple[int, int]],
+    warps: int,
+    n_unit: int = MMA_N,
+    exact: bool = False,
+) -> bool:
+    return all(warp_tile(m, n, warps, n_unit, exact) != (0, 0) for m, n in c_shapes)
+
+
+def tilelang_legal(cands: list[TilePlan], dev: Device, shapes_of) -> list[TilePlan]:
+    """The candidates whose every ``T.gemm`` accumulator (``shapes_of(plan)``)
+    partitions over the plan's warps under TileLang's exact rule on ``dev``;
+    sentinel plans (no warps) pass. An illegal tile is a compile failure, so it
+    never reaches the tuner. Falls back to the input when nothing is legal."""
+    n_unit = mma_n(dev)
+    legal = [
+        p
+        for p in cands
+        if p.warps == 0 or warps_legal(shapes_of(p), p.warps, n_unit, exact=True)
+    ]
+    return legal or cands
 
 
 def occupancy(dev: Device, est_regs: int, smem: int, warps: int) -> int:

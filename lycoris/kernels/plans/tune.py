@@ -9,6 +9,8 @@ tuning writes only to scratch the factory allocated.
 
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 import torch
@@ -38,31 +40,78 @@ def _table_path() -> Path:
     return base / "tuning.json"
 
 
+def _read_table(path: Path) -> dict[tuple, TilePlan]:
+    rows: dict[tuple, TilePlan] = {}
+    if not path.exists():
+        return rows
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for row in json.load(fh):
+                rows[tuple(row["key"])] = TilePlan(**row["plan"])
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return rows
+
+
 def _load_table() -> None:
     global _LOADED
     if _LOADED:
         return
     _LOADED = True
-    path = _table_path()
-    if not path.exists():
-        return
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for row in json.load(fh):
-                _CACHE[tuple(row["key"])] = TilePlan(**row["plan"])
-    except (OSError, ValueError, TypeError, KeyError):
-        pass
+    for key, plan in _read_table(_table_path()).items():
+        _CACHE.setdefault(key, plan)
 
 
 def _save_table() -> None:
+    """Merge with what is on disk now, then replace atomically.
+
+    Several processes (ranks, concurrent jobs) share one table: each keeps the
+    rows another wrote since it loaded, and a reader never sees a partial file.
+    """
     path = _table_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        rows = [{"key": list(k), "plan": v.as_dict()} for k, v in _CACHE.items()]
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(rows, fh, indent=1)
     except OSError:
-        pass
+        return
+    merged = _read_table(path)
+    merged.update(_CACHE)
+    _write_rows(path, merged)
+
+
+REPLACE_TRIES = 20
+REPLACE_WAIT_S = 0.05
+
+
+def _write_rows(path: Path, rows: dict[tuple, TilePlan]) -> bool:
+    """Write the table through a temp file and an atomic replace. On Windows
+    the replace fails while another handle has the table open, so it is retried
+    for up to ``REPLACE_TRIES * REPLACE_WAIT_S`` s; the temp file never
+    outlives the call."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(
+                [{"key": list(k), "plan": v.as_dict()} for k, v in rows.items()],
+                fh,
+                indent=1,
+            )
+        for attempt in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                return True
+            except PermissionError:
+                if attempt == REPLACE_TRIES - 1:
+                    return False
+                time.sleep(REPLACE_WAIT_S)
+    except OSError:
+        return False
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+    return False
 
 
 def _time(fn, warmup: int = 10, iters: int = 30, rounds: int = 3) -> float:

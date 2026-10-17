@@ -102,8 +102,11 @@ def _json_path() -> Path | None:
     return base / "device.json"
 
 
-def resolve_device(index: int = 0) -> Device:
-    """Queried device + measured numbers from disk or the KNOWN table."""
+def resolve_device(index: int | None = None) -> Device:
+    """Queried device (default: the current one) + measured numbers from disk
+    or the KNOWN table."""
+    if index is None:
+        index = torch.cuda.current_device() if torch.cuda.is_available() else 0
     if index in _RESOLVED:
         return _RESOLVED[index]
     if not torch.cuda.is_available():
