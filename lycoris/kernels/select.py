@@ -1,17 +1,18 @@
 """Per-call backend choice for the functional and module layers.
 
-``dispatch.resolve_backend`` gives the process-wide preference
-(triton > tilelang > compile > torch); this layer narrows it per call. A fused
-op covers CUDA tensors of one floating family, and a call outside that scope —
-mixed fp16/bf16, or a layout the fused path does not implement — steps one tier
-down instead of failing, so the caller never carries a capability test. CPU
-operands go straight to eager, since the compile tier's warmup only pays for
-itself on device work.
+``dispatch.resolve_backend`` gives the per-device preference (tilelang first on
+sm_70/75, triton first from sm_80); this layer narrows it per call. A fused op
+covers CUDA tensors of one floating family, and a call outside that scope —
+mixed fp16/bf16, bf16 on a device without bf16 MMA, or a layout the fused path
+does not implement — steps one backend down instead of failing, so the caller
+never carries a capability test. CPU operands go straight to eager, since the
+compile backend's warmup only pays for itself on device work.
 
 torch.compile is applied to ONE op at a time and cached on the function object,
 never to a module: each op then compiles once for the process and a model
-mixing algos never recompiles on their union. A tier that imports but cannot
-run is demoted on its first failure, which costs a fallback, not the run.
+mixing algos never recompiles on their union. A backend that imports but cannot
+run is demoted for that device on its first failure, which costs a fallback,
+not the run.
 """
 
 import functools
@@ -20,10 +21,10 @@ import os
 import torch
 import torch._dynamo
 
-from .dispatch import FUSED, available_backends, demote, resolve_backend
+from .dispatch import FUSED, available_backends, demote, pre_ampere, resolve_backend
 
 # Dynamo/inductor failures only: a shape or dtype error from the op itself
-# must propagate, not silently disable the tier.
+# must propagate, not silently disable the backend.
 _COMPILE_FAILED = (
     torch._dynamo.exc.BackendCompilerFailed,
     torch._dynamo.exc.InternalTorchDynamoError,
@@ -31,16 +32,21 @@ _COMPILE_FAILED = (
 )
 
 
-def on_device(tensors) -> bool:
-    """Every operand a floating tensor on one and the same CUDA device."""
+def device_of(tensors) -> torch.device | None:
+    """The one CUDA device every operand sits on, else None."""
     devices = set()
     for t in tensors:
         if t is None:
             continue
         if not (torch.is_tensor(t) and t.is_cuda and t.is_floating_point()):
-            return False
+            return None
         devices.add(t.device)
-    return len(devices) == 1
+    return next(iter(devices)) if len(devices) == 1 else None
+
+
+def on_device(tensors) -> bool:
+    """Every operand a floating tensor on one and the same CUDA device."""
+    return device_of(tensors) is not None
 
 
 def one_family(tensors) -> bool:
@@ -53,19 +59,28 @@ def one_family(tensors) -> bool:
     return not (torch.float16 in dtypes and torch.bfloat16 in dtypes)
 
 
+def half_supported(tensors, device) -> bool:
+    """bf16 operands need bf16 MMA, which sm_70/75 do not have."""
+    dtypes = {t.dtype for t in tensors if t is not None}
+    return not (pre_ampere(device) and torch.bfloat16 in dtypes)
+
+
 def fusable(tensors) -> bool:
     """The operand set a fused kernel can take as it stands."""
-    return on_device(tensors) and one_family(tensors)
+    device = device_of(tensors)
+    return (
+        device is not None and one_family(tensors) and half_supported(tensors, device)
+    )
 
 
 def choose(tensors, supported: bool = True, backend: str | None = None) -> str:
-    """Backend for THIS call: triton > tilelang > compile > torch.
+    """Backend for THIS call, from the operands' device preference order.
 
     ``supported`` is the caller's own scope test — the layout this op has a
     fused kernel for. Failing it, or arriving with operands outside the fused
-    scope, steps one tier down.
+    scope, steps one backend down.
 
-    The compile tier is device-only unless asked for by name: the CPU callers
+    The compile backend is device-only unless asked for by name: the CPU callers
     here are weight merges, where an inductor warmup costs more than the op it
     replaces.  An enclosing ``torch.compile`` owns the whole graph, so expose
     the torch body to it instead of probing optional backends or nesting a
@@ -74,14 +89,16 @@ def choose(tensors, supported: bool = True, backend: str | None = None) -> str:
     if torch.compiler.is_compiling():
         return "torch"
 
-    name = resolve_backend(backend)
+    device = device_of(tensors)
+    name = resolve_backend(backend, device)
     if name == "torch":
         return name
-    device = on_device(tensors)
-    if name in FUSED and supported and device and one_family(tensors):
+    if name in FUSED and supported and fusable(tensors):
         return name
     asked = (backend or os.environ.get("LYCORIS_KERNEL_BACKEND", "auto")).lower()
-    if "compile" in available_backends() and (device or asked == "compile"):
+    if "compile" in available_backends(device) and (
+        device is not None or asked == "compile"
+    ):
         return "compile"
     return "torch"
 
@@ -111,5 +128,6 @@ def call_compiled(fn, *args, **kwargs):
     try:
         return compiled(fn)(*args, **kwargs)
     except _COMPILE_FAILED:
-        demote("compile")
+        device = next((a.device for a in args if isinstance(a, torch.Tensor)), None)
+        demote("compile", device)
         return fn(*args, **kwargs)
