@@ -234,11 +234,11 @@ def _merge_bwd_kernel(
         # Role A: g_up = gamma * G @ down^T, reduced over the I axis.
         rm = pid * BLOCK_M + tl.arange(0, BLOCK_M)
         mm = rm < O
-        acc = tl.zeros((BLOCK_M, BR), tl.float32)
+        acc_u = tl.zeros((BLOCK_M, BR), tl.float32)
         for i0 in range(0, I, BLOCK_K):
             ri = i0 + tl.arange(0, BLOCK_K)
             mi = ri < I
-            gv = tl.load(
+            g_a = tl.load(
                 g_ptr + rm[:, None] * sgo + ri[None, :] * sgi,
                 mask=mm[:, None] & mi[None, :],
                 other=0.0,
@@ -248,21 +248,21 @@ def _merge_bwd_kernel(
                 mask=mr[:, None] & mi[None, :],
                 other=0.0,
             )
-            acc = tl.dot(gv, tl.trans(dv), acc, input_precision=PREC)
+            acc_u = tl.dot(g_a, tl.trans(dv), acc_u, input_precision=PREC)
         tl.store(
             gu_ptr + rm[:, None] * R + rr[None, :],
-            (acc * gamma).to(gu_ptr.dtype.element_ty),
+            (acc_u * gamma).to(gu_ptr.dtype.element_ty),
             mask=mm[:, None] & mr[None, :],
         )
     else:
         # Role B: g_down = gamma * up^T @ G, reduced over the O axis.
         rn = (pid - GA) * BLOCK_N + tl.arange(0, BLOCK_N)
         mn = rn < I
-        acc = tl.zeros((BR, BLOCK_N), tl.float32)
+        acc_d = tl.zeros((BR, BLOCK_N), tl.float32)
         for o0 in range(0, O, BLOCK_K):
             ro = o0 + tl.arange(0, BLOCK_K)
             mo = ro < O
-            gv = tl.load(
+            g_b = tl.load(
                 g_ptr + ro[:, None] * sgo + rn[None, :] * sgi,
                 mask=mo[:, None] & mn[None, :],
                 other=0.0,
@@ -272,10 +272,10 @@ def _merge_bwd_kernel(
                 mask=mo[:, None] & mr[None, :],
                 other=0.0,
             )
-            acc = tl.dot(tl.trans(uv), gv, acc, input_precision=PREC)
+            acc_d = tl.dot(tl.trans(uv), g_b, acc_d, input_precision=PREC)
         tl.store(
             gd_ptr + rr[:, None] * I + rn[None, :],
-            (acc * gamma).to(gd_ptr.dtype.element_ty),
+            (acc_d * gamma).to(gd_ptr.dtype.element_ty),
             mask=mr[:, None] & mn[None, :],
         )
 
