@@ -16,6 +16,18 @@ def _sync(kind: str) -> None:
     (torch.cuda if kind == "cuda" else torch.xpu).synchronize()
 
 
+_WARM_STREAMS: dict[int, torch.cuda.Stream] = {}
+
+
+def _warm_stream() -> torch.cuda.Stream:
+    """One warm-up and capture stream per device for every timed candidate."""
+    index = torch.cuda.current_device()
+    stream = _WARM_STREAMS.get(index)
+    if stream is None:
+        stream = _WARM_STREAMS[index] = torch.cuda.Stream()
+    return stream
+
+
 def buffer_sets(bytes_per_call: int, dev: DeviceInfo, cap: int = 64) -> int:
     """How many independent operand sets cycle L2 out: 4x L2, at least 1."""
     return max(1, min(cap, -(-4 * dev.l2_bytes // max(1, bytes_per_call))))
@@ -29,14 +41,16 @@ class _Batch:
         self.graph = None
         if pool is not None:
             try:
-                stream = torch.cuda.Stream()
+                stream = _warm_stream()
                 stream.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(stream):
                     for call in calls:
                         call()
                 torch.cuda.current_stream().wait_stream(stream)
                 graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(graph, pool=pool):
+                with torch.cuda.graph(
+                    graph, pool=pool, stream=stream, capture_error_mode="thread_local"
+                ):
                     for call in calls:
                         call()
                 self.graph = graph
@@ -98,4 +112,7 @@ def time_candidates(
     # Free the graphs before their pool's memory is reused.
     del batches
     _sync(dev.kind)
+    # Return the warm-up stream's and the graph pool's blocks to the driver.
+    if dev.kind == "cuda":
+        torch.cuda.empty_cache()
     return best
