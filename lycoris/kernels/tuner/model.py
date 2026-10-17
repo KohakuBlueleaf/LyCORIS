@@ -13,7 +13,7 @@ import torch
 from .device import DeviceInfo
 
 try:
-    from . import probes
+    from ..triton import probes
 except ImportError:
     probes = None
 
