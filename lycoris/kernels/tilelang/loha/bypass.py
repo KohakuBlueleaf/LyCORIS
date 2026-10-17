@@ -5,15 +5,18 @@ import tilelang.language as T
 import torch
 
 from ...gradbuf import GradPack
+from ...limits import MAX_HADA_RANK
 from ...plans import lora as plan
 from ...plans import tune
-from ...plans.cost import SENTINEL_MATERIALIZE
+from ...plans.cost import SENTINEL_MATERIALIZE, tilelang_legal
 from ...plans.device import resolve_device
 from ..lora.merge import loha_merge_bwd, lora_merge_fwd
 
 
 @tilelang.jit(out_idx=[5])
-def _hada_delta(TT, O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+def _hada_delta(O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+    # Token count is symbolic: one compile serves every batch length.
+    TT = T.symbolic("tt")
     br = max(16, R)
 
     @T.prim_func
@@ -207,7 +210,6 @@ def _canon(x, a1, b1, a2, b2):
 def _delta_run(xc, a1c, b1c, a2c, b2c, t, o, i, r, gamma, tag):
     def build(p):
         fn = _hada_delta(
-            t,
             o,
             i,
             r,
@@ -223,10 +225,14 @@ def _delta_run(xc, a1c, b1c, a2c, b2c, t, o, i, r, gamma, tag):
         w = lora_merge_fwd(a1c, b1c, a2c, b2c, gamma=gamma, mode="hada")
         return xc @ w.transpose(0, 1)
 
-    shortlist = lambda: [
-        *plan.topk_delta(t, o, i, r, xc.element_size(), resolve_device()),
-        SENTINEL_MATERIALIZE,
-    ]
+    shortlist = lambda: tilelang_legal(
+        [
+            *plan.topk_delta(t, o, i, r, xc.element_size(), resolve_device()),
+            SENTINEL_MATERIALIZE,
+        ],
+        resolve_device(),
+        lambda p: [(p.bk, p.bn), (p.bm, p.bn)],
+    )
 
     def factory(p):
         return materialize_run if p.limiter == "materialize" else build(p)
@@ -240,7 +246,13 @@ def _delta_run(xc, a1c, b1c, a2c, b2c, t, o, i, r, gamma, tag):
     return materialize_run() if best.limiter == "materialize" else build(best)()
 
 
-def loha_bypass_fwd(x, a1, b1, a2, b2, gamma=1.0):
+def loha_bypass_fwd(x, a1, b1, a2, b2, gamma=1.0, base=None):
+    """[base +] gamma * x @ DeltaW^T (base added after the kernel)."""
+    y = _bypass_delta(x, a1, b1, a2, b2, gamma)
+    return y if base is None else base + y
+
+
+def _bypass_delta(x, a1, b1, a2, b2, gamma):
     t = x.shape[0]
     o, r = a1.shape
     i = b1.shape[1]
@@ -253,8 +265,8 @@ def loha_bypass_bwd(grad, x, a1, b1, a2, b2, gamma=1.0):
     t, o = grad.shape
     i = x.shape[1]
     r = a1.shape[1]
-    if r > 128:
-        raise ValueError("hadamard delta backward supports rank <= 128")
+    if r > MAX_HADA_RANK:
+        raise ValueError(f"hadamard delta backward supports rank <= {MAX_HADA_RANK}")
     gx = torch.empty_like(x)
     # One fp32 allocation for all four atomic targets: one fill, one cast.
     pack = GradPack(x.device, (o, r), (r, i), (o, r), (r, i))
@@ -290,10 +302,15 @@ def loha_bypass_bwd(grad, x, a1, b1, a2, b2, gamma=1.0):
         scratch = pack.like()
         return lambda: run(p, s0, *scratch)
 
-    shortlist = lambda: [
-        *plan.topk_hada_bypass_bwd(t, o, i, r, x.element_size(), resolve_device()),
-        SENTINEL_MATERIALIZE,
-    ]
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        [
+            *plan.topk_hada_bypass_bwd(t, o, i, r, x.element_size(), resolve_device()),
+            SENTINEL_MATERIALIZE,
+        ],
+        resolve_device(),
+        lambda p: [(p.bm, p.bn), (p.bm, br), (br, p.bn)],
+    )
     best = tune.tuned(
         "tilelang.loha.bypass_bwd",
         (tune.bucket_tokens(t), o, i, r, str(x.dtype)),

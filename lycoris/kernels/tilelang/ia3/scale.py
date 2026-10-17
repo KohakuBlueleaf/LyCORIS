@@ -82,7 +82,17 @@ def _view3(x: torch.Tensor, channel_axis: int):
     raise ValueError("channel_axis must be 0, 1 or -1")
 
 
+def _common(*tensors):
+    """The operands in their promoted dtype (the kernels take one dtype)."""
+    dt = tensors[0].dtype
+    for t in tensors[1:]:
+        dt = torch.promote_types(dt, t.dtype)
+    return [t if t.dtype == dt else t.to(dt) for t in tensors]
+
+
 def ia3_fwd(x, w, channel_axis, alpha=1.0, gamma=1.0):
+    """x * (alpha + gamma * w[c]) in the promoted dtype of x and w."""
+    x, w = _common(x, w)
     xc, c, inner = _view3(x, channel_axis)
     flat = xc.reshape(-1)
     wc = w.reshape(-1).contiguous()
@@ -102,6 +112,9 @@ def ia3_fwd(x, w, channel_axis, alpha=1.0, gamma=1.0):
 
 
 def ia3_bwd(grad, x, w, channel_axis, alpha=1.0, gamma=1.0):
+    """(gx, gw) of :func:`ia3_fwd`, computed in the promoted dtype."""
+    w_dtype = w.dtype
+    grad, x, w = _common(grad, x, w)
     xc, c, inner = _view3(x, channel_axis)
     gc, _, _ = _view3(grad, channel_axis)
     slices = 32
@@ -128,4 +141,4 @@ def ia3_bwd(grad, x, w, channel_axis, alpha=1.0, gamma=1.0):
         factory,
     )
     gx = run(best, gw)
-    return gx.view_as(x), gw.sum(0).to(w.dtype).view_as(w)
+    return gx.view_as(x), gw.sum(0).to(w_dtype).view_as(w)

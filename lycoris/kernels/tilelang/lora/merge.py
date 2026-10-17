@@ -8,15 +8,16 @@ import tilelang
 import tilelang.language as T
 import torch
 
+from ...limits import MAX_HADA_RANK
 from ...plans import lora as plan
 from ...plans import tune
-from ...plans.cost import SENTINEL_EAGER
+from ...plans.cost import SENTINEL_EAGER, tilelang_legal
 from ...plans.device import resolve_device
 from ..common import dstr
 
 
 @tilelang.jit(out_idx=[5])
-def _rebuild(O, I, R, mode, add_base, dtype, bm=64, bn=64, threads=128):
+def _rebuild(O, I, R, mode, add_base, dtype, odt, bm=64, bn=64, threads=128):
     br = max(16, R)
 
     @T.prim_func
@@ -25,8 +26,8 @@ def _rebuild(O, I, R, mode, add_base, dtype, bm=64, bn=64, threads=128):
         b1: T.Tensor((R, I), dtype),
         a2: T.Tensor((O, R), dtype),
         b2: T.Tensor((R, I), dtype),
-        base: T.Tensor((O, I), dtype),
-        out: T.Tensor((O, I), dtype),
+        base: T.Tensor((O, I), odt),
+        out: T.Tensor((O, I), odt),
         gamma: T.float32,
     ):
         with T.Kernel(T.ceildiv(I, bn), T.ceildiv(O, bm), threads=threads) as (bx, by):
@@ -131,7 +132,7 @@ def _loha_merge_bwd(O, I, R, dtype, bm=64, bn=64, threads=128):
     bx < ga: own an O tile, reduce over I -> ga1, ga2. Otherwise: own an I
     tile, reduce over O -> gb1, gb2. Each CTA holds its whole reduction, so
     the grads are plain dtype stores — no fp32 scratch, zero-fill or cast, and
-    the result is deterministic. Both roles run the same gemm sequence; only
+    a fixed reduction order. Both roles run the same gemm sequence; only
     addressing and the store guards branch, never a T.gemm.
     """
     br = max(16, R)
@@ -229,15 +230,23 @@ def _loha_merge_bwd(O, I, R, dtype, bm=64, bn=64, threads=128):
     return main
 
 
-def lora_merge_fwd(a1, b1, a2=None, b2=None, base=None, gamma=1.0, mode="plain"):
+def lora_merge_fwd(
+    a1, b1, a2=None, b2=None, base=None, gamma=1.0, mode="plain", out_dtype=None
+):
+    """DeltaW stored in ``out_dtype`` (default a1's)."""
     mode_id = {"plain": 0, "hada": 1, "sum": 2}[mode]
     o, r = a1.shape
     i = b1.shape[1]
+    odt = out_dtype or a1.dtype
     a1c = a1.contiguous()
     b1c = b1.contiguous()
     a2c = a2.contiguous() if a2 is not None else a1c
     b2c = b2.contiguous() if b2 is not None else b1c
-    basec = base.contiguous() if base is not None else a1c.new_zeros(o, i)
+    basec = (
+        base.to(odt).contiguous()
+        if base is not None
+        else torch.zeros(o, i, device=a1.device, dtype=odt)
+    )
 
     def build(p):
         fn = _rebuild(
@@ -247,6 +256,7 @@ def lora_merge_fwd(a1, b1, a2=None, b2=None, base=None, gamma=1.0, mode="plain")
             mode_id,
             base is not None,
             dstr(a1),
+            str(odt).split(".")[-1],
             bm=p.bm,
             bn=p.bn,
             threads=32 * p.warps,
@@ -262,17 +272,24 @@ def lora_merge_fwd(a1, b1, a2=None, b2=None, base=None, gamma=1.0, mode="plain")
         acc = acc * gamma
         return acc + basec if base is not None else acc
 
-    shortlist = lambda: [
-        *plan.topk_rebuild(o, i, r, mode_id == 1, a1.element_size(), resolve_device()),
-        SENTINEL_EAGER,
-    ]
+    shortlist = lambda: tilelang_legal(
+        [
+            *plan.topk_rebuild(
+                o, i, r, mode_id == 1, a1.element_size(), resolve_device()
+            ),
+            SENTINEL_EAGER,
+        ],
+        resolve_device(),
+        lambda p: [(p.bm, p.bn)],
+    )
 
     def factory(p):
         return eager_run if p.limiter == "eager" else build(p)
 
     best = tune.tuned(
         "tilelang.lora.merge_fwd",
-        (o, i, r, mode_id, base is not None, str(a1.dtype)),
+        (o, i, r, mode_id, base is not None, str(a1.dtype))
+        + ((str(out_dtype),) if out_dtype else ()),
         shortlist,
         factory,
     )
@@ -300,8 +317,11 @@ def lora_tucker_fwd(a1, t1, b1, a2=None, t2=None, b2=None, gamma=1.0):
         )
         return lambda: fn(a1c, t1c, b1c, a2c, t2c, b2c, gam)
 
-    shortlist = lambda: plan.topk_rebuild(
-        o, i, r, hada, a1.element_size(), resolve_device()
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        plan.topk_rebuild(o, i, r, hada, a1.element_size(), resolve_device()),
+        resolve_device(),
+        lambda p: [(p.bm, br), (p.bm, p.bn)],
     )
     best = tune.tuned(
         "tilelang.lora.tucker_fwd",
@@ -317,8 +337,8 @@ def loha_merge_bwd(grad, a1, b1, a2, b2, gamma=1.0):
     parameter dtype directly — no fp32 scratch, zero-fill or cast launch."""
     o, r = a1.shape
     i = b1.shape[1]
-    if r > 128:
-        raise ValueError("hadamard backward kernel supports rank <= 128")
+    if r > MAX_HADA_RANK:
+        raise ValueError(f"hadamard backward kernel supports rank <= {MAX_HADA_RANK}")
     ga1 = torch.empty(o, r, device=a1.device, dtype=a1.dtype)
     gb1 = torch.empty(r, i, device=a1.device, dtype=b1.dtype)
     ga2 = torch.empty(o, r, device=a1.device, dtype=a2.dtype)
@@ -335,7 +355,12 @@ def loha_merge_bwd(grad, a1, b1, a2, b2, gamma=1.0):
         s = [torch.empty_like(t) for t in (ga1, gb1, ga2, gb2)]
         return lambda: run(p, *s)
 
-    shortlist = lambda: plan.topk_hada_bwd(o, i, r, a1.element_size(), resolve_device())
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        plan.topk_hada_bwd(o, i, r, a1.element_size(), resolve_device()),
+        resolve_device(),
+        lambda p: [(p.bm, p.bn), (p.bm, br), (br, p.bn)],
+    )
     best = tune.tuned(
         "tilelang.loha.merge_bwd",
         (o, i, r, str(a1.dtype)),

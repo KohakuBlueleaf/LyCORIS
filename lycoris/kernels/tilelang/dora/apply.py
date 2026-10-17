@@ -154,8 +154,11 @@ def _pick(rows, cols, w, name, factory):
     )
 
 
-def dora_fwd(w, dscale, mult=1.0, row_axis=0):
-    """(y, norms) in one launch; norms are saved for the backward."""
+def dora_fwd(w, dscale, mult=1.0, row_axis=0, delta=None):
+    """(y, norms) in one launch on M = w [+ delta] (the add in torch); norms
+    are saved for the backward."""
+    if delta is not None:
+        w = w + delta
     wv = _view(w, row_axis).contiguous()
     rows, cols = wv.shape
     dsc = dscale.reshape(-1).to(torch.float32).contiguous()
@@ -176,8 +179,10 @@ def dora_fwd(w, dscale, mult=1.0, row_axis=0):
     return (y if row_axis == 0 else y.transpose(0, 1)), norms
 
 
-def dora_bwd(grad, w, dscale, norms, mult=1.0, row_axis=0):
-    """(gw, gd) in one launch."""
+def dora_bwd(grad, w, dscale, norms, mult=1.0, row_axis=0, delta=None):
+    """(gM, gd) in one launch, M = w [+ delta] (the add in torch)."""
+    if delta is not None:
+        w = w + delta
     wv = _view(w, row_axis).contiguous()
     gv = _view(grad, row_axis).contiguous()
     rows, cols = wv.shape

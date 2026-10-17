@@ -10,24 +10,26 @@ neither direction materializes a factor or issues a host mm.
 
 import tilelang
 import tilelang.language as T
+import torch
 
 from ...gradbuf import GradPack
 from ...plans import lokr as plan
 from ...plans import tune
+from ...plans.cost import SENTINEL_EAGER, tilelang_legal
 from ...plans.device import resolve_device
 
 
 @tilelang.jit(out_idx=[3])
-def _lokr_full_merge_fwd(A, B, C, D, add_base, dtype, bm=32, bn=64, threads=128):
+def _lokr_full_merge_fwd(A, B, C, D, add_base, d1, d2, odt, bm=32, bn=64, threads=128):
     O = A * C
     I = B * D
 
     @T.prim_func
     def main(
-        w1: T.Tensor((A, B), dtype),
-        w2: T.Tensor((C, D), dtype),
-        base: T.Tensor((O, I), dtype),
-        out: T.Tensor((O, I), dtype),
+        w1: T.Tensor((A, B), d1),
+        w2: T.Tensor((C, D), d2),
+        base: T.Tensor((O, I), odt),
+        out: T.Tensor((O, I), odt),
         gamma: T.float32,
     ):
         with T.Kernel(T.ceildiv(I, bn), T.ceildiv(O, bm), threads=threads) as (bx, by):
@@ -43,29 +45,31 @@ def _lokr_full_merge_fwd(A, B, C, D, add_base, dtype, bm=32, bn=64, threads=128)
                     )
                     if add_base:
                         v += T.cast(base[ro, ri], "float32")
-                    out[ro, ri] = T.cast(v, dtype)
+                    out[ro, ri] = T.cast(v, odt)
 
     return main
 
 
 @tilelang.jit(out_idx=[5])
 def _lokr_merge_fwd(
-    A, B, C, D, R1, R2, gen1, gen2, add_base, dtype, bm=32, bn=64, threads=128
+    A, B, C, D, R1, R2, gen1, gen2, add_base, d1, d2, odt, bm=32, bn=64, threads=128
 ):
+    """``d1`` / ``d2``: the dtypes of the w1 and w2 sides (w2's tiles meet the GEMM)."""
     O = A * C
     I = B * D
     pr = max(16, R1, R2)
     nc = -(-C // bm)
     nd = -(-D // bn)
+    dtype = d2
 
     @T.prim_func
     def main(
-        w1a: T.Tensor((A, R1 if gen1 else B), dtype),
-        w1b: T.Tensor((max(R1, 1), B), dtype),
+        w1a: T.Tensor((A, R1 if gen1 else B), d1),
+        w1b: T.Tensor((max(R1, 1), B), d1),
         w2a: T.Tensor((C, R2 if gen2 else D), dtype),
         w2b: T.Tensor((max(R2, 1), D), dtype),
-        base: T.Tensor((O, I), dtype),
-        out: T.Tensor((O, I), dtype),
+        base: T.Tensor((O, I), odt),
+        out: T.Tensor((O, I), odt),
         gamma: T.float32,
     ):
         with T.Kernel(A * B * nc * nd, threads=threads) as bx:
@@ -132,13 +136,18 @@ def _lokr_merge_fwd(
                     val = w1_r[0] * w2_f[i, j] * gamma
                     if add_base:
                         val += T.cast(base[ro, ri], "float32")
-                    out[ro, ri] = T.cast(val, dtype)
+                    out[ro, ri] = T.cast(val, odt)
 
     return main
 
 
 @tilelang.jit
-def _lokr_merge_bwd(A, B, C, D, R1, R2, gen1, gen2, dtype, bm=32, bn=64, threads=128):
+def _lokr_merge_bwd(
+    A, B, C, D, R1, R2, gen1, gen2, d1, d2, gin, bm=32, bn=64, threads=128
+):
+    """Factor grads added atomically. ``d1`` / ``d2``: the w1 and w2 sides'
+    dtypes (w2's tiles meet the GEMMs); ``gin``: the grad's."""
+    dtype = d2
     pr = max(16, R1, R2)
     nc = -(-C // bm)
     nd = -(-D // bn)
@@ -146,9 +155,9 @@ def _lokr_merge_bwd(A, B, C, D, R1, R2, gen1, gen2, dtype, bm=32, bn=64, threads
 
     @T.prim_func
     def main(
-        g: T.Tensor((A * C, B * D), dtype),
-        w1a: T.Tensor((A, R1 if gen1 else B), dtype),
-        w1b: T.Tensor((max(R1, 1), B), dtype),
+        g: T.Tensor((A * C, B * D), gin),
+        w1a: T.Tensor((A, R1 if gen1 else B), d1),
+        w1b: T.Tensor((max(R1, 1), B), d1),
         w2a: T.Tensor((C, R2 if gen2 else D), dtype),
         w2b: T.Tensor((max(R2, 1), D), dtype),
         g1a: T.Tensor((A, R1 if gen1 else B), "float32"),
@@ -294,13 +303,26 @@ def _lokr_merge_bwd(A, B, C, D, R1, R2, gen1, gen2, dtype, bm=32, bn=64, threads
     return main
 
 
-def lokr_full_merge_fwd(w1, w2, base=None, gamma=1.0):
+def _name(dtype) -> str:
+    return str(dtype).split(".")[-1]
+
+
+def _base(base, shape, like, odt):
+    """The base operand in the output dtype (zeros when absent)."""
+    if base is not None:
+        return base.to(odt).contiguous()
+    return torch.zeros(shape, device=like.device, dtype=odt)
+
+
+def lokr_full_merge_fwd(w1, w2, base=None, gamma=1.0, out_dtype=None):
+    """DeltaW stored in ``out_dtype`` (default w2's)."""
     a, b = w1.shape
     c, d = w2.shape
+    odt = out_dtype or w2.dtype
     w1c = w1.contiguous()
     w2c = w2.contiguous()
-    basec = base.contiguous() if base is not None else w2c.new_zeros(a * c, b * d)
-    dt = str(w2.dtype).split(".")[-1]
+    basec = _base(base, (a * c, b * d), w2c, odt)
+    dt = _name(w2.dtype)
 
     def build(p):
         fn = _lokr_full_merge_fwd(
@@ -309,7 +331,9 @@ def lokr_full_merge_fwd(w1, w2, base=None, gamma=1.0):
             c,
             d,
             base is not None,
+            _name(w1.dtype),
             dt,
+            _name(odt),
             bm=p.bm,
             bn=p.bn,
             threads=32 * p.warps,
@@ -321,7 +345,8 @@ def lokr_full_merge_fwd(w1, w2, base=None, gamma=1.0):
     )
     best = tune.tuned(
         "tilelang.lokr.full_merge_fwd",
-        (a, b, c, d, base is not None, str(w2.dtype)),
+        (a, b, c, d, base is not None, str(w2.dtype))
+        + ((str(out_dtype), str(w1.dtype)) if out_dtype else ()),
         shortlist,
         build,
     )
@@ -345,11 +370,13 @@ def _halves(w1a, w1b, w2a, w2b, shape):
     )
 
 
-def lokr_merge_fwd(w1a, w1b, w2a, w2b, shape, base=None, gamma=1.0):
+def lokr_merge_fwd(w1a, w1b, w2a, w2b, shape, base=None, gamma=1.0, out_dtype=None):
+    """DeltaW stored in ``out_dtype`` (default w2a's)."""
     a, b, c, d = shape
     w1ac, w1bc, w2ac, w2bc, r1, r2 = _halves(w1a, w1b, w2a, w2b, shape)
-    basec = base.contiguous() if base is not None else w2ac.new_zeros(a * c, b * d)
-    dt = str(w2a.dtype).split(".")[-1]
+    odt = out_dtype or w2a.dtype
+    basec = _base(base, (a * c, b * d), w2ac, odt)
+    dt = _name(w2a.dtype)
 
     def build(p):
         fn = _lokr_merge_fwd(
@@ -362,7 +389,9 @@ def lokr_merge_fwd(w1a, w1b, w2a, w2b, shape, base=None, gamma=1.0):
             w1b is not None,
             w2b is not None,
             base is not None,
+            _name(w1a.dtype),
             dt,
+            _name(odt),
             bm=p.bm,
             bn=p.bn,
             threads=32 * p.warps,
@@ -374,18 +403,43 @@ def lokr_merge_fwd(w1a, w1b, w2a, w2b, shape, base=None, gamma=1.0):
     )
     best = tune.tuned(
         "tilelang.lokr.merge_fwd",
-        (a, b, c, d, r1, r2, base is not None, str(w2a.dtype)),
+        (a, b, c, d, r1, r2, base is not None, str(w2a.dtype))
+        + ((str(out_dtype), str(w1a.dtype)) if out_dtype else ()),
         shortlist,
         build,
     )
     return build(best)()
 
 
+def _merge_bwd_eager(grad, w1a, w1b, w2a, w2b, gamma):
+    """Gradients of gamma·kron(w1, w2), w1 = w1a[@w1b], w2 = w2a[@w2b], in torch.
+
+    With G viewed as (a, c, b, d): dW1 = gamma·Σ_cd G·W2, dW2 = gamma·Σ_ab G·W1,
+    then each low-rank half takes the chain rule of its product.
+    """
+    w1 = w1a if w1b is None else w1a @ w1b
+    w2 = w2a if w2b is None else w2a @ w2b
+    a, b = w1.shape
+    c, d = w2.shape
+    g4 = grad.reshape(a, c, b, d)
+    dw1 = torch.einsum("acbd,cd->ab", g4, w2) * gamma
+    dw2 = torch.einsum("acbd,ab->cd", g4, w1) * gamma
+    if w1b is None:
+        g1a, g1b = dw1, None
+    else:
+        g1a, g1b = dw1 @ w1b.T, w1a.T @ dw1
+    if w2b is None:
+        g2a, g2b = dw2, None
+    else:
+        g2a, g2b = dw2 @ w2b.T, w2a.T @ dw2
+    return g1a, g1b, g2a, g2b
+
+
 def lokr_merge_bwd(grad, w1a, w1b, w2a, w2b, shape, gamma=1.0):
+    """Factor grads in w1a's dtype."""
     a, b, c, d = shape
     gc = grad.contiguous()
     w1ac, w1bc, w2ac, w2bc, r1, r2 = _halves(w1a, w1b, w2a, w2b, shape)
-    dt = str(grad.dtype).split(".")[-1]
     # One fp32 allocation for every grad this launch writes: one fill, one cast.
     pack = GradPack(grad.device, w1ac.shape, w1bc.shape, w2ac.shape, w2bc.shape)
     g1a, g1b, g2a, g2b = pack
@@ -400,7 +454,9 @@ def lokr_merge_bwd(grad, w1a, w1b, w2a, w2b, shape, gamma=1.0):
             r2,
             w1b is not None,
             w2b is not None,
-            dt,
+            _name(w1a.dtype),
+            _name(w2a.dtype),
+            _name(gc.dtype),
             bm=p.bm,
             bn=p.bn,
             threads=32 * p.warps,
@@ -408,18 +464,30 @@ def lokr_merge_bwd(grad, w1a, w1b, w2a, w2b, shape, gamma=1.0):
         fn(gc, w1ac, w1bc, w2ac, w2bc, o1, o2, o3, o4, float(gamma))
 
     def factory(p):
+        if p.limiter == "eager":
+            return lambda: _merge_bwd_eager(grad, w1a, w1b, w2a, w2b, gamma)
         scratch = pack.like()
         return lambda: run(p, *scratch)
 
-    shortlist = lambda: plan.topk_rebuild_bwd(
-        a, b, c, d, grad.element_size(), resolve_device()
-    )
+    dev = resolve_device()
+    pr = max(16, r1, r2)
+
+    def shortlist():
+        cands = plan.topk_rebuild_bwd(a, b, c, d, grad.element_size(), dev)
+        return tilelang_legal(
+            [*cands, SENTINEL_EAGER],
+            dev,
+            lambda p: [(p.bm, p.bn), (p.bm, pr), (pr, p.bn)],
+        )
+
     best = tune.tuned(
         "tilelang.lokr.merge_bwd",
-        (a, b, c, d, r1, r2, str(grad.dtype)),
+        (a, b, c, d, r1, r2, str(grad.dtype), str(w1a.dtype), str(w2a.dtype)),
         shortlist,
         factory,
     )
+    if best.limiter == "eager":
+        return _merge_bwd_eager(grad, w1a, w1b, w2a, w2b, gamma)
     run(best, g1a, g1b, g2a, g2b)
     o1a, o1b, o2a, o2b = pack.to(w1a.dtype)
     return (

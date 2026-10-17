@@ -32,7 +32,9 @@ def kron_factors_supported(a: int, b: int, c: int, d: int) -> bool:
 
 
 @tilelang.jit(out_idx=[3])
-def _lokr_bypass_fwd(TT, A, B, C, D, bt, dtype, threads=128):
+def _lokr_bypass_fwd(A, B, C, D, bt, dtype, threads=128):
+    # Token count is symbolic: one compile serves every batch length.
+    TT = T.symbolic("tt")
     pa, pb, pc, pd = _pad16(A), _pad16(B), _pad16(C), _pad16(D)
 
     @T.prim_func
@@ -86,7 +88,9 @@ def _lokr_bypass_fwd(TT, A, B, C, D, bt, dtype, threads=128):
 
 
 @tilelang.jit(out_idx=[4])
-def _lokr_bypass_bwd(TT, A, B, C, D, bt, dtype, threads=64):
+def _lokr_bypass_bwd(A, B, C, D, bt, dtype, threads=64):
+    """One token tile per program, factor grads added atomically."""
+    TT = T.symbolic("tt")
     pa, pb, pc, pd = _pad16(A), _pad16(B), _pad16(C), _pad16(D)
 
     @T.prim_func
@@ -175,7 +179,13 @@ def _lokr_bypass_bwd(TT, A, B, C, D, bt, dtype, threads=64):
     return main
 
 
-def lokr_bypass_fwd(x, w1, w2, gamma=1.0):
+def lokr_bypass_fwd(x, w1, w2, gamma=1.0, base=None):
+    """[base +] gamma * x @ kron(w1, w2)^T (base added after the kernel)."""
+    y = _bypass_delta(x, w1, w2, gamma)
+    return y if base is None else base + y
+
+
+def _bypass_delta(x, w1, w2, gamma):
     t = x.shape[0]
     a, b = w1.shape
     c, d = w2.shape
@@ -185,7 +195,7 @@ def lokr_bypass_fwd(x, w1, w2, gamma=1.0):
     dt = str(x.dtype).split(".")[-1]
 
     def build(p):
-        fn = _lokr_bypass_fwd(t, a, b, c, d, p.bm, dt, threads=32 * p.warps)
+        fn = _lokr_bypass_fwd(a, b, c, d, p.bm, dt, threads=32 * p.warps)
         return lambda: fn(xc, w1c, w2c, float(gamma))
 
     shortlist = lambda: plan.topk_apply(
@@ -212,7 +222,7 @@ def lokr_bypass_bwd(grad, x, w1, w2, gamma=1.0):
     dt = str(x.dtype).split(".")[-1]
 
     def run(p, o1, o2):
-        fn = _lokr_bypass_bwd(t, a, b, c, d, p.bm, dt, threads=32 * p.warps)
+        fn = _lokr_bypass_bwd(a, b, c, d, p.bm, dt, threads=32 * p.warps)
         return fn(gc, xc, w1c, w2c, o1, o2, float(gamma))
 
     def factory(p):

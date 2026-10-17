@@ -12,7 +12,7 @@ import torch
 from ...gradbuf import GradPack
 from ...plans import lora as plan
 from ...plans import tune
-from ...plans.cost import SENTINEL_EAGER
+from ...plans.cost import SENTINEL_EAGER, tilelang_legal
 from ...plans.device import resolve_device
 
 
@@ -21,7 +21,9 @@ def _dt(t: torch.Tensor) -> str:
 
 
 @tilelang.jit(out_idx=[3])
-def _bypass_fwd(TT, O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+def _bypass_fwd(O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+    # Token count is symbolic: one compile serves every batch length.
+    TT = T.symbolic("tt")
     br = max(16, R)
 
     @T.prim_func
@@ -59,7 +61,9 @@ def _bypass_fwd(TT, O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
 
 
 @tilelang.jit(out_idx=[4])
-def _bypass_bwd(TT, O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+def _bypass_bwd(O, I, R, dtype, bm=64, bn=64, bk=64, threads=128):
+    """One token tile per program, factor grads added atomically."""
+    TT = T.symbolic("tt")
     br = max(16, R)
 
     @T.prim_func
@@ -192,7 +196,13 @@ def _merge_bwd(O, I, R, dtype, bm=64, bk=64, threads=128):
     return main
 
 
-def lora_bypass_fwd(x, up, down, gamma: float = 1.0) -> torch.Tensor:
+def lora_bypass_fwd(x, up, down, gamma: float = 1.0, base=None) -> torch.Tensor:
+    """[base +] gamma * (x @ down^T) @ up^T (base added after the kernel)."""
+    y = _bypass_delta(x, up, down, gamma)
+    return y if base is None else base + y
+
+
+def _bypass_delta(x, up, down, gamma):
     t, i = x.shape
     o, r = up.shape
     xc, uc, dc = x.contiguous(), up.contiguous(), down.contiguous()
@@ -203,14 +213,16 @@ def lora_bypass_fwd(x, up, down, gamma: float = 1.0) -> torch.Tensor:
 
     def build(p):
         fn = _bypass_fwd(
-            t, o, i, r, _dt(x), bm=p.bm, bn=p.bn, bk=p.bk, threads=32 * p.warps
+            o, i, r, _dt(x), bm=p.bm, bn=p.bn, bk=p.bk, threads=32 * p.warps
         )
         return lambda: fn(xc, dc, uc, float(gamma))
 
-    shortlist = lambda: [
-        *plan.topk_bypass_fwd(t, o, i, r, eb, resolve_device()),
-        SENTINEL_EAGER,
-    ]
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        [*plan.topk_bypass_fwd(t, o, i, r, eb, resolve_device()), SENTINEL_EAGER],
+        resolve_device(),
+        lambda p: [(p.bm, br), (p.bm, p.bn)],
+    )
 
     def factory(p):
         if p.limiter == "eager":
@@ -253,14 +265,16 @@ def lora_bypass_bwd(x, up, down, grad, gamma: float = 1.0):
 
     def run(p, o_gu, o_gd):
         fn = _bypass_bwd(
-            t, o, i, r, _dt(x), bm=p.bm, bn=p.bn, bk=p.bk, threads=32 * p.warps
+            o, i, r, _dt(x), bm=p.bm, bn=p.bn, bk=p.bk, threads=32 * p.warps
         )
         return fn(xc, dc, uc, gc, o_gu, o_gd, float(gamma))
 
-    shortlist = lambda: [
-        *plan.topk_bypass_bwd(t, o, i, r, eb, resolve_device()),
-        SENTINEL_EAGER,
-    ]
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        [*plan.topk_bypass_bwd(t, o, i, r, eb, resolve_device()), SENTINEL_EAGER],
+        resolve_device(),
+        lambda p: [(p.bm, br), (p.bn, br), (p.bm, p.bk), (br, p.bk)],
+    )
 
     def factory(p):
         if p.limiter == "eager":
@@ -297,10 +311,12 @@ def lora_merge_bwd(grad, up, down, gamma: float = 1.0):
         fn = _merge_bwd(o, i, r, _dt(up), bm=p.bm, bk=p.bk, threads=32 * p.warps)
         fn(gc, uc, dc, o_gu, o_gd, float(gamma))
 
-    shortlist = lambda: [
-        *plan.topk_merge_bwd(o, i, r, eb, resolve_device()),
-        SENTINEL_EAGER,
-    ]
+    br = max(16, r)
+    shortlist = lambda: tilelang_legal(
+        [*plan.topk_merge_bwd(o, i, r, eb, resolve_device()), SENTINEL_EAGER],
+        resolve_device(),
+        lambda p: [(p.bm, br)],
+    )
 
     def factory(p):
         if p.limiter == "eager":
