@@ -1,18 +1,17 @@
-"""Operand dtype policy: what the matmul runs in, what comes back out.
+"""Operand dtypes: what the matmul runs in, what comes back out.
 
 Inputs (x or the original weight) and module weights carry their dtypes
 independently, in fp16, bf16 or fp32. fp16 and bf16 never appear together, so
 the 16-bit type in play is unambiguous and a mix of the two is a caller bug
 rather than a case to resolve.
 
-Accumulation is fp32 under every policy; only the MMA operand type and the
-output type are decided here.
+Accumulation is always fp32; only the MMA operand type and the output type are
+decided here.
 """
 
 import torch
 
 HALF = (torch.float16, torch.bfloat16)
-POLICIES = ("mma16", "wide", "tf32")
 
 
 def half_of(dtypes) -> torch.dtype | None:
@@ -25,27 +24,26 @@ def half_of(dtypes) -> torch.dtype | None:
     return next(iter(seen), None)
 
 
-def resolve(*tensors, policy: str = "mma16") -> tuple[torch.dtype, torch.dtype]:
+def resolve(
+    *tensors, compute: torch.dtype | None = None
+) -> tuple[torch.dtype, torch.dtype]:
     """(compute dtype, output dtype) for this operand set.
 
-    ``mma16`` runs the matmul in the 16-bit type present, rounding an fp32
-    operand down to it; ``wide`` promotes everything to fp32 IEEE; ``tf32``
-    keeps fp32 operands but lets them reach the tensor cores. The output is
-    always the promoted type, so an fp32 operand yields an fp32 result
-    whatever the matmul ran in.
+    The matmul runs in ``compute`` when given, else in the 16-bit type present
+    (an fp32 operand rounded down to it), else fp32. The output is always the
+    promoted type, so an fp32 operand yields an fp32 result whatever the
+    matmul ran in.
     """
-    if policy not in POLICIES:
-        raise ValueError(f"unknown precision policy {policy!r}; have {POLICIES}")
     dtypes = [t.dtype for t in tensors if t is not None]
     if not dtypes:
         raise ValueError("resolve() needs at least one tensor")
     out = dtypes[0]
     for d in dtypes[1:]:
         out = torch.promote_types(out, d)
+    if compute is not None:
+        return compute, out
     half = half_of(dtypes)
-    if policy == "mma16" and half is not None:
-        return half, out
-    return torch.float32, out
+    return (torch.float32 if half is None else half), out
 
 
 def cast_operands(tensors, compute: torch.dtype):
@@ -56,15 +54,22 @@ def cast_operands(tensors, compute: torch.dtype):
     ]
 
 
-def promote(*tensors, policy: str = "mma16"):
+def promote(*tensors, compute: torch.dtype | None = None):
     """(operands in the compute dtype, compute dtype, output dtype).
 
     The single entry point the autograd layer uses, so a backend kernel keeps
     its one-dtype assumption while callers may mix fp16/bf16/fp32 freely
     across x, the original weight and the module weights.
     """
-    compute, out = resolve(*tensors, policy=policy)
+    compute, out = resolve(*tensors, compute=compute)
     return cast_operands(tensors, compute), compute, out
+
+
+def folds(base, *operands) -> bool:
+    """Whether base + delta(operands) keeps base's dtype, the dtype a kernel
+    with the add folded into its store returns."""
+    _, out = resolve(*operands)
+    return torch.promote_types(base.dtype, out) == base.dtype
 
 
 def restore(grads, dtypes):

@@ -2,14 +2,14 @@
 
 import torch
 
-from ..ops import get_ops
+from .. import library_apply as lib
 
 
 class AddScaledFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, base, delta, gamma, backend):
         ctx.gamma = gamma
-        return get_ops(backend).add_scaled(base, delta, gamma)
+        return lib.add_scaled(base, delta, gamma, backend or "")
 
     @staticmethod
     def backward(ctx, grad):

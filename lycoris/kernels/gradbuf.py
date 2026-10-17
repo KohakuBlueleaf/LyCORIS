@@ -2,9 +2,9 @@
 
 A kernel accumulating with atomics needs fp32 targets that start at zero, and
 its caller needs them back in the parameter dtype. Packing every gradient of
-one launch into a single allocation makes that one fill and one cast whatever
-the gradient count is; the views alias that storage, so kernels take them as
-ordinary tensors.
+one launch into a single allocation makes that one fill whatever the gradient
+count is; the views alias that storage, so kernels take them as ordinary
+tensors. The cast back is one launch per gradient into its own storage.
 """
 
 import torch
@@ -29,18 +29,14 @@ class GradPack:
         return iter(self.views)
 
     def to(self, *dtypes):
-        """Cast once, then re-split; a single dtype applies to every view."""
+        """Each gradient in its dtype, in its own storage (custom-op outputs may
+        not alias each other); a single dtype applies to every view. fp32
+        gradients are the views themselves."""
         if len(dtypes) == 1:
             dtypes = dtypes * len(self.views)
-        if len(set(dtypes)) == 1:
-            flat = self.flat.to(dtypes[0])
-            out, off = [], 0
-            for shape in self.shapes:
-                size = int(torch.Size(shape).numel())
-                out.append(flat[off : off + size].view(*shape))
-                off += size
-            return out
-        return [v.to(d) for v, d in zip(self.views, dtypes)]
+        return [
+            v if d == torch.float32 else v.to(d) for v, d in zip(self.views, dtypes)
+        ]
 
     def like(self):
         """An uninitialised twin, for the tuner's scratch runs."""

@@ -7,12 +7,13 @@ second index), so the forward runs untransposed and the backward chains
 R^T applies. The backward replays forward prefixes instead of caching the
 m stage inputs (m*O*I bytes); rescale costs one extra replay + reduce only
 when it is used. cscale is one host scalar when constraint>0 (documented
-exception, same convention as diag_oft).
+exception, same convention as diag_oft). Kernels are reached through
+``..library_apply``.
 """
 
 import torch
 
-from ..ops import get_ops
+from .. import library_apply as lib
 from ..precision import promote, restore
 from .diag_oft import _cscale
 
@@ -20,7 +21,7 @@ from .diag_oft import _cscale
 class ButterflyFusedFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, blocks, x, rescale, axis, cscale, scale, diff, backend):
-        ops = get_ops(backend)
+        backend = backend or ""
         # fp32 chain, as the eager reference does: rounding the buffer between
         # the m stages costs m roundings rather than one.
         ctx.dtypes = (
@@ -28,16 +29,10 @@ class ButterflyFusedFn(torch.autograd.Function):
             x.dtype,
             rescale.dtype if rescale is not None else None,
         )
-        (blocks, x, rescale), _, out_dtype = promote(blocks, x, rescale, policy="wide")
-        out = ops.boft_fwd(
-            blocks,
-            x,
-            axis=axis,
-            cscale=cscale,
-            scale=scale,
-            rescale=rescale,
-            diff=diff,
+        (blocks, x, rescale), _, out_dtype = promote(
+            blocks, x, rescale, compute=torch.float32
         )
+        out = lib.boft_fwd(blocks, x, axis, cscale, scale, rescale, diff, backend)
         out = out if out.dtype == out_dtype else out.to(out_dtype)
         saved = (blocks, x) if rescale is None else (blocks, x, rescale)
         ctx.save_for_backward(*saved)
@@ -55,23 +50,22 @@ class ButterflyFusedFn(torch.autograd.Function):
             blocks, x, rescale = ctx.saved_tensors
         else:
             (blocks, x), rescale = ctx.saved_tensors, None
-        ops = get_ops(ctx.backend)
         # The chain runs in the promoted dtype, so the incoming grad joins it.
         grad = grad.contiguous().to(x.dtype)
         axis = ctx.axis % grad.dim()
         g_res = None
         g_chain = grad
         if rescale is not None:
-            pre = ops.boft_fwd(
-                blocks, x, axis=ctx.axis, cscale=ctx.cscale, scale=ctx.scale
+            pre = lib.boft_fwd(
+                blocks, x, ctx.axis, ctx.cscale, ctx.scale, None, False, ctx.backend
             )
             dims = [d for d in range(grad.dim()) if d != axis]
             g_res = (grad * pre).sum(dims).to(rescale.dtype)
             shape = [1] * grad.dim()
             shape[axis] = -1
             g_chain = (grad * rescale.reshape(shape)).contiguous()
-        gx, gb = ops.boft_bwd(
-            blocks, x, g_chain, axis=ctx.axis, cscale=ctx.cscale, scale=ctx.scale
+        gx, gb = lib.boft_bwd(
+            blocks, x, g_chain, ctx.axis, ctx.cscale, ctx.scale, ctx.backend
         )
         if ctx.diff:
             gx = gx - grad
@@ -84,8 +78,8 @@ def boft_diff_weight(
 ):
     """Mirrors functional.boft.diff_weight: butterfly(W)[*rescale] - W."""
     cscale = _cscale(oft_blocks, constraint)
-    w = org_weight.to(oft_blocks.dtype)
     res = None if rescale is None else rescale.reshape(-1)
+    w = org_weight.to(oft_blocks.dtype)
     return ButterflyFusedFn.apply(
         oft_blocks, w, res, 0, cscale, float(scale), True, backend
     )
@@ -99,12 +93,15 @@ def boft_bypass_diff(
     scale=1,
     need_transpose=False,
     backend=None,
+    diff=True,
 ):
-    """Mirrors functional.boft.bypass_forward_diff on the channel axis."""
+    """Mirrors functional.boft.bypass_forward_diff on the channel axis;
+    ``diff=False`` returns the rotated output itself (org_out + the diff, the
+    add folded into the kernel)."""
     cscale = _cscale(oft_blocks, constraint)
     axis = 1 if need_transpose else -1
-    x = org_out.to(oft_blocks.dtype)
     res = None if rescale is None else rescale.reshape(-1)
+    x = org_out.to(oft_blocks.dtype)
     return ButterflyFusedFn.apply(
-        oft_blocks, x, res, axis, cscale, float(scale), True, backend
+        oft_blocks, x, res, axis, cscale, float(scale), diff, backend
     )

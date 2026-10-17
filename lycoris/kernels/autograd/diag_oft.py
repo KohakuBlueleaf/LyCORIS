@@ -3,12 +3,12 @@
 The Cayley transform, rescale fold and identity shift all live inside the
 kernel (loop3-fusion.md); this layer only handles the constraint scalar (a
 global norm over the KB-sized blocks — the one permitted host op) and the
-eager-compatible reshapes.
+eager-compatible reshapes. Kernels are reached through ``..library_apply``.
 """
 
 import torch
 
-from ..ops import get_ops
+from .. import library_apply as lib
 from ..precision import promote, restore
 
 
@@ -25,6 +25,7 @@ def _cscale(oft_blocks, constraint):
 class BlockDiagFusedFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, blocks, x, rescale, cscale, shift, weight, backend):
+        backend = backend or ""
         (bc, xc, rc), _, out_dtype = promote(blocks, x, rescale)
         ctx.save_for_backward(bc, xc, *((rc,) if rc is not None else ()))
         ctx.dtypes = (
@@ -33,7 +34,7 @@ class BlockDiagFusedFn(torch.autograd.Function):
             rescale.dtype if rescale is not None else None,
         )
         ctx.args = (rescale is not None, cscale, shift, weight, backend)
-        out = get_ops(backend).oft_fwd(bc, xc, rc, cscale, shift, weight)
+        out = lib.oft_fwd(bc, xc, rc, cscale, shift, weight, backend)
         return out if out.dtype == out_dtype else out.to(out_dtype)
 
     @staticmethod
@@ -41,8 +42,15 @@ class BlockDiagFusedFn(torch.autograd.Function):
         has_rescale, cscale, shift, weight, backend = ctx.args
         blocks, x = ctx.saved_tensors[:2]
         rescale = ctx.saved_tensors[2] if has_rescale else None
-        gx, gb, gres = get_ops(backend).oft_bwd(
-            blocks, x, grad.contiguous().to(x.dtype), rescale, cscale, shift, weight
+        gx, gb, gres = lib.oft_bwd(
+            blocks,
+            x,
+            grad.contiguous().to(x.dtype),
+            rescale,
+            cscale,
+            shift,
+            weight,
+            backend,
         )
         gres_out = gres.view_as(rescale) if has_rescale else None
         grads = restore([gb, gx, gres_out], ctx.dtypes)
@@ -50,13 +58,14 @@ class BlockDiagFusedFn(torch.autograd.Function):
 
 
 def diag_oft_diff_weight(
-    org_weight, oft_blocks, rescale=None, constraint=None, backend=None
+    org_weight, oft_blocks, rescale=None, constraint=None, backend=None, diff=True
 ):
-    """Mirrors functional.diag_oft.diff_weight in one kernel launch."""
+    """Mirrors functional.diag_oft.diff_weight in one kernel launch;
+    ``diff=False`` returns the merged weight itself (org_weight + the diff)."""
     k, s, _ = oft_blocks.shape
     cscale = _cscale(oft_blocks, constraint)
     w = org_weight.reshape(k * s, -1).contiguous()
-    out = BlockDiagFusedFn.apply(oft_blocks, w, rescale, cscale, True, True, backend)
+    out = BlockDiagFusedFn.apply(oft_blocks, w, rescale, cscale, diff, True, backend)
     return out.reshape(org_weight.shape).to(org_weight.dtype)
 
 
@@ -67,15 +76,18 @@ def diag_oft_bypass_diff(
     constraint=None,
     need_transpose=False,
     backend=None,
+    diff=True,
 ):
-    """Mirrors functional.diag_oft.bypass_forward_diff in one kernel launch."""
+    """Mirrors functional.diag_oft.bypass_forward_diff in one kernel launch;
+    ``diff=False`` returns the rotated output itself (org_out + the diff, the
+    add folded into the kernel)."""
     cscale = _cscale(oft_blocks, constraint)
     if need_transpose and org_out.dim() > 2:
         return BlockDiagFusedFn.apply(
-            oft_blocks, org_out, rescale, cscale, True, False, backend
+            oft_blocks, org_out, rescale, cscale, diff, False, backend
         )
     flat = org_out.reshape(-1, org_out.shape[-1]).contiguous()
     out = BlockDiagFusedFn.apply(
-        oft_blocks, flat, rescale, cscale, True, False, backend
+        oft_blocks, flat, rescale, cscale, diff, False, backend
     )
     return out.reshape(org_out.shape)

@@ -6,25 +6,29 @@ torch chains its grad to a1. Backward here is four skinny GEMMs.
 
 import torch
 
-from ..ops import get_ops
+from .. import library as lib
+from ..precision import promote, restore
 
 
 class DualLowRankRebuildFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, u, a2, b1, b2, scale, backend):
-        ctx.save_for_backward(u, a2, b1, b2)
+        ops, _, out_dtype = promote(u, a2, b1, b2)
+        ctx.save_for_backward(*ops)
+        ctx.dtypes = (u.dtype, a2.dtype, b1.dtype, b2.dtype)
         ctx.scale = scale
-        return get_ops(backend).lora_merge_fwd(u, a2, b1, b2, gamma=scale, mode="sum")
+        out = lib.lora_merge_fwd(*ops, None, scale, "sum", backend or "", None)
+        return out if out.dtype == out_dtype else out.to(out_dtype)
 
     @staticmethod
     def backward(ctx, grad):
         u, a2, b1, b2 = ctx.saved_tensors
-        grad = grad * ctx.scale
+        grad = (grad * ctx.scale).to(u.dtype)
         g_u = grad @ a2.transpose(0, 1)
         g_a2 = u.transpose(0, 1) @ grad
         g_b1 = grad @ b2.transpose(0, 1)
         g_b2 = b1.transpose(0, 1) @ grad
-        return g_u, g_a2, g_b1, g_b2, None, None
+        return (*restore([g_u, g_a2, g_b1, g_b2], ctx.dtypes), None, None)
 
 
 def glora_diff_weight(w, a1, a2, b1, b2, gamma=1.0, backend=None):

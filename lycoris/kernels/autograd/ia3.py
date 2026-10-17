@@ -1,22 +1,33 @@
-"""IA3: fused broadcast channel scale, weight-space and activation-space."""
+"""IA3: fused broadcast channel scale, weight-space and activation-space.
+
+x and the scale vector may arrive in different dtypes (an fp32 trained vector
+on fp16 activations): the op reads both as they are, computes in fp32 and
+returns the promoted dtype, as the eager broadcast multiply does; the backward
+saves the operands as they arrived, so a half activation is saved in half.
+"""
 
 import torch
 
-from ..ops import get_ops
+from .. import library_apply as lib
+from ..precision import restore
 
 
 class ChannelScaleFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, w, channel_axis, alpha, gamma, backend):
+        backend = backend or ""
         ctx.save_for_backward(x, w)
+        ctx.dtypes = (x.dtype, w.dtype)
         ctx.args = (channel_axis, alpha, gamma, backend)
-        return get_ops(backend).ia3_fwd(x, w, channel_axis, alpha, gamma)
+        return lib.ia3_fwd(x, w, channel_axis, alpha, gamma, backend)
 
     @staticmethod
     def backward(ctx, grad):
         x, w = ctx.saved_tensors
         channel_axis, alpha, gamma, backend = ctx.args
-        gx, gw = get_ops(backend).ia3_bwd(grad, x, w, channel_axis, alpha, gamma)
+        grad = grad.contiguous()
+        gx, gw = lib.ia3_bwd(grad, x, w, channel_axis, alpha, gamma, backend)
+        gx, gw = restore([gx, gw], ctx.dtypes)
         return gx, gw, None, None, None, None
 
 
