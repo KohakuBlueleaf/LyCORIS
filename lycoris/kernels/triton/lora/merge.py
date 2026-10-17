@@ -11,6 +11,7 @@ import torch
 import triton
 import triton.language as tl
 
+from ...limits import MAX_HADA_RANK
 from ...plans import lora as plan
 from ...plans import tune
 from ...plans.cost import SENTINEL_EAGER
@@ -233,7 +234,7 @@ def _loha_merge_bwd_kernel(
     pids [0, GA) own an O tile and reduce over I -> ga1, ga2; the rest own an
     I tile and reduce over O -> gb1, gb2. Every CTA holds its whole reduction
     in registers, so the grads are plain dtype stores: no fp32 scratch, no
-    zero-fill, no cast launch, and the result is deterministic. G is read
+    zero-fill, no cast launch, and a fixed reduction order. G is read
     twice, which is L2-covered at these sizes. Waves are O/BM + I/BN.
     """
     pid = tl.program_id(0)
@@ -343,15 +344,17 @@ def lora_merge_fwd(
     base: torch.Tensor | None = None,
     gamma: float = 1.0,
     mode: str = "plain",
+    out_dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
-    """DeltaW = gamma * (a1@b1) [* or + (a2@b2)] [+ base], one pass.
+    """DeltaW = gamma * (a1@b1) [* or + (a2@b2)] [+ base], one pass, stored in
+    ``out_dtype`` (default a1's).
 
     mode: "plain" (a2/b2 ignored), "hada" (product), "sum" (GLoRA-style).
     """
     out_o, r = a1.shape
     out_i = b1.shape[1]
     mode_id = {"plain": 0, "hada": 1, "sum": 2}[mode]
-    out = torch.empty(out_o, out_i, device=a1.device, dtype=a1.dtype)
+    out = torch.empty(out_o, out_i, device=a1.device, dtype=out_dtype or a1.dtype)
     z = a1
     a2_, b2_ = (a2, b2) if mode_id > 0 else (z, z)
     base_ = base if base is not None else z
@@ -405,9 +408,10 @@ def lora_merge_fwd(
             return eager_run
         return lambda: launch(p, out)
 
+    extra = (str(out_dtype),) if out_dtype else ()
     best = tune.tuned(
         "triton.lora.merge_fwd",
-        (out_o, out_i, r, mode_id, base is not None, str(a1.dtype)),
+        (out_o, out_i, r, mode_id, base is not None, str(a1.dtype)) + extra,
         shortlist,
         factory,
     )
@@ -499,8 +503,8 @@ def loha_merge_bwd(
     """
     out_o, r = a1.shape
     out_i = b1.shape[1]
-    if r > 128:
-        raise ValueError("hadamard backward kernel supports rank <= 128")
+    if r > MAX_HADA_RANK:
+        raise ValueError(f"hadamard backward kernel supports rank <= {MAX_HADA_RANK}")
     ga1 = torch.empty(out_o, r, device=a1.device, dtype=a1.dtype)
     ga2 = torch.empty(out_o, r, device=a1.device, dtype=a2.dtype)
     gb1 = torch.empty(r, out_i, device=a1.device, dtype=b1.dtype)

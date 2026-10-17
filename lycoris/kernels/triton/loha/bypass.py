@@ -11,6 +11,7 @@ import triton
 import triton.language as tl
 
 from ...gradbuf import GradPack
+from ...limits import MAX_HADA_RANK
 from ...plans import lora as plan
 from ...plans import tune
 from ...plans.cost import SENTINEL_MATERIALIZE
@@ -451,8 +452,8 @@ def loha_bypass_bwd(grad, x, a1, b1, a2, b2, gamma=1.0):
     t, out_o = grad.shape
     out_i = x.shape[1]
     r = a1.shape[1]
-    if r > 128:
-        raise ValueError("hadamard delta backward supports rank <= 128")
+    if r > MAX_HADA_RANK:
+        raise ValueError(f"hadamard delta backward supports rank <= {MAX_HADA_RANK}")
     gx = torch.empty_like(x)
     # One fp32 allocation for all four atomic targets: one fill, one cast.
     pack = GradPack(x.device, (out_o, r), (r, out_i), (out_o, r), (r, out_i))
@@ -603,8 +604,8 @@ def loha_bypass_bwd_dw(grad, x, a1, b1, a2, b2, gamma=1.0):
     t, out_o = grad.shape
     out_i = x.shape[1]
     r = a1.shape[1]
-    if r > 128:
-        raise ValueError("hadamard delta backward supports rank <= 128")
+    if r > MAX_HADA_RANK:
+        raise ValueError(f"hadamard delta backward supports rank <= {MAX_HADA_RANK}")
     f32 = torch.float32
     ga1 = torch.zeros(out_o, r, device=x.device, dtype=f32)
     gb1 = torch.zeros(r, out_i, device=x.device, dtype=f32)

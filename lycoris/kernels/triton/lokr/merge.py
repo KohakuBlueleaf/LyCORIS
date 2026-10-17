@@ -312,8 +312,10 @@ def lokr_full_merge_fwd(
     w2: torch.Tensor,
     base: torch.Tensor | None = None,
     gamma: float = 1.0,
+    out_dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     """DeltaW = gamma * kron(w1, w2) [+ base]; w2 may be a flattened conv factor.
+    Stored in ``out_dtype`` (default w2's).
 
     Output-tiled, not flat: the flat form recovers (u, c, v, d) with four
     integer div/mods PER ELEMENT, where the tile recovers them once per row
@@ -322,17 +324,17 @@ def lokr_full_merge_fwd(
     """
     a, b = w1.shape
     c, d = w2.shape
-    return _launch_merge_fwd(w1, None, w2, None, (a, b, c, d), base, gamma)
+    return _launch_merge_fwd(w1, None, w2, None, (a, b, c, d), base, gamma, out_dtype)
 
 
-def _launch_merge_fwd(w1a, w1b, w2a, w2b, shape, base, gamma):
+def _launch_merge_fwd(w1a, w1b, w2a, w2b, shape, base, gamma, out_dtype=None):
     """The one output-tiled body, with either side optionally factorized."""
     a, b, c, d = shape
     r1 = w1b.shape[0] if w1b is not None else 0
     r2 = w2b.shape[0] if w2b is not None else 0
     pr = max(16, 1 << (max(1, r1, r2) - 1).bit_length())
     out_o, out_i = a * c, b * d
-    out = torch.empty(out_o, out_i, device=w2a.device, dtype=w2a.dtype)
+    out = torch.empty(out_o, out_i, device=w2a.device, dtype=out_dtype or w2a.dtype)
     base_ = base if base is not None else w1a
     w1b_ = w1b if w1b is not None else w1a
     w2b_ = w2b if w2b is not None else w2a
@@ -377,7 +379,8 @@ def _launch_merge_fwd(w1a, w1b, w2a, w2b, shape, base, gamma):
     )
     best = tune.tuned(
         "triton.lokr.merge_fwd",
-        (out_o, out_i, c, d, r1, r2, base is not None, str(w2a.dtype)),
+        (out_o, out_i, c, d, r1, r2, base is not None, str(w2a.dtype))
+        + ((str(out_dtype), str(w1a.dtype)) if out_dtype else ()),
         shortlist,
         lambda p: (lambda: launch(p, out)),
     )
@@ -553,10 +556,11 @@ def lokr_merge_fwd(
     shape: tuple[int, int, int, int],
     base: torch.Tensor | None = None,
     gamma: float = 1.0,
+    out_dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     """DeltaW = gamma * kron(w1a@w1b, w2a@w2b) [+ base], factors generated
     in-kernel; a None b-half means that side arrives already whole."""
-    return _launch_merge_fwd(w1a, w1b, w2a, w2b, shape, base, gamma)
+    return _launch_merge_fwd(w1a, w1b, w2a, w2b, shape, base, gamma, out_dtype)
 
 
 def lokr_merge_bwd(
