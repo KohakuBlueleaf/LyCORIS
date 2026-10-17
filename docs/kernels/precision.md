@@ -1,6 +1,6 @@
 # Precision
 
-## Dtype policy
+## Dtypes
 
 The input (`x`, or the original weight) and the LyCORIS module weights carry
 their dtypes independently. Both may be fp16, bf16 or fp32, in any
@@ -11,11 +11,12 @@ widen to fp32 to meet, and silently doing that hides a mistake.
 For each call, `lycoris/kernels/precision.py` resolves two dtypes:
 
 * **compute** — what the matmul operands are in. With any 16-bit operand
-  present, that 16-bit type (policy `mma16`); otherwise fp32.
+  present, that 16-bit type; otherwise fp32. BOFT's stage chain runs in fp32,
+  as the eager reference does.
 * **output** — the promotion of every operand's dtype. An fp32 operand
   anywhere yields an fp32 result whatever the matmul ran in.
 
-Accumulation is **fp32 under every policy**. A 16-bit matmul with fp32
+Accumulation is **always fp32**. A 16-bit matmul with fp32
 accumulation is the arrangement the tensor cores implement natively, so this
 costs nothing and is what the eager path gets from cuBLAS too.
 

@@ -84,5 +84,7 @@ export LYCORIS_KERNEL_BACKEND=torch   # stock PyTorch everywhere
 ```
 
 See [backends.md](backends.md) for the full selection order and the rest of
-the environment variables, and [precision.md](precision.md) for the dtype
-rules and the measured accuracy.
+the environment variables, [precision.md](precision.md) for the dtype
+rules and the measured accuracy, [designs.md](designs.md) for how each op
+computes its result, and [tuning.md](tuning.md) for how its tile config is
+chosen.

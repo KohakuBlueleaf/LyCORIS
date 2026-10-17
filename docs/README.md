@@ -37,7 +37,9 @@ docs/
 ├── kernels/        the fused kernel backends (experimental)
 │   ├── README.md      what is fused, what it buys, how to switch it off
 │   ├── backends.md    selection order, per-op scope, environment variables
-│   ├── precision.md   dtype policy and measured accuracy
+│   ├── precision.md   dtypes and measured accuracy
+│   ├── designs.md     how each fused op computes its result
+│   ├── tuning.md      config selection: the cost model, timing, the table
 │   └── benchmarks.md  the measurement harness and current results
 ├── development/
 │   └── README.md   checks, versioning, release channels, workflows
