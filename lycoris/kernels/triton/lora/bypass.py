@@ -52,10 +52,8 @@ def _bypass_fwd_kernel(
     """y = gamma * (x @ down^T) @ up^T, one CTA per token tile.
 
     1D over tokens: h is computed once and reused across the whole O axis, so
-    x is read exactly once. Splitting O for more programs was measured worse —
-    it re-reads x O/BN times, and at these sizes that traffic outweighs the
-    parallelism (33.5 us against 10.9 us at T=512, I=O=1280, r=16). BM is the
-    only parallelism lever, so it stays small.
+    x is read exactly once; BM is the only parallelism axis. See
+    docs/kernels/designs.md.
     """
     pid_t = tl.program_id(0)
     rt = pid_t * BLOCK_M + tl.arange(0, BLOCK_M)

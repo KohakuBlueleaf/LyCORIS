@@ -75,7 +75,8 @@ The kernels are not `triton.autotune`d. Each op has an analytic cost model in
 device — SM count, L2 size, measured DRAM bandwidth and matmul peak, whether
 `cp.async` is available (sm_80+, which sets the usable pipeline depths) — and
 returns a shortlist of the best five to seven. The shortlist is timed once,
-best of three rounds, and the winner is cached in memory and in
+best of three rounds (the pick is kept for the life of the table, so one noisy
+pass would keep a slower plan), and the winner is cached in memory and in
 `tuning.json`, keyed by device name, op, bucketed shape and dtype. A later
 process reuses the table and pays nothing.
 
@@ -84,10 +85,10 @@ the eager formulation at some shape, the tuner picks eager for that shape and
 records it. Being slower than PyTorch at a shape is therefore a measurement,
 not a regression you have to hit in production.
 
-The kernels under `lycoris/kernels/tuner/` (the per-family `stream`, `rebuild`,
-`hada`, `regen`, `apply`, `grad`, `kron`, `decompose`, `channel`, `rotate` and
-`stages` modules) rank their configs with a device-measured cost model and
-time a short shortlist instead; see [tuning.md](tuning.md).
+The per-family `stream`, `rebuild`, `hada`, `regen`, `apply`, `grad`, `kron`,
+`decompose`, `channel`, `rotate` and `stages` kernels rank their configs with
+the device-measured cost model of `lycoris/kernels/tuner/` and time a short
+shortlist instead; see [tuning.md](tuning.md).
 
 ## Adding a backend
 

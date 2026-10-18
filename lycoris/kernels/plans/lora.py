@@ -76,10 +76,9 @@ def topk_bypass_fwd(
     """LoRA bypass forward: 1D grid over t/bm, h = x@down^T once per CTA,
     then an o-loop emitting y = gamma*h@up^T in bn chunks.
 
-    Splitting O for more programs was measured worse (33.5 us against 10.9 at
-    t=512, i=o=1280, r=16): it re-reads x o/bn times. bm is therefore the only
-    parallelism lever and small bm is preferred; factor rereads are
-    (t/bm)*r*(i+o)*eb and L2-resident.
+    The O axis is not split, so bm is the only parallelism axis; factor
+    re-reads are (t/bm)*r*(i+o)*eb bytes, L2-resident. See
+    docs/kernels/designs.md.
     """
     br = _rank_block(r)
     shapes_of = lambda bm, bn, bk: [(bm, bk or 32), (bm, bn)]

@@ -85,9 +85,8 @@ def _bf_cone_kernel(
     base = pid_c * (NBLK * S)
     eye_c = (rc[:, None] == rc[None, :]).to(tl.float32)
 
-    # Restricted to a cone the m stages compose to ONE PC x PC map, so the
-    # Gauss-Jordan chain is paid per cone, not per column block: doing it per
-    # block measured 1183 us against 142 us for the stage-per-launch chain.
+    # Restricted to a cone the m stages compose to one PC x PC map, built once
+    # per cone (not per column block).
     total = eye_c
     for i in range(M):
         kd = (1 << i) * (S // 2)

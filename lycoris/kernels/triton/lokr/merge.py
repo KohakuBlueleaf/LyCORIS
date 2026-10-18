@@ -317,10 +317,8 @@ def lokr_full_merge_fwd(
     """DeltaW = gamma * kron(w1, w2) [+ base]; w2 may be a flattened conv factor.
     Stored in ``out_dtype`` (default w2's).
 
-    Output-tiled, not flat: the flat form recovers (u, c, v, d) with four
-    integer div/mods PER ELEMENT, where the tile recovers them once per row
-    and once per column vector. Measured 10.0 us flat against 7.6 us tiled at
-    1280 square.
+    Output-tiled: the factor indices (u, c, v, d) are recovered once per row
+    and once per column vector, not per element.
     """
     a, b = w1.shape
     c, d = w2.shape

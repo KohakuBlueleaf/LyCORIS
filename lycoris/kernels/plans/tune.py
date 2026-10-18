@@ -119,12 +119,7 @@ def _write_rows(path: Path, rows: dict[tuple, TilePlan]) -> bool:
 
 
 def _time(fn, warmup: int = 10, iters: int = 30, rounds: int = 3) -> float:
-    """Best of ``rounds`` passes, each the min of ``iters`` events.
-
-    The pick is made once and then cached for the life of the table, so a
-    single noisy pass would freeze a plan that is measurably worse: one pass
-    was observed selecting a plan 2x off the shortlist's best.
-    """
+    """Best of ``rounds`` passes, each the min of ``iters`` events, in ms."""
     for _ in range(warmup):
         fn()
     torch.cuda.synchronize()

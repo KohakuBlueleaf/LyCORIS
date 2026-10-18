@@ -28,13 +28,9 @@ def topk_rebuild(
 ) -> list[TilePlan]:
     """Gather-FMA elementwise: one read (optional) + one write per element.
 
-    Traffic is the same for every tile here, so the model alone ties and the
-    shortlist would be six arbitrary equals. The tie-breaks are the terms the
-    bandwidth model cannot see: a row shorter than a 128 B cache line wastes
-    the transaction, and among equals fewer warps and a smaller tile give
-    finer wave granularity. An exhaustive sweep at 1280 square put the true
-    optimum at (16, 64, 2) — 2.74 us against 5.6 for the untied pick — so the
-    space has to reach bm=16 and the ordering has to surface it.
+    Every tile moves the same bytes; the score scales that by wave efficiency,
+    by the unused share of a 128 B line for shorter rows, and slightly by warps
+    and bm, so among equals fewer warps and a smaller tile rank first.
     """
     if not dev.measured:
         return [

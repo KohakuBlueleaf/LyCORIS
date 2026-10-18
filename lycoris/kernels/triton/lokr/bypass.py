@@ -191,9 +191,8 @@ MAX_KRON_FACTOR = 128
 def kron_factors_supported(a: int, b: int, c: int, d: int) -> bool:
     """Whether factor dims (a, b, c, d) fit the apply kernel's register tiles.
 
-    This is the dispatcher's scope test for the fused apply: oversized factors
-    (typical LoKr, whose second factor spans out/factor by in/factor) step
-    down a backend tier instead of raising at launch time.
+    This is the dispatcher's scope test for the fused apply: a call with
+    larger factors runs on the next backend in the order.
     """
     return max(a, b, c, d) <= MAX_KRON_FACTOR
 

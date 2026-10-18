@@ -32,6 +32,12 @@ stores `h` and `q = g @ up`; the factor gradients are two GEMMs over tokens
 (no atomics). The single-launch backward that adds the factor gradients
 atomically is a timed alternative.
 
+The planner-ranked bypass forward (`triton/lora/bypass.py`, ranked by
+`plans/lora.py`) is 1-D over token tiles: `h` is computed once per tile and
+reused across the whole output axis, so x is read once. Splitting the output
+axis would re-read x once per output slice; the token tile is the only
+parallelism axis.
+
 Merge forward: a 2-D grid over the weight reduced over rank, the base add in
 the epilogue. Merge backward: "roles" (g_up and g_down programs, each split S
 ways along its reduction) or "tile" (each grad tile read once for both
@@ -71,6 +77,14 @@ elementwise product, no matmul) and adds the base. Its backward gives each
 w1 element a program over its (C, D) block of g, and sums w1 x g over S splits
 for each w2 tile; fp32 partials, no atomics.
 
+The planner-ranked full merge (`triton/lokr/merge.py`) is output-tiled: a
+program recovers the factor indices (u, c, v, d) once per row and once per
+column vector, where a flat form pays four integer div / mods per element.
+Every tile of the rebuild planner (`plans/lokr.py`) moves the same bytes, so
+its order comes from wave efficiency, the unused share of a 128 B line for
+short rows, and a slight preference for fewer warps and smaller tiles; its
+space reaches 16-row tiles.
+
 ## Diag-OFT (`triton/oft/apply.py`)
 
 One launch per direction. Each program rebuilds its block's `q = b - b^T`,
@@ -88,6 +102,11 @@ the last stage, the rescale rows and the diff. The per-stage gradient kernel
 chains the rotation gradient to `g_blocks` in-kernel. The backward recomputes
 the stage inputs by replaying forward prefixes instead of caching the `m`
 stage inputs.
+
+When the butterfly's cone fits one program (up to `CONE_MAX` = 32 channels;
+no transpose, reverse or offset), the `m` stages compose to one PC x PC map,
+built once per cone rather than per column block, and the cone kernel
+(`SENTINEL_CONE`) is timed against the stage chain.
 
 ## DoRA (`triton/dora/decompose.py`)
 
