@@ -110,6 +110,8 @@ def _write(path: Path, rows: dict[Key, dict], stamp: dict) -> None:
 class Tuner:
     def __init__(self):
         self._chosen: dict[tuple[str, Key], dict] = {}
+        # Model picks made with tuning off: timed once tuning is enabled.
+        self._untimed: dict[tuple[str, Key], dict] = {}
         self._disk: dict[str, dict[Key, dict]] = {}
         self._stamp: dict | None = None
         # When a list, every tuned key's timings are appended (benches).
@@ -139,6 +141,11 @@ class Tuner:
         config = self._chosen.get(memo)
         if config is not None:
             return config
+        enabled = tune.tuning_enabled()
+        if not enabled:
+            config = self._untimed.get(memo)
+            if config is not None:
+                return config
         with self._lock:
             config = self._chosen.get(memo)
             if config is not None:
@@ -153,11 +160,11 @@ class Tuner:
                 if _capturing(dev):
                     # Not remembered: the key is timed once timing is possible.
                     return _model_pick(ranked)
-                if tune.tuning_enabled():
-                    config = self._tune(dev, key, ranked, measure)
-                else:
+                if not enabled:
                     # Remembered for the process, never stored, as in plans.tune.
-                    config = _model_pick(ranked)
+                    config = self._untimed[memo] = _model_pick(ranked)
+                    return config
+                config = self._tune(dev, key, ranked, measure)
             self._chosen[memo] = config
             return config
 
@@ -224,6 +231,7 @@ class Tuner:
         """Forget every in-process choice and loaded table (a test helper)."""
         with self._lock:
             self._chosen.clear()
+            self._untimed.clear()
             self._disk.clear()
             self._stamp = None
 

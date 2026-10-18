@@ -22,6 +22,8 @@ SHORTLIST = 6
 ROW_BUCKET = 4096
 
 _CACHE: dict[tuple, TilePlan] = {}
+# First picks made with tuning off: process-only, never stored.
+_UNTIMED: dict[tuple, TilePlan] = {}
 _LOADED = False
 
 
@@ -146,18 +148,27 @@ def tuned(kernel: str, key: tuple, shortlist_fn, runner_factory) -> TilePlan:
 
     Cache-first: ``shortlist_fn`` (a thunk, or a plain list) is evaluated only
     on a miss, so steady-state calls never pay the python scoring loop. First
-    pick when timing is disabled, fails everywhere, or the list is singular.
+    pick when the list is singular or timing fails everywhere; with timing
+    disabled, the first pick is kept for the process and timed once timing is
+    enabled.
     """
     full_key = (resolve_device().name, kernel, *key)
     _load_table()
     if full_key in _CACHE:
         return _CACHE[full_key]
+    enabled = tuning_enabled()
+    if not enabled and full_key in _UNTIMED:
+        return _UNTIMED[full_key]
     shortlist = shortlist_fn() if callable(shortlist_fn) else shortlist_fn
     if not shortlist:
         raise ValueError(f"{kernel}: empty shortlist")
-    if len(shortlist) == 1 or not tuning_enabled():
+    if len(shortlist) == 1:
         best = shortlist[0]
         _CACHE[full_key] = best
+        return best
+    if not enabled:
+        best = shortlist[0]
+        _UNTIMED[full_key] = best
         return best
     best, best_ms = None, float("inf")
     for cand in shortlist:
@@ -175,3 +186,4 @@ def tuned(kernel: str, key: tuple, shortlist_fn, runner_factory) -> TilePlan:
 
 def clear() -> None:
     _CACHE.clear()
+    _UNTIMED.clear()
