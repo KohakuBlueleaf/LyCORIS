@@ -100,15 +100,20 @@ def _best_seconds(dev: DeviceInfo, fn, reps: int = 5) -> float:
 @functools.cache
 def _measure(dev: DeviceInfo) -> Throughput:
     device = torch.device(dev.kind, dev.index)
-    # Random data (constant buffers compress in memory on some parts).
-    buf = torch.randn(2, 64 * 1024 * 1024, device=device, dtype=torch.float32)
+    # Random data (constant buffers compress in memory on some parts), from a
+    # private generator: the caller's generators are never advanced.
+    gen = torch.Generator(device=device)
+    gen.manual_seed(0)
+    buf = torch.randn(
+        2, 64 * 1024 * 1024, device=device, dtype=torch.float32, generator=gen
+    )
     dram = (
         2
         * buf[0].nbytes
         / _best_seconds(dev, lambda: torch.mul(buf[0], 1.0, out=buf[1]))
     )
     n = 4096
-    a16 = torch.randn(n, n, device=device, dtype=torch.float16)
+    a16 = torch.randn(n, n, device=device, dtype=torch.float16, generator=gen)
     mma = 2 * n**3 / _best_seconds(dev, lambda: a16 @ a16)
     if probes is None:
         # No kernel language to probe with: a flat in-flight curve and the
@@ -120,7 +125,9 @@ def _measure(dev: DeviceInfo) -> Throughput:
 
     # L2: every program re-reads a buffer a quarter of L2's size.
     block, nprog = 1024, 8 * dev.units
-    src = torch.randn(dev.l2_bytes // 16, device=device, dtype=torch.float32)
+    src = torch.randn(
+        dev.l2_bytes // 16, device=device, dtype=torch.float32, generator=gen
+    )
     out = torch.empty(nprog * block, device=device, dtype=torch.float32)
     reps = max(1, (1 << 31) // (nprog * block * 4))
     seconds = _best_seconds(

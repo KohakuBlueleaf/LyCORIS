@@ -48,7 +48,8 @@ per-product constants:
 The bandwidth-against-bytes-in-flight curve, the L2 bandwidth, the 16-bit MMA
 rate and the fp32 vector FMA rate are measured on the card once per process
 (a dependent-load chain kernel, an L2-resident re-read, a 4096^3 fp16 GEMM and
-an FMA chain; no fp32 matmul). Triton's dots reach the matrix units from sm_80;
+an FMA chain; no fp32 matmul). The probe's random inputs come from a private
+generator, so tuning never advances the caller's CPU or device generators. Triton's dots reach the matrix units from sm_80;
 TileLang's `T.gemm` from sm_70, so TileLang planners rank with the MMA rate on
 every card.
 
