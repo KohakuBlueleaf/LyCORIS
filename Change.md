@@ -1,5 +1,23 @@
 # Change Log
 
+## 2026/10/18 update to 4.1.2
+
+### Highlights
+
+A patch release of the fused kernel layer: kernel tuning no longer advances
+the caller's random generators.
+
+### Full change log
+
+#### Fixes
+
+* The cost model's device probe, run once per process before the first
+  config is timed, drew its random inputs from the global CPU / device
+  generator, so the caller's random stream after the first kernel calls
+  depended on whether the tuning table was already warm. The probe now draws
+  from a private generator; a call that tunes leaves the CPU and device
+  generator states bit-identical.
+
 ## 2026/10/18 update to 4.1.1
 
 ### Highlights
