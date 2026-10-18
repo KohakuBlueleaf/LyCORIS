@@ -1,5 +1,34 @@
 # Change Log
 
+## 2026/10/18 update to 4.1.1
+
+### Highlights
+
+A patch release of the fused kernel layer: kernel config timing can be
+switched in-process, and configs picked with timing off are no longer stored.
+
+### Full change log
+
+#### New Features
+
+* `lycoris.kernels.set_tuning(enabled)` turns kernel config timing on or off
+  for the process and returns the previous setting, so a caller can restore
+  it; `lycoris.kernels.tuning_enabled()` reads the current one.
+  `LYCORIS_KERNEL_TUNE` keeps working as the initial value
+  (`set_tuning(None)`). See [docs/kernels/backends.md](docs/kernels/backends.md).
+
+#### Fixes
+
+* With timing off, a config the planner picked untimed was written to
+  `tuning.json` as soon as another key was timed and stored. Untimed picks
+  are now kept for the process only, in both tuners, and a key picked untimed
+  is timed on its next call once timing is on.
+
+#### Documentation
+
+* The kernel docstrings describe what each kernel and planner does; the
+  design reasons moved to [docs/kernels/designs.md](docs/kernels/designs.md).
+
 ## 2026/10/18 update to 4.1.0
 
 ### Highlights
