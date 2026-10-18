@@ -33,7 +33,7 @@ the operation it replaces.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `LYCORIS_KERNEL_BACKEND` | `auto` | `auto`, `triton`, `tilelang`, `compile` or `torch`. A named backend is still narrowed per call by the scope rules above. |
-| `LYCORIS_KERNEL_TUNE` | `on` | `off` skips the measured tile pick and takes the planner's first candidate. |
+| `LYCORIS_KERNEL_TUNE` | `on` | `off` skips the measured tile pick and takes the planner's first candidate. `set_tuning` overrides it in-process. |
 | `LYCORIS_KERNEL_CACHE_DIR` | `~/.cache/lycoris_kernels` | Where the tuning tables (`tuning.json`, `kernels/<arch>-<card>.json`) live. |
 
 ## From Python
@@ -45,6 +45,23 @@ available_backends()   # ('triton', 'tilelang', 'compile', 'torch')
 fused_backends()       # ('triton', 'tilelang')  -- the ones with an op set
 resolve_backend()      # 'triton'  -- preference; pass a device for its own order
 ```
+
+Config timing is switched per process with `set_tuning`:
+
+```python
+from lycoris.kernels import set_tuning, tuning_enabled
+
+prev = set_tuning(False)   # time nothing; returns the previous setting (None)
+tuning_enabled()           # False
+set_tuning(prev)           # restore; None follows LYCORIS_KERNEL_TUNE again
+```
+
+`set_tuning(True)` / `set_tuning(False)` take precedence over
+`LYCORIS_KERNEL_TUNE`; `set_tuning(None)` (the initial state) reads the
+variable on each lookup. With timing off, a key without a stored config runs
+the planner's first config, kept for the process and never stored; once timing
+is on again, that key is timed on its next call. Stored configs are used
+either way.
 
 The per-call decision is `lycoris.kernels.select.choose(tensors, supported)`;
 `supported` is the caller's own layout test. Every functional entry point and

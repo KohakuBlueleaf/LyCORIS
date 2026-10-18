@@ -15,9 +15,10 @@ shortlist that decides. Nothing is swept and no block size is chosen by hand.
    the single-launch kernels of the family's `apply.py`) are timed with them.
    Then `LAUNCH_SHORTLIST` (3) launch settings (warps, stages) of the fastest
    tile. The fastest of all is stored.
-3. Inside CUDA-graph capture or `torch.compile` tracing, and with
-   `LYCORIS_KERNEL_TUNE=off`, the model's top config runs untimed and is not
-   stored.
+3. Inside CUDA-graph capture or `torch.compile` tracing, and with timing off
+   (`lycoris.kernels.set_tuning(False)`, or `LYCORIS_KERNEL_TUNE=off` while
+   `set_tuning` is unset), the model's top config runs untimed and is not
+   stored; the key is timed on its first call once timing is possible again.
 
 Before a candidate is timed, its result is compared with the torch
 composition's: a candidate off by more than a loose relative Frobenius

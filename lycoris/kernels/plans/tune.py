@@ -25,6 +25,8 @@ _CACHE: dict[tuple, TilePlan] = {}
 # First picks made with tuning off: process-only, never stored.
 _UNTIMED: dict[tuple, TilePlan] = {}
 _LOADED = False
+# set_tuning's value; None reads LYCORIS_KERNEL_TUNE.
+_TUNING: bool | None = None
 
 
 def bucket_tokens(t: int) -> int:
@@ -140,7 +142,23 @@ def _time(fn, warmup: int = 10, iters: int = 30, rounds: int = 3) -> float:
 
 
 def tuning_enabled() -> bool:
+    """Whether a config missing from the table is timed: the value given to
+    ``set_tuning``, else ``LYCORIS_KERNEL_TUNE`` (``off`` / ``0`` disable;
+    default on)."""
+    if _TUNING is not None:
+        return _TUNING
     return os.environ.get("LYCORIS_KERNEL_TUNE", "on").lower() not in ("off", "0")
+
+
+def set_tuning(enabled: bool | None) -> bool | None:
+    """Turn config timing on or off for this process; ``None`` reads
+    ``LYCORIS_KERNEL_TUNE`` again. Returns the previous value, which
+    ``set_tuning`` restores."""
+    global _TUNING
+    if enabled is not None and not isinstance(enabled, bool):
+        raise TypeError(f"set_tuning expects a bool or None, got {enabled!r}")
+    prev, _TUNING = _TUNING, enabled
+    return prev
 
 
 def tuned(kernel: str, key: tuple, shortlist_fn, runner_factory) -> TilePlan:
