@@ -1,5 +1,40 @@
 # Change Log
 
+## 2026/10/19 update to 4.1.3
+
+### Highlights
+
+A patch release of the fused kernel layer. The LoKr bypass gains a token-major GEMM
+layout, about 2-2.5x the compiled torch chain's speed at factor 8 on an RTX 5090, and
+its autograd saves only `x`. Kernel tuning now stores fewer wrong verdicts.
+
+### Full change log
+
+#### Features
+
+* LoKr bypass, token-major GEMM layout (`triton/lokr/gemm.py`). `x` (T, b·d) is read as
+  (T·b, d) and `y` (T, a·c) as (T·a, c). The forward is then one GEMM against `w2`,
+  with the mix by `w1` on each tile's result. `gx` with `g_w1`, and `g_w2` (split-K),
+  are GEMMs of the same layout. The forward and backward tuners time the layout as a
+  whole-op alternative beside the fused layouts and torch. Forward and backward, in ms
+  per linear on an RTX 5090 (bf16, factor 8, 4096 tokens), compiled torch against the
+  GEMM layout: 3072 -> 3072 0.39 -> 0.19; 3072 -> 16384 2.28 -> 0.90; 8192 -> 3072
+  0.60 -> 0.45. The bytes saved for backward drop from 152 to 24 MiB for the
+  3072 -> 16384 linear.
+
+#### Fixes
+
+* The agreement guard compares a candidate with the torch composition at the compute
+  dtype's distance. An fp32 factor gradient reduced from bf16 products used to be
+  held to the fp32 distance, so every bf16 backward config of such an op was rejected.
+* A key whose timing ran out of device memory keeps its winner (or the model's top
+  config) for the process only and is not stored, so a process with more free memory
+  times it again. A key tuned while another key is being timed keeps its own failure
+  record. One WARNING per kernel and process names a failed config, its error and the
+  config the key runs instead.
+* The tuning table format is version 2. Tables written by 4.1.2 or earlier are
+  re-tuned once.
+
 ## 2026/10/18 update to 4.1.2
 
 ### Highlights
