@@ -15,6 +15,7 @@ from pathlib import Path
 
 import torch
 
+from ...logging import logger
 from ..plans import tune
 from .device import DeviceInfo, device_info
 
@@ -41,6 +42,11 @@ Key = tuple[str, tuple, tuple]
 
 def _freeze(config: dict) -> tuple:
     return tuple(sorted(config.items()))
+
+
+def _out_of_memory(reason: str) -> bool:
+    """Whether a candidate's recorded failure is an out-of-memory error."""
+    return "OutOfMemoryError" in reason or "out of memory" in reason
 
 
 def _capturing(dev: DeviceInfo) -> bool:
@@ -117,6 +123,8 @@ class Tuner:
         # When a list, every tuned key's timings are appended (benches).
         self.record: list[dict] | None = None
         self._failures: dict[tuple, str] = {}
+        # Kernel name -> the first failure of one of its configs in this process.
+        self.failed: dict[str, str] = {}
         # Reentrant: a candidate being timed may itself select.
         self._lock = threading.RLock()
 
@@ -170,8 +178,17 @@ class Tuner:
 
     def _tune(self, dev: DeviceInfo, key: Key, ranked: list[dict], measure) -> dict:
         """Time the tile shortlist and the whole-op alternatives, then launch
-        settings of the fastest tile; store the winner."""
+        settings of the fastest tile; store the winner, unless a candidate ran out of
+        memory while timed (the winner then holds for this process only). A key tuned
+        while another is being timed keeps its failures apart."""
+        outer = self._failures
         self._failures = {}
+        try:
+            return self._tune_key(dev, key, ranked, measure)
+        finally:
+            self._failures = outer
+
+    def _tune_key(self, dev: DeviceInfo, key: Key, ranked: list[dict], measure) -> dict:
         ordered = [c for c in ranked if "impl" not in c]
         tile_axes = {k for c in ordered for k in c} - LAUNCH_KEYS
         best_per_tile, seen = [], set()
@@ -182,7 +199,15 @@ class Tuner:
                 best_per_tile.append(c)
         tiles = shortlist(best_per_tile, sorted(tile_axes), TILE_SHORTLIST)
         candidates = tiles + [c for c in ranked if "impl" in c]
-        times = measure(candidates)
+        try:
+            times = measure(candidates)
+        except torch.OutOfMemoryError as e:
+            pick = _model_pick(ranked)
+            logger.warning(
+                f"kernel {key[0]}: out of memory while timing ({str(e)[:120]}); "
+                f"{pick} holds for this process, not stored"
+            )
+            return pick
 
         # Launch settings of the fastest tile, among the configs sharing its shape.
         timed_tiles = [i for i, c in enumerate(candidates) if "impl" not in c]
@@ -201,6 +226,12 @@ class Tuner:
                 candidates += variants
 
         winner = candidates[min(range(len(candidates)), key=times.__getitem__)]
+        if self._failures:
+            reason = next(iter(self._failures.values()))
+            self._fail(
+                key[0], f"{len(self._failures)} config(s) failed ({reason})", winner
+            )
+        short = any(_out_of_memory(why) for why in self._failures.values())
         if self.record is not None:
             self.record.append(
                 {
@@ -210,6 +241,12 @@ class Tuner:
                     "failures": [[dict(f), why] for f, why in self._failures.items()],
                 }
             )
+        if short:
+            logger.warning(
+                f"kernel {key[0]}: a config ran out of memory while timed; {winner} "
+                "holds for this process, not stored"
+            )
+            return winner
         rows = self._table(dev)
         rows[key] = winner
         path = _table_path(dev)
@@ -223,9 +260,18 @@ class Tuner:
         """A candidate of the key being tuned failed; kept for the record."""
         self._failures[_freeze(config)] = reason
 
-    def demote(self, dev: DeviceInfo, key: Key) -> None:
+    def _fail(self, kernel: str, reason: str, runs: dict) -> None:
+        """Record a failure of `kernel` in `failed`; one WARNING per kernel and process
+        names it, the error and the config the key runs instead."""
+        if kernel in self.failed:
+            return
+        self.failed[kernel] = reason
+        logger.warning(f"kernel {kernel}: {reason}; the key runs {runs}")
+
+    def demote(self, dev: DeviceInfo, key: Key, reason: str = "") -> None:
         """A config this device could not build: the key runs torch from now on."""
         self._chosen[(dev.name, key)] = TORCH
+        self._fail(key[0], f"a config could not build on {dev.name} {reason}", TORCH)
 
     def reset(self) -> None:
         """Forget every in-process choice and loaded table (a test helper)."""

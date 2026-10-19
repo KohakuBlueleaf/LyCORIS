@@ -22,9 +22,20 @@ shortlist that decides. Nothing is swept and no block size is chosen by hand.
 
 Before a candidate is timed, its result is compared with the torch
 composition's: a candidate off by more than a loose relative Frobenius
-distance (1e-2 fp16, 4e-2 bf16) or not finite times as infinity. This guards
+distance (1e-2 fp16, 4e-2 bf16, the compute dtype's where the op passes it, so an
+fp32 factor gradient reduced from bf16 products takes the bf16 distance) or not
+finite times as infinity. This guards
 against a miscompiled config; the precision rule itself is a test
 ([precision.md](precision.md)). Candidates compile one at a time.
+
+A candidate that fails to build, raises, or disagrees is recorded: `tuner.failed`
+maps the kernel name to its first failure in the process, and one WARNING per
+kernel and process (logger `LyCORIS`) names the kernel, the error and the config
+the key runs instead. A config that runs out of resources at its first real call
+demotes its key to the torch composition and is recorded the same way. A key whose
+timing ran out of device memory (a candidate, or the timing inputs themselves) keeps
+its winner, or the model's top config, for the process only and is not stored: a
+later process with more free memory times it again.
 
 ## The model (`tuner/model.py`)
 

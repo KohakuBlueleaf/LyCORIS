@@ -65,8 +65,8 @@ def guarded(dev: DeviceInfo, key, cfg: dict, run: Callable[[dict], object], too_
     (the backend's out-of-resources error)."""
     try:
         return run(cfg)
-    except too_big:
-        tuner.demote(dev, key)
+    except too_big as e:
+        tuner.demote(dev, key, f"({type(e).__name__}: {str(e)[:200]})")
         return run(TORCH)
 
 
@@ -76,11 +76,12 @@ def _tensors(result) -> list[torch.Tensor]:
     return [t for t in result if isinstance(t, torch.Tensor) and t.numel() > 0]
 
 
-def disagreement(got, ref) -> str | None:
+def disagreement(got, ref, dtype: torch.dtype | None = None) -> str | None:
     """None when got matches the torch composition's ref, else the mismatch: a
-    guard against a miscompiled config, not a precision ranking."""
+    guard against a miscompiled config, not a precision ranking. The tolerance is
+    the compute dtype's (`dtype`) when given, else each output's own dtype's."""
     for n, (g, r) in enumerate(zip(_tensors(got), _tensors(ref))):
-        tol = _AGREE_TOL.get(r.dtype, _AGREE_TOL[torch.bfloat16])
+        tol = _AGREE_TOL.get(dtype or r.dtype, _AGREE_TOL[torch.bfloat16])
         g, r = g.float(), r.float()
         if not torch.isfinite(g).all():
             return f"output {n} not finite"
@@ -101,8 +102,10 @@ def measurer(
     bytes_per_call: int,
     make_inputs: Callable[[], tuple],
     run: Callable[[dict, tuple], Callable[[], object]],
+    dtype: torch.dtype | None = None,
 ) -> Callable[[list[dict]], list[float]]:
-    """The tuner's measure(): per-config ms, inf for a config that disagrees with torch."""
+    """The tuner's measure(): per-config ms, inf for a config that disagrees with torch
+    (`disagreement` under the compute dtype `dtype`, when given)."""
     state = {}
 
     def measure(configs: list[dict]) -> list[float]:
@@ -123,7 +126,7 @@ def measurer(
                 valid.append(True)
                 continue
             try:
-                gap = disagreement(run(c, sets[0])(), state["ref"])
+                gap = disagreement(run(c, sets[0])(), state["ref"], dtype)
             except Exception as e:  # noqa: BLE001 - a failing config times as inf
                 gap = f"{type(e).__name__}: {str(e)[:300]}"
             valid.append(gap is None)
