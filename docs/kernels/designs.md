@@ -72,6 +72,61 @@ tile, rounded to the compute dtype and stored once, then `gx` accumulates
 the token-diagonal blocks of one (BT*a, BT*b) tile product; fp32 partials are
 summed in torch.
 
+### F4b: the token-major GEMM layout (`triton/lokr/gemm.py`, `gemm_kernels.py`)
+
+`x` (T, b·d) is exactly the matrix X2 = (T·b, d) and `y` (T, a·c) is
+Y2 = (T·a, c), so the bypass is Y2 = (I_T ⊗ w1) · X2 · w2ᵀ: one GEMM against w2
+over K = d, plus a 16-row-group mix by w1. The fused layouts above tile tokens ×
+w1 rows × w2 rows with fp32 accumulators of 64×128 + 32×128 in two warps. That is
+about 244 registers a thread and four programs an SM. They also run the
+block-diagonal w1 dot at 1/BT useful work, and pad c to the 128-wide column tile.
+
+At factor 16 on a 3072-wide model (w1 16×16, w2 192×192, 11k tokens), a 5090 then
+runs the forward at about 17% tensor-pipe activity, 527 µs against a roofline of
+77-115 µs. The gx kernel runs at 460 µs against about 180 µs, and g_w1 at 330 µs
+against about 140 µs.
+
+The GEMM layout keeps the large product a plain GEMM tile and mixes once per
+tile, on the GEMM's result:
+
+- **Forward:** a program owns BT tokens (BT·pb rows of X2) × BN columns of c. It
+  runs `M = X2 @ w2ᵀ` over K = d, rounds M to the compute dtype as eager's chain
+  does, mixes the b rows of each token by w1, scales, adds the base and stores
+  rows (token, u) of Y2. The grid runs (group, column tile) fastest, so a token
+  tile's programs are adjacent and x leaves DRAM once for every column tile and
+  group member.
+- **gx and g_w1:** a program owns BT tokens × BD columns of d. It runs
+  `P = G2 @ w2` over K = c, rounded, mixes the a rows by w1ᵀ into gx (summed over
+  the group), and reduces `g_w1 = Σ_t P_t X_tᵀ` over its columns into one fp32
+  partial per program, summed in torch. g_w1 needs neither `mid = X @ w2ᵀ` nor a
+  pass of its own.
+- **g_w2:** a split-K kernel. A program owns one (BC, BD) tile of g_w2 and a
+  strided share of the token tiles; it mixes each G tile into `N = w1ᵀ G` on load
+  (rounded, as eager's chain rounds N), so N is never stored. Splits are sized for
+  about two programs an SM; fp32 partials are summed in torch.
+- **The mix (MIX):** "batch" is a 3-D dot per token, used where both w1 sides pad
+  to ≥ 16, with no wasted MMA work. "diag" is one 2-D dot against the
+  token-block-diagonal w1 tile, for small factors where the batch dot's 16-wide
+  minimum would pad.
+- **Rounding:** each kernel rounds exactly one intermediate to the compute dtype,
+  M in the forward and P and N in the backward, which is the class of rounding
+  eager's two-dot chain applies.
+- **Stacked factors:** every kernel takes G adapters with stacked factors (G, a, b) /
+  (G, c, d) that share x, x read once for all of them and gx summed over them; the
+  bypass op runs them with G = 1.
+- **Saved tensors:** the op's autograd saves x and the factors only (`KronApplyFn`),
+  as LoRA's bypass does; the backward recomputes nothing from `mid`.
+- **Selection:** the forward and backward tuners hold it as the whole-op
+  alternative `{"impl": "gemm"}`, timed beside the fused layouts and torch.
+  `lokr.gemm_fwd`, `lokr.gemm_dx` and `lokr.gemm_gw2` each choose their own tile
+  config against their torch composition. The scope is pow2(a), pow2(b) ≤ 128.
+- **Tests:** `test/kernels/test_lokr_gemm_build.py` compiles, without a GPU, every
+  kernel through every w1 shape and mix for sm_120 (fp16 and bf16, both values of
+  each flag) and the factor-16 cases for sm_89 and sm_86;
+  `test/kernels/test_lokr_gemm.py` scores every kernel against fp64 beside eager
+  and checks that on a cold table each op's tuner runs at least one kernel config in
+  fp16 and bf16.
+
 Full merge: one program per output tile gathers w1 and w2 per element (an
 elementwise product, no matmul) and adds the base. Its backward gives each
 w1 element a program over its (C, D) block of g, and sums w1 x g over S splits

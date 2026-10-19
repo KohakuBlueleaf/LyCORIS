@@ -74,7 +74,12 @@ rounds; a candidate over twice the leader after the first round stops early.
 
 `<LYCORIS_KERNEL_CACHE_DIR>/kernels/<arch>-<card>.json` (default
 `~/.cache/lycoris_kernels`), one file per card name, stamped with the torch /
-Triton / TileLang / LyCORIS versions; a stamp mismatch starts the table empty.
+Triton / TileLang / LyCORIS versions and carrying the table format version
+(`tuner.TABLE_VERSION`, 2: the rows include the LoKr token-major GEMM
+candidates); a stamp or version mismatch starts the table empty. A table
+written under another format version is therefore ignored: the first run on
+such a card re-tunes every key it meets once (the tile tuning of each kernel's
+first call per key) and writes the table again in the current format.
 A save merges with rows another process wrote since this one loaded the
 table and replaces the file atomically (retried on Windows while another
 handle holds it).

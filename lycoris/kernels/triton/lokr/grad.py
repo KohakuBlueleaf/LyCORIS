@@ -19,7 +19,7 @@ from ...tuner.measure import (
 )
 from ...tuner.model import Work, cdiv, rank, shared_reads
 from ..common import OutOfResources, dot_prec, load2d
-from . import apply, bypass
+from . import apply, bypass, gemm
 
 DXN = {"impl": "dxn"}
 APPLY = {"impl": "apply"}
@@ -398,22 +398,32 @@ def lokr_bypass_bwd(grad, x, w1, w2, gamma: float = 1.0):
         (token_bucket(x.shape[0]), *w1.shape, *w2.shape),
     )
 
+    tiled = gemm.in_scope(*w1.shape, *w2.shape)
+
     def run(cf, g, xx):
         if cf == ATOMIC:
             return bypass.lokr_bypass_bwd(g, xx, w1, w2, gamma)
         if cf == APPLY:
             return _bwd_apply(g, xx, w1, w2, gamma)
+        if cf == gemm.GEMM:
+            return gemm.bwd_single(g, xx, w1, w2, gamma)
         return _bwd_dxn(g, xx, w1, w2, gamma)
 
     cfg = select(
         dev,
         key,
-        lambda: [DXN, APPLY, *([ATOMIC] if small else [])],
+        lambda: [
+            DXN,
+            APPLY,
+            *([ATOMIC] if small else []),
+            *([gemm.GEMM] if tiled else []),
+        ],
         measurer(
             dev,
             2 * grad.numel() * grad.element_size(),
             lambda: (copy_of(grad), copy_of(x)),
             lambda cf, s: lambda: run(cf, *s),
+            x.dtype,
         ),
     )
     return run(cfg, grad, x)

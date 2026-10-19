@@ -34,7 +34,7 @@ TILE_SHORTLIST = 4
 LAUNCH_SHORTLIST = 3
 # Config keys that set how a tile is launched, not its shape.
 LAUNCH_KEYS = frozenset({"num_warps", "num_stages", "threads"})
-TABLE_VERSION = 1
+TABLE_VERSION = 2
 _REPLACE_TRIES = 20
 
 Key = tuple[str, tuple, tuple]

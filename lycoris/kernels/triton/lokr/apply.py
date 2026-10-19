@@ -21,7 +21,7 @@ from ...tuner.measure import (
 )
 from ...tuner.model import Work, cdiv, rank, shared_reads
 from ..common import OutOfResources, dot_prec, load2d
-from . import bypass
+from . import bypass, gemm
 
 # Largest fp32 register tile per program (128 x 128).
 _TILE_BUDGET = 16384
@@ -294,6 +294,8 @@ def _apply_run(cfg, flat, w1, w2, scale, base2, out_dtype):
     if cfg == ATOMIC:
         y = bypass.lokr_bypass_fwd(flat, w1.contiguous(), w2.contiguous(), scale)
         return (y if base2 is None else base2 + y).to(out_dtype)
+    if cfg == gemm.GEMM:
+        return gemm.fwd_single(flat, w1, w2, scale, base2, out_dtype)
     out = torch.empty(t, a * c, device=flat.device, dtype=out_dtype)
     bb = base2 if base2 is not None else out
     grid = (
@@ -356,6 +358,7 @@ def _apply(name, flat, w1, w2, scale, base2, out_dtype, alternatives):
             t * (b * d + a * c) * flat.element_size(),
             inputs,
             lambda cf, s: lambda: _apply_run(cf, s[0], w1, w2, scale, s[1], out_dtype),
+            flat.dtype,
         ),
     )
     return guarded(
@@ -373,4 +376,6 @@ def lokr_bypass_fwd(x, w1, w2, gamma: float = 1.0, base=None):
     out_dtype = base.dtype if base is not None else x.dtype
     small = bypass.kron_factors_supported(*w1.shape, *w2.shape)
     alternatives = [TORCH, ATOMIC] if small else [TORCH]
+    if gemm.in_scope(*w1.shape, *w2.shape):
+        alternatives.append(gemm.GEMM)
     return _apply("lokr.bypass_fwd", x, w1, w2, gamma, base, out_dtype, alternatives)
